@@ -1,0 +1,3244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TourDesk — Event & Tour Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#fafaf8;--surf:#ffffff;--surf2:#f4f3ef;--surf3:#ecebe5;
+  --bord:#e4e2da;--bord2:#d2cfc4;
+  --txt:#1c1c1a;--txt2:#5f5e58;--txt3:#908e85;
+  --acc:#c1493f;--acc-soft:#f6e8e6;
+  --green:#3b6d11;--green-soft:#eaf3de;
+  --amber:#854f0b;--amber-soft:#faeeda;
+  --red:#a32d2d;--red-soft:#fcebeb;
+  --blue:#185fa5;--blue-soft:#e6f1fb;
+  --rad:8px;--rad-lg:12px;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+}
+[data-theme="dark"]{
+  --bg:#16161a;--surf:#1e1e24;--surf2:#26262d;--surf3:#2e2e36;
+  --bord:#33333c;--bord2:#44444f;
+  --txt:#ececf0;--txt2:#a8a8b3;--txt3:#7a7a85;
+  --acc:#e0655a;--acc-soft:#3a2320;
+  --green:#7fb340;--green-soft:#22301a;
+  --amber:#d99a3c;--amber-soft:#332815;
+  --red:#e06666;--red-soft:#331c1c;
+  --blue:#5b9bd5;--blue-soft:#1a2733;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+a{color:var(--blue);text-decoration:none}
+
+/* Layout */
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:208px;min-width:208px;background:var(--surf2);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:16px 0}
+.logo{padding:0 18px 16px;border-bottom:1px solid var(--bord);margin-bottom:8px}
+.logo-title{font-size:16px;font-weight:600;letter-spacing:-.3px;display:flex;align-items:center;gap:7px}
+.logo-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.nav-section{font-size:10px;font-weight:600;color:var(--txt3);padding:14px 18px 4px;letter-spacing:.7px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer;font-size:13px;color:var(--txt2);border-left:2px solid transparent;transition:background .12s,color .12s}
+.nav-item:hover{background:var(--surf3);color:var(--txt)}
+.nav-item.active{background:var(--surf3);color:var(--txt);border-left-color:var(--acc);font-weight:500}
+.nav-ico{width:17px;text-align:center;flex-shrink:0;font-size:15px}
+.sync-status{margin-top:auto;padding:10px 18px 0;border-top:1px solid var(--bord);font-size:11px;color:var(--txt3);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--txt3);flex-shrink:0}
+.dot.ok{background:var(--green)}.dot.off{background:var(--bord2)}
+
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.topbar{padding:15px 22px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surf)}
+.topbar-title{font-size:17px;font-weight:600;letter-spacing:-.2px}
+.topbar-actions{display:flex;gap:8px}
+.content{flex:1;overflow-y:auto;padding:22px;background:var(--bg)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--rad);border:1px solid var(--bord2);background:var(--surf);color:var(--txt);font-size:13px;transition:background .12s,border-color .12s}
+.btn:hover{background:var(--surf2)}
+.btn:active{transform:translateY(.5px)}
+.btn.primary{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn.primary:hover{background:#a83c33}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--surf2)}
+.btn.danger{color:var(--red);border-color:var(--bord2)}
+.btn.danger:hover{background:var(--red-soft);border-color:var(--red)}
+
+/* Cards */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);padding:16px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.card:hover{border-color:var(--bord2);box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px}
+.card-title{font-size:14px;font-weight:600;line-height:1.3}
+.card-sub{font-size:12px;color:var(--txt2)}
+.card-meta{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px;padding-top:11px;border-top:1px solid var(--bord)}
+.meta label{font-size:10px;color:var(--txt3);display:block;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px}
+.meta span{font-size:12px;font-weight:500}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:500;white-space:nowrap}
+.badge.green{background:var(--green-soft);color:var(--green)}
+.badge.amber{background:var(--amber-soft);color:var(--amber)}
+.badge.red{background:var(--red-soft);color:var(--red)}
+.badge.blue{background:var(--blue-soft);color:var(--blue)}
+.badge.gray{background:var(--surf3);color:var(--txt2)}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.stat{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:14px}
+.stat-val{font-size:23px;font-weight:600;line-height:1;letter-spacing:-.5px}
+.stat-lbl{font-size:11px;color:var(--txt3);margin-top:5px;text-transform:uppercase;letter-spacing:.4px}
+
+/* Tables */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);overflow:hidden}
+.tbl th{text-align:left;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;padding:9px 12px;border-bottom:1px solid var(--bord);background:var(--surf2)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--bord)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr{cursor:pointer;transition:background .1s}
+.tbl tbody tr:hover{background:var(--surf2)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* Section headers */
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+.sec-title{font-size:12px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.6px}
+
+/* Empty states */
+.empty{text-align:center;padding:56px 20px;color:var(--txt3)}
+.empty-ico{font-size:34px;margin-bottom:10px;opacity:.5}
+.empty p{font-size:13px}
+
+/* Detail pages */
+.detail-head{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.back{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--txt2);cursor:pointer;padding:5px 8px;border-radius:var(--rad);transition:background .12s}
+.back:hover{background:var(--surf2);color:var(--txt)}
+.detail-title{font-size:20px;font-weight:600;letter-spacing:-.3px;flex:1}
+.sec{margin-bottom:24px}
+.sec-label{font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.6px;padding-bottom:8px;border-bottom:1px solid var(--bord);margin-bottom:13px}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+.info label{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;display:block}
+.info span{font-size:13px;display:block;margin-top:2px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bord);margin-bottom:18px}
+.tab{padding:9px 15px;font-size:13px;color:var(--txt2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s}
+.tab:hover{color:var(--txt)}
+.tab.active{color:var(--acc);border-bottom-color:var(--acc);font-weight:500}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(20,20,18,.4);display:flex;align-items:flex-start;justify-content:center;z-index:200;padding:40px 20px;overflow-y:auto}
+.modal{background:var(--surf);border-radius:var(--rad-lg);width:560px;max-width:100%;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:auto}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:16px;font-weight:600}
+.modal-x{cursor:pointer;color:var(--txt3);font-size:20px;line-height:1;padding:4px;border-radius:var(--rad)}
+.modal-x:hover{background:var(--surf2);color:var(--txt)}
+.modal-body{padding:20px 22px;max-height:62vh;overflow-y:auto}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--bord);display:flex;justify-content:flex-end;gap:8px}
+
+/* Forms */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--txt2);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;transition:border-color .12s}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--acc)}
+.field textarea{min-height:64px;resize:vertical}
+.field .hint{font-size:11px;color:var(--txt3);margin-top:3px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.form-section{font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 12px;padding-top:14px;border-top:1px solid var(--bord)}
+.form-section:first-child{margin-top:0;padding-top:0;border-top:none}
+
+/* Misc */
+.tag{display:inline-block;background:var(--surf3);border-radius:100px;padding:3px 9px;font-size:11px;color:var(--txt2);margin:0 4px 4px 0}
+.divider{height:1px;background:var(--bord);margin:18px 0}
+.muted{color:var(--txt3)}
+.banner{background:var(--blue-soft);border:1px solid #cfe3f6;border-radius:var(--rad);padding:11px 14px;font-size:12px;color:var(--blue);margin-bottom:16px;display:flex;gap:9px;align-items:flex-start}
+.pos{color:var(--green)}.neg{color:var(--red)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title"><span id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark" style="cursor:pointer">◆</span> TourDesk</div>
+      <div class="logo-sub">Event &amp; Tour Manager</div>
+    </div>
+    <nav id="nav">
+      <div class="nav-section">Overview</div>
+      <div class="nav-item" data-view="dashboard"><span class="nav-ico">▦</span>Dashboard</div>
+      <div class="nav-section">Manage</div>
+      <div class="nav-item" data-view="venues"><span class="nav-ico">▣</span>Venues</div>
+      <div class="nav-item" data-view="tours"><span class="nav-ico">↝</span>Tours</div>
+      <div class="nav-item" data-view="events"><span class="nav-ico">◉</span>Events</div>
+      <div class="nav-item" data-view="contacts"><span class="nav-ico">☺</span>Contacts</div>
+      <div class="nav-item" data-view="artists"><span class="nav-ico">♪</span>Artists</div>
+      <div class="nav-section">Sales</div>
+      <div class="nav-item" data-view="proposals"><span class="nav-ico">◈</span>Proposals</div>
+      <div class="nav-section">System</div>
+      <div class="nav-item" data-view="activity"><span class="nav-ico">⟲</span>Activity</div>
+      <div class="nav-item" data-view="settings"><span class="nav-ico">⚙</span>Settings</div>
+    </nav>
+    <div class="sync-status">
+      <span class="dot off" id="sync-dot"></span>
+      <span id="sync-text">Local only</span>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Dashboard</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2)"></div>
+        <div class="topbar-actions" id="page-actions"></div>
+        <button class="btn sm" onclick="logout()" style="margin-left:8px">Logout</button>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+  </main>
+</div>
+<div id="modal-root"></div>
+
+<script>
+/* ============================================================
+   TOURDESK — single-file app
+   Data layer: localStorage now; Google Sheets/Drive/Gmail
+   sync hooks are stubbed in the SYNC section for setup later.
+   ============================================================ */
+
+/* ---------- DATA STORE ---------- */
+const DB = {
+  venues: [], tours: [], events: [], contacts: [], artists: [], proposals: [],
+  activity: [],
+  settings: { mgmtPct: 15, taxRate: 13, serviceFeePct: 5, supabaseConfig: null, googleConnected: false, theme: 'light' },
+  _seq: { v:1, t:1, e:1, c:1, a:1, p:1 }
+};
+
+function uid(kind){ return kind + (DB._seq[kind]++); }
+
+/* ---------- AUDIT LOG ---------- */
+function logActivity(action, recordType, recordName){
+  DB.activity = DB.activity || [];
+  DB.activity.unshift({
+    ts: new Date().toISOString(),
+    user: (typeof AUTH_USER!=='undefined' && AUTH_USER) ? AUTH_USER.name : 'Unknown',
+    action, recordType, recordName
+  });
+  // Keep the log bounded — last 1000 entries
+  if(DB.activity.length>1000) DB.activity=DB.activity.slice(0,1000);
+}
+
+/* ---------- THEME ---------- */
+function applyTheme(){
+  const t=DB.settings.theme||localStorage.getItem('tourdesk_theme')||'light';
+  document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light');
+  const tog=document.getElementById('theme-toggle');
+  if(tog) tog.title = t==='dark'?'Switch to light mode':'Switch to dark mode';
+}
+function toggleTheme(){
+  const cur=DB.settings.theme||'light';
+  DB.settings.theme = cur==='dark'?'light':'dark';
+  localStorage.setItem('tourdesk_theme', DB.settings.theme);
+  applyTheme();
+  persist();
+}
+
+/* ============================================================
+   AUTHENTICATION — simple username / password
+   ============================================================ */
+const APP_USER = 'AdamLanger';
+const APP_PASS = 'KermitTheDog';
+
+let AUTH_USER = null;
+
+function initAuth(){
+  if(localStorage.getItem('tourdesk_session')==='ok'){
+    AUTH_USER = {name: APP_USER};
+  } else {
+    showLogin();
+  }
+}
+
+function showLogin(){
+  document.body.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);font-family:var(--sans)">
+      <div style="width:320px;padding:40px;border:1px solid var(--bord);border-radius:12px;background:var(--surf);text-align:center">
+        <div style="font-size:28px;font-weight:600;letter-spacing:-.5px;margin-bottom:6px">◆ TourDesk</div>
+        <div style="font-size:13px;color:var(--txt3);margin-bottom:28px">Event & Tour Manager</div>
+        <div style="text-align:left">
+          <div class="field"><label>Username</label><input id="li-user" type="text" autocomplete="username" placeholder="Username" onkeydown="if(event.key==='Enter')doLogin()"></div>
+          <div class="field"><label>Password</label><input id="li-pass" type="password" autocomplete="current-password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        </div>
+        <div id="li-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px"></div>
+        <button class="btn primary" style="width:100%;justify-content:center" onclick="doLogin()">Sign in</button>
+      </div>
+    </div>`;
+  setTimeout(()=>{ const el=document.getElementById('li-user'); if(el) el.focus(); }, 50);
+}
+
+function doLogin(){
+  const u=document.getElementById('li-user').value.trim();
+  const p=document.getElementById('li-pass').value;
+  if(u===APP_USER && p===APP_PASS){
+    localStorage.setItem('tourdesk_session','ok');
+    AUTH_USER={name:APP_USER};
+    location.reload();
+  } else {
+    const err=document.getElementById('li-err');
+    if(err) err.textContent='Incorrect username or password.';
+    document.getElementById('li-pass').value='';
+    document.getElementById('li-pass').focus();
+  }
+}
+
+function logout(){
+  localStorage.removeItem('tourdesk_session');
+  AUTH_USER=null;
+  location.reload();
+}
+
+/* ============================================================
+   DATA PERSISTENCE (with Supabase)
+   ============================================================ */
+let SBDB = null; // Supabase client
+let SBSUB = null; // Supabase real-time subscription
+
+function initSupabase() {
+  if (!DB.settings.supabaseConfig) return; // not configured yet
+  try {
+    const cfg = DB.settings.supabaseConfig;
+    SBDB = window.supabase.createClient(cfg.projectUrl, cfg.apiKey);
+    // Listen for real-time updates
+    SBSUB = SBDB
+      .channel('tourdesk_changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'tourdesk_data' },
+        payload => {
+          if (payload.new && payload.new.data) {
+            const data = typeof payload.new.data === 'string' 
+              ? JSON.parse(payload.new.data) 
+              : payload.new.data;
+            Object.assign(DB, data);
+            if (route && route.view) render(); // refresh UI if viewing
+          }
+        }
+      )
+      .subscribe();
+    updateSyncBadge();
+  } catch (e) { console.error('Supabase init failed:', e); }
+}
+
+async function persist() {
+  try {
+    if (SBDB) {
+      // Write to Supabase
+      const { error } = await SBDB
+        .from('tourdesk_data')
+        .upsert({ id: 1, data: DB }, { onConflict: 'id' });
+      if (error) console.error('Supabase write failed:', error);
+    } else {
+      // Fallback to localStorage if Supabase not configured
+      localStorage.setItem('tourdesk_db', JSON.stringify(DB));
+    }
+  } catch (e) { console.error('Persist failed:', e); }
+}
+
+async function load() {
+  try {
+    if (DB.settings.supabaseConfig && !SBDB) {
+      // Supabase configured but not yet initialized; init now
+      initSupabase();
+    }
+    if (SBDB) {
+      // Load from Supabase
+      const { data, error } = await SBDB
+        .from('tourdesk_data')
+        .select('data')
+        .eq('id', 1)
+        .single();
+      if (data && data.data) {
+        const loaded = typeof data.data === 'string' 
+          ? JSON.parse(data.data) 
+          : data.data;
+        Object.assign(DB, loaded);
+      } else if (!error) {
+        // No data in Supabase yet; seed and push
+        seed();
+        await persist();
+      }
+    } else {
+      // No Supabase; use localStorage
+      const raw = localStorage.getItem('tourdesk_db');
+      if (raw) {
+        Object.assign(DB, JSON.parse(raw));
+      } else {
+        seed();
+      }
+    }
+  } catch (e) {
+    console.error('Load failed:', e);
+    seed();
+  }
+}
+
+
+
+/* ---------- SEED (sample data, removable in Settings) ---------- */
+function seed(){
+  DB.venues = [
+    {id:'v1',name:'Shenkman Arts Centre',hall:'Harold Shenkman Hall',city:'Ottawa',province:'ON',
+     address:'245 Centrum Boulevard, Ottawa, ON K1E 0A1',capacity:500,type:'Theatre',
+     contactId:'c1',
+     terms:{contractType:'rental',guarantee:0,doorSplit:90,rental:1363.31,
+       boxOffice:455.13,crew:1057.20,foh:195.96,stageDoor:129.86,equipment:164.02,
+       merchPct:15,royalties:45.94},
+     notes:'City-owned. Box office min fee $455 or 10% net, whichever greater. IATSE crew (4 techs @ $44.05/hr). HST 13%.',
+     tags:['All Ages','IATSE','City-Owned']},
+    {id:'v2',name:'The Horseshoe Tavern',city:'Toronto',province:'ON',
+     address:'370 Queen St W, Toronto, ON',capacity:250,type:'Club',contactId:'c2',
+     terms:{contractType:'guarantee',guarantee:800,doorSplit:80,rental:0,boxOffice:0,crew:0,foh:0,merchPct:0},
+     notes:'SAMPLE DATA — fabricated for demonstration, not a real deal. Edit or delete.',tags:['Sample','19+']},
+  ];
+  DB.contacts = [
+    {id:'c1',name:'Bernie Leger',role:'Booker',company:'Shenkman Arts Centre',
+     email:'bernie.leger@ottawa.ca',phone:'613-580-2424',venueId:'v1',notes:''},
+    {id:'c2',name:'Mike Chen',role:'Booker',company:'The Horseshoe Tavern',
+     email:'booking@horseshoetavern.com',phone:'416-598-4753',venueId:'v2',notes:''},
+    {id:'c3',name:'Adam Langer',role:'Manager',company:'Langer Public Affairs',
+     email:'adam@langerpa.com',phone:'902-430-8126',notes:'Licensee / promoter'},
+    {id:'c4',name:'Trent McClellan',role:'Talent',company:'',email:'',phone:'',notes:'Comedian'},
+  ];
+  DB.tours = [
+    {id:'t1',name:'Be Nice Tour',artist:'Trent McClellan',managerId:'c3',
+     start:'2026-09-18',end:'2026-09-18',status:'Confirmed',notes:'Single date Ottawa routing'},
+  ];
+  DB.events = [
+    {id:'e1',name:'Ottawa — Shenkman',tourId:'t1',venueId:'v1',date:'2026-09-18',status:'Confirmed',
+     showTime:'20:00',loadIn:'18:30',
+     pricing:{base:30,serviceFee:0,feeType:'fixed',taxRate:13,taxOn:'base',ccFee:0},
+     terms:{contractType:'rental',guarantee:0,doorSplit:90,rental:1363.31},
+     showCosts:{crew:[],equipment:[],fees:[{desc:'Box office min',amount:455.13},{desc:'Crew (IATSE)',amount:1057.20},{desc:'Other',amount:489.84}]},
+     presales:0,capacityAlloc:500,comps:25,mgmtPct:15,
+     bookedItems:[],
+     talentIds:['c4'],vendorIds:[],crewIds:[],
+     files:[]},
+  ];
+  DB.artists = [
+    {id:'a1',name:'Trent McClellan',type:'roster',genre:'Comedy',contactId:'c4',
+     mgmtPct:15,notes:'Headline comedian, touring nationally.',
+     links:[{label:'Website',url:'https://trentmcclellan.com'}],
+     status:'Active',tags:['Comedy','Headline']},
+  ];
+  DB._seq = { v:3, t:2, e:2, c:5, a:2 };
+  persist();
+}
+
+/* ---------- FINANCIAL ENGINE ---------- */
+const BOOKING_CATEGORIES = ['Travel / transport','Accommodation','Advertising / digital','Printing','Distribution','Backline rental','Per diems / meals','Visas / permits','Insurance','Publicist / PR','Other'];
+
+function priceBreakdown(pricing){
+  const feePct = pricing.feeType==='pct';
+  const taxRate=(pricing.taxRate||0)/100;
+  const base=+pricing.base||0;
+  const fee=feePct ? base*((+pricing.serviceFee||0)/100) : (+pricing.serviceFee||0);
+  let taxBase=0;
+  if(pricing.taxOn==='base') taxBase=base;
+  else if(pricing.taxOn==='base_fee') taxBase=base+fee;
+  const tax=taxBase*taxRate;
+  const sub=base+fee+tax;
+  const cc=sub*((+pricing.ccFee||0)/100);
+  return {base,fee,tax,cc,total:sub+cc};
+}
+
+function venuePayout(gross, terms){
+  const ct=terms.contractType;
+  const g=+terms.guarantee||0, s=(+terms.doorSplit||0)/100, r=+terms.rental||0;
+  if(ct==='guarantee') return g;
+  if(ct==='door') return gross*s;
+  if(ct==='guarantee_plus') return Math.max(g, gross*s);
+  if(ct==='rental') return Math.max(0, gross-r);
+  if(ct==='rental_greater_of') return Math.max(0, gross-Math.max(r, gross*s)); // greater of flat OR %
+  if(ct==='rental_plus_pct') return Math.max(0, gross-r-(gross*s)); // flat fee + % of net, both deducted
+  return 0;
+}
+
+function eventFinancials(ev, ticketsSold){
+  const sold = ticketsSold==null ? (+ev.presales||0) : ticketsSold;
+  const pb = priceBreakdown(ev.pricing);
+  const baseRevenue = pb.base * sold;
+  const grossBoxOffice = pb.total * sold;
+  const fixed = showCostsTotal(ev.showCosts||ev.fixedCosts||{});
+  const payout = venuePayout(baseRevenue, ev.terms);
+  const mgmtPct=(+ev.mgmtPct||0)/100;
+  const mgmt = payout*mgmtPct;
+  const artistGross = payout - mgmt;
+  const items = ev.bookedItems||[];
+  let bookedCost=0, serviceFeeIncome=0;
+  items.forEach(it=>{
+    const cost=+it.cost||0;
+    const fee=cost*((+it.feePct||0)/100);
+    bookedCost+=cost; serviceFeeIncome+=fee;
+  });
+  const artistDeductions = bookedCost + serviceFeeIncome;
+  const artistNet = artistGross - artistDeductions;
+  const cap=+ev.capacityAlloc||1;
+  return {sold,pb,baseRevenue,grossBoxOffice,fixed,payout,mgmt,artistGross,
+    bookedCost,serviceFeeIncome,artistDeductions,artistNet,cap,
+    pctSold:Math.round(sold/cap*100)};
+}
+
+/* ---------- PROJECTION ENGINE (estimates) ----------
+   Mirrors the settlement waterfall but uses projected ticket
+   count and projected expenses. Payer types: 'producer'
+   (with markup, flows to you) and 'artist' (tracked only).
+   No 'venue' type on projections.
+*/
+function projectionFigures(ev, ticketsOverride){
+  const p = ev.projection || {};
+  const exps = p.expenses || [];
+  const pb = priceBreakdown(ev.pricing);
+  const sold = ticketsOverride!=null ? ticketsOverride : (+p.ticketsEst||0);
+  const grossBoxOffice = pb.total * sold;
+  const baseRevenue = pb.base * sold;
+  // Projections don't include venue deductions (those appear at settlement)
+  const netBoxOffice = baseRevenue;
+  const payout = venuePayout(netBoxOffice, ev.terms);
+  const mgmtPct=(+ev.mgmtPct||0)/100;
+  const commission = payout*mgmtPct;
+  let producerCost=0, producerMarkup=0, artistTracked=0;
+  exps.forEach(x=>{
+    const amt=+x.amount||0;
+    if(x.payer==='producer'){ producerCost+=amt; producerMarkup+=amt*((+x.markupPct||0)/100); }
+    else if(x.payer==='artist'){ artistTracked+=amt; }
+  });
+  const producerTotal=producerCost+producerMarkup;
+  const yourTotal=commission+producerTotal;
+  const artistGross=payout-commission-producerTotal;       // before artist's own costs
+  const artistNet=artistGross-artistTracked;               // after artist's direct expenses
+  const cap=+ev.capacityAlloc||1;
+  return {sold,grossBoxOffice,baseRevenue,netBoxOffice,payout,commission,
+    mgmtPct:(+ev.mgmtPct||0),producerCost,producerMarkup,producerTotal,
+    artistTracked,artistGross,yourTotal,artistNet,cap,pctSold:Math.round(sold/cap*100)};
+}
+function projectionBreakeven(ev){
+  const cap=+ev.capacityAlloc||1;
+  for(let i=0;i<=cap;i++){ if(projectionFigures(ev,i).artistNet>=0) return i; }
+  return null;
+}
+
+/* Pick the most meaningful figures for an event: actuals if settlement
+   has begun, otherwise the projection. Used in rollups (dashboard, tours). */
+function eventHasActuals(e){
+  const s=e.settlement; if(!s) return false;
+  return (+s.ticketsSold>0) || s.settled || (s.expenses&&s.expenses.length>0);
+}
+function eventBest(e){
+  if(eventHasActuals(e)){
+    const f=settlementFigures(e);
+    return {gross:f.grossBoxOffice, payout:f.payout, commission:f.commission, yourTotal:f.yourTotal, artistNet:f.artistNet, actual:true};
+  }
+  const f=projectionFigures(e);
+  return {gross:f.grossBoxOffice, payout:f.payout, commission:f.commission, yourTotal:f.yourTotal, artistNet:f.artistNet, actual:false};
+}
+
+function breakeven(ev){
+  const cap=+ev.capacityAlloc||1;
+  for(let i=0;i<=cap;i++){ if(eventFinancials(ev,i).artistNet>=0) return i; }
+  return null;
+}
+
+/* ---------- SETTLEMENT ENGINE (real figures) ----------
+   Expense types:
+     'artist'   — artist pays directly; tracked only, no money-flow impact
+     'producer' — you front it; optional markup; both flow into YOUR payout
+     'venue'    — deducted off gross box office at settlement (before the deal)
+   Waterfall:
+     gross → less venue deductions → net box office
+     → apply deal → venue payout (the pot to split)
+     → less mgmt commission, less producer expenses+markups → artist net
+     → your total = commission + producer expenses + markups
+*/
+function settlementFigures(ev){
+  const s = ev.settlement || {};
+  const exps = s.expenses || [];
+  // Actual ticket revenue: prefer manually entered gross if provided,
+  // else compute from actual tickets sold × ticket price breakdown.
+  const pb = priceBreakdown(ev.pricing);
+  const soldActual = +s.ticketsSold || 0;
+  const grossManual = (s.grossOverride!=null && s.grossOverride!=='') ? +s.grossOverride : null;
+  const grossBoxOffice = grossManual!=null ? grossManual : pb.total * soldActual;
+  const baseRevenue = grossManual!=null
+    ? (pb.total>0 ? grossManual*(pb.base/pb.total) : grossManual) // back out base proportionally
+    : pb.base * soldActual;
+
+  let venueDeductions=0, artistTracked=0, producerCost=0, producerMarkup=0;
+
+  // Show costs from event form (crew, equipment, flat fees) are venue deductions
+  const sc = ev.showCosts||{};
+  const showCostLines = [
+    ...(sc.crew||[]).map(l=>({desc:l.desc, amount:(+l.hours||0)*(+l.rate||0)})),
+    ...(sc.equipment||[]).map(l=>({desc:l.desc, amount:+l.amount||0})),
+    ...(sc.fees||[]).map(l=>({desc:l.desc, amount:+l.amount||0}))
+  ];
+  showCostLines.forEach(l=>{ venueDeductions+=(+l.amount||0); });
+
+  // Settlement expenses (entered on the settlement tab)
+  exps.forEach(x=>{
+    const amt=+x.amount||0;
+    if(x.payer==='venue') venueDeductions+=amt;
+    else if(x.payer==='artist') artistTracked+=amt;
+    else if(x.payer==='producer'){
+      producerCost+=amt;
+      producerMarkup+=amt*((+x.markupPct||0)/100);
+    }
+  });
+
+  // For deal types where the venue takes a calculated amount off the top,
+  // surface those as explicit named deduction lines in the waterfall.
+  const ct=ev.terms.contractType;
+  const rentalFlat=+ev.terms.rental||0;
+  const rentalPct=(+ev.terms.doorSplit||0)/100;
+  let dealRentalFlat=0, dealRentalPct=0;
+  if(ct==='rental_plus_pct'){
+    dealRentalFlat=rentalFlat;
+    dealRentalPct=baseRevenue*rentalPct;
+  } else if(ct==='rental_greater_of'){
+    const flat=rentalFlat, pctAmt=baseRevenue*rentalPct;
+    if(pctAmt>=flat){ dealRentalPct=pctAmt; }
+    else { dealRentalFlat=flat; }
+  }
+  // Plain 'rental' — the flat fee is implicit in venuePayout(), no separate display row needed
+  const dealVenueTotal = dealRentalFlat + dealRentalPct;
+
+  const netBoxOffice = Math.max(0, baseRevenue - venueDeductions);
+  // For rental types the deal is applied to net, payout = what's left after venue takes their share
+  const payout = venuePayout(netBoxOffice, ev.terms);
+  const mgmtPct=(+ev.mgmtPct||0)/100;
+  const commission = payout*mgmtPct;
+  const producerTotal = producerCost + producerMarkup;
+  const yourTotal = commission + producerTotal;
+  const artistGross = payout - commission - producerTotal;
+  const artistNet = artistGross - artistTracked;
+
+  return {
+    soldActual, grossBoxOffice, baseRevenue, venueDeductions, netBoxOffice,
+    dealRentalFlat, dealRentalPct, dealVenueTotal,
+    payout, commission, mgmtPct:(+ev.mgmtPct||0),
+    producerCost, producerMarkup, producerTotal,
+    artistTracked, artistGross, yourTotal, artistNet,
+    settled: !!s.settled
+  };
+}
+
+
+/* ---------- FORMAT HELPERS ---------- */
+const money=n=>'$'+(Math.round((+n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0=n=>'$'+Math.round(+n||0).toLocaleString();
+const get=(arr,id)=>arr.find(x=>x.id===id);
+const feeDisp=(val,mode)=> !val ? '—' : (mode==='pct' ? val+'%' : money0(val));
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- ROUTER ---------- */
+let route={view:'dashboard',id:null,tab:null};
+const NAV_TITLES={dashboard:'Dashboard',venues:'Venues',tours:'Tours',events:'Events',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
+
+/* ---------- ARTIST VIEW MODE ---------- */
+let ARTIST_VIEW=null; // artist id when filtering the whole app to one artist
+function enterArtistView(id){
+  ARTIST_VIEW=id;
+  localStorage.setItem('tourdesk_artistview', id);
+  applyArtistViewChrome();
+  go('dashboard');
+}
+function exitArtistView(){
+  ARTIST_VIEW=null;
+  localStorage.removeItem('tourdesk_artistview');
+  applyArtistViewChrome();
+  go('dashboard');
+}
+function switchArtistView(val){
+  if(!val) return exitArtistView();
+  enterArtistView(val);
+}
+// Returns true if app is currently filtered to an artist
+function inArtistView(){ return !!ARTIST_VIEW; }
+function currentArtist(){ return ARTIST_VIEW?get(DB.artists,ARTIST_VIEW):null; }
+// Events/tours belonging to the active artist
+function artistTours(arId){ const ar=get(DB.artists,arId); if(!ar) return []; return DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===ar.name.toLowerCase()); }
+function artistEvents(arId){ const tours=artistTours(arId); return DB.events.filter(e=>tours.some(t=>t.id===e.tourId)); }
+
+function applyArtistViewChrome(){
+  const nav=document.getElementById('nav');
+  // In artist view: only Dashboard, Tours, Events, Proposals visible
+  const allowed=['dashboard','tours','events','proposals'];
+  nav.querySelectorAll('.nav-item').forEach(n=>{
+    n.style.display = (!inArtistView() || allowed.includes(n.dataset.view)) ? '' : 'none';
+  });
+  // Hide manage/sales section labels selectively is overkill; keep labels
+  // Build/refresh the top-bar artist dropdown
+  let bar=document.getElementById('artist-view-bar');
+  if(!bar){
+    bar=document.createElement('div');
+    bar.id='artist-view-bar';
+    bar.style.cssText='display:flex;align-items:center;gap:8px';
+    const ui=document.getElementById('user-info');
+    ui.parentNode.insertBefore(bar, ui);
+  }
+  if(inArtistView()){
+    const ar=currentArtist();
+    bar.innerHTML=`<span style="font-size:12px;color:var(--txt3)">Viewing as</span>
+      <select onchange="switchArtistView(this.value)" style="padding:5px 8px;border:1px solid var(--acc);border-radius:6px;background:var(--acc-soft);color:var(--txt);font-size:12px;font-weight:600">
+        ${DB.artists.filter(a=>a.type==='roster').map(a=>`<option value="${a.id}" ${a.id===ARTIST_VIEW?'selected':''}>${esc(a.name)}</option>`).join('')}
+      </select>
+      <button class="btn sm" onclick="exitArtistView()" style="padding:4px 10px">Exit</button>`;
+  } else {
+    bar.innerHTML='';
+  }
+}
+
+function go(view,id=null,tab=null){
+  // In artist view, block disallowed views
+  if(inArtistView() && !['dashboard','tours','events','proposals'].includes(view)){
+    view='dashboard'; id=null; tab=null;
+  }
+  route={view,id,tab};
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
+  document.getElementById('page-title').textContent=(inArtistView()?(currentArtist()?.name+' · '):'')+(NAV_TITLES[view]||'TourDesk');
+  render();
+}
+
+function render(){
+  const c=document.getElementById('content');
+  const a=document.getElementById('page-actions');
+  a.innerHTML='';
+  // Show user info
+  if(AUTH_USER){
+    const userInfo=document.getElementById('user-info');
+    if(userInfo){
+      userInfo.innerHTML=`<span>${esc(AUTH_USER.name)}</span>`;
+    }
+  }
+  const R=VIEWS[route.view];
+  if(R){ R.render(c,a); } else { c.innerHTML='<div class="empty">Not found</div>'; }
+}
+
+/* View modules are attached to VIEWS in later sections */
+const VIEWS={};
+
+/* ---------- MODAL ---------- */
+function openModal(title, bodyHTML, footHTML){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" id="ov"><div class="modal">
+    <div class="modal-head"><div class="modal-title">${esc(title)}</div><div class="modal-x" onclick="closeModal()">×</div></div>
+    <div class="modal-body">${bodyHTML}</div>
+    <div class="modal-foot">${footHTML||''}</div>
+  </div></div>`;
+  document.getElementById('ov').addEventListener('mousedown',e=>{ if(e.target.id==='ov') closeModal(); });
+}
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+function fv(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
+function fvn(id){ const e=document.getElementById(id); return e?(+e.value||0):0; }
+
+/* ============================================================
+   VIEW: DASHBOARD
+   ============================================================ */
+VIEWS.dashboard={
+  render(c){
+    const av=inArtistView();
+    const events = av?artistEvents(ARTIST_VIEW):DB.events;
+    const tours = av?artistTours(ARTIST_VIEW):DB.tours;
+    const {firm,routing,all}=splitTotals(events);
+    const upcoming=events.filter(e=>e.date>=todayStr()).sort((a,b)=>a.date.localeCompare(b.date));
+    c.innerHTML=`
+      ${av?`<div class="banner" style="margin-bottom:16px">Viewing as <strong>${esc(currentArtist().name)}</strong> — showing only their tours and events. <a onclick="exitArtistView()" style="cursor:pointer">Exit artist view</a></div>`:''}
+      <div class="stats">
+        ${av?`
+          <div class="stat"><div class="stat-val">${tours.length}</div><div class="stat-lbl">Tours</div></div>
+          <div class="stat"><div class="stat-val">${events.length}</div><div class="stat-lbl">Shows</div></div>
+          <div class="stat"><div class="stat-val ${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</div><div class="stat-lbl">Artist net (confirmed)</div></div>
+          <div class="stat"><div class="stat-val" style="color:var(--txt2)">${money0(routing.net)}</div><div class="stat-lbl">Artist net (routing)</div></div>
+        `:`
+          <div class="stat"><div class="stat-val">${DB.venues.length}</div><div class="stat-lbl">Venues</div></div>
+          <div class="stat"><div class="stat-val">${DB.events.length}</div><div class="stat-lbl">Events</div></div>
+          <div class="stat"><div class="stat-val pos">${money0(firm.comm)}</div><div class="stat-lbl">Commission (confirmed)</div></div>
+          <div class="stat"><div class="stat-val" style="color:var(--txt2)">${money0(routing.comm)}</div><div class="stat-lbl">Commission (routing)</div></div>
+        `}
+      </div>
+      ${!av?`<div style="display:flex;gap:16px;margin:-8px 0 18px;flex-wrap:wrap;font-size:12px;color:var(--txt3)">
+        <span>Artist net (confirmed): <strong class="${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</strong></span>
+        <span>· routing: <strong>${money0(routing.net)}</strong></span>
+        <span>· total: <strong>${money0(all.net)}</strong></span>
+      </div>`:''}
+      <div class="sec-head"><span class="sec-title">Upcoming events</span></div>
+      ${upcoming.length? tableEvents(upcoming) : emptyState('◉','No upcoming events')}
+      <div style="height:22px"></div>
+      <div class="sec-head"><span class="sec-title">Tours</span></div>
+      <div class="cards-grid">${tours.map(tourCard).join('')||emptyState('↝','No tours yet')}</div>`;
+  }
+};
+function todayStr(){return new Date().toISOString().slice(0,10);}
+
+function tableEvents(list){
+  const hideComm=inArtistView();
+  return `<table class="tbl"><thead><tr>
+    <th>Event</th><th>Date</th><th>Venue</th><th>Sold</th>
+    <th class="num">Gross</th>${hideComm?'':'<th class="num">My comm.</th>'}<th class="num">Artist net</th><th>Status</th></tr></thead><tbody>
+    ${list.map(e=>{
+      const v=get(DB.venues,e.venueId), f=eventBest(e);
+      const cap=+e.capacityAlloc||1;
+      const sold=f.actual?(+e.settlement.ticketsSold||0):(e.projection?+e.projection.ticketsEst||0:0);
+      return `<tr onclick="go('events','${e.id}')">
+        <td style="font-weight:500">${esc(e.name)}</td><td>${esc(e.date)}</td>
+        <td>${v?esc(v.name):'—'}</td>
+        <td>${sold}/${e.capacityAlloc} <span class="muted">(${Math.round(sold/cap*100)}%${f.actual?'':' est'})</span></td>
+        <td class="num">${money0(f.gross)}</td>
+        ${hideComm?'':`<td class="num pos">${money0(f.commission)}</td>`}
+        <td class="num ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</td>
+        <td><span class="badge ${statusColor(e.status)}">${esc(e.status)}</span></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+function statusColor(s){return s==='Confirmed'?'green':s==='Routing'?'amber':s==='Completed'?'blue':'gray';}
+
+function tourCard(t){
+  const evts=DB.events.filter(e=>e.tourId===t.id);
+  const {firm,routing}=splitTotals(evts);
+  const hideComm=inArtistView();
+  return `<div class="card" onclick="go('tours','${t.id}')">
+    <div class="card-top"><div><div class="card-title">${esc(t.name)}</div>
+    <div class="card-sub">${esc(t.artist)}</div></div>
+    <span class="badge ${statusColor(t.status)}">${esc(t.status)}</span></div>
+    <div class="card-meta">
+      <div class="meta"><label>Shows</label><span>${evts.length}</span></div>
+      ${hideComm?'':`<div class="meta"><label>Commission (firm)</label><span class="pos">${money0(firm.comm)}</span></div>`}
+      <div class="meta"><label>Artist net (firm)</label><span class="${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</span></div>
+    </div>
+    ${routing.count?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--bord2);display:flex;gap:12px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--txt3)">+ ${routing.count} routing:</span>
+      ${hideComm?'':`<span style="font-size:11px;color:var(--txt3)">comm ${money0(routing.comm)}</span>`}
+      <span style="font-size:11px;color:var(--txt3)">artist ${money0(routing.net)}</span>
+    </div>`:''}
+  </div>`;
+}
+function emptyState(ico,msg){return `<div class="empty"><div class="empty-ico">${ico}</div><p>${esc(msg)}</p></div>`;}
+
+/* ============================================================
+   VIEW: VENUES
+   ============================================================ */
+VIEWS.venues={
+  render(c,a){
+    if(route.id) return this.detail(c,a,route.id);
+    a.innerHTML=`<button class="btn primary" onclick="venueForm()">+ Add venue</button>`;
+    c.innerHTML=`
+      <div class="field" style="max-width:340px;margin-bottom:16px">
+        <input id="vn-search" placeholder="Search venues by name, city…" oninput="filterCards('vn')" style="width:100%">
+      </div>
+      <div id="vn-list" class="cards-grid">${DB.venues.map(venueCard).join('')||emptyState('▣','No venues yet')}</div>`;
+  },
+  detail(c,a,id){
+    const v=get(DB.venues,id); if(!v){go('venues');return;}
+    const contact=get(DB.contacts,v.contactId);
+    const evts=DB.events.filter(e=>e.venueId===id);
+    a.innerHTML=`<button class="btn sm" onclick="venueForm('${id}')">Edit</button>
+      <button class="btn sm danger" onclick="deleteVenue('${id}')">Delete</button>`;
+    const t=v.terms||{};
+    c.innerHTML=`
+      <div class="detail-head">
+        <span class="back" onclick="go('venues')">← Venues</span>
+        <span class="detail-title">${esc(v.name)}</span>
+        <span class="badge gray">${esc(v.type||'Venue')}</span>
+      </div>
+      <div class="sec"><div class="sec-label">Venue info</div>
+        <div class="info-grid">
+          <div class="info"><label>Hall</label><span>${esc(v.hall||'—')}</span></div>
+          <div class="info"><label>City</label><span>${esc(v.city)}, ${esc(v.province)}</span></div>
+          <div class="info"><label>Capacity</label><span>${v.capacity||'—'}</span></div>
+          <div class="info"><label>Address</label><span>${esc(v.address||'—')}</span></div>
+        </div>
+      </div>
+      <div class="sec"><div class="sec-label">Primary contact</div>
+        <div class="info-grid">
+          <div class="info"><label>Name</label><span>${esc(v.contactName||contact?.name||'—')}</span></div>
+          <div class="info"><label>Role</label><span>${esc(v.contactRole||contact?.role||'—')}</span></div>
+          <div class="info"><label>Email</label><span>${(v.contactEmail||contact?.email)?`<a href="mailto:${esc(v.contactEmail||contact?.email)}">${esc(v.contactEmail||contact?.email)}</a>`:'—'}</span></div>
+          <div class="info"><label>Phone</label><span>${esc(v.contactPhone||contact?.phone||'—')}</span></div>
+        </div>
+      </div>
+      ${v.notes?`<div class="sec"><div class="sec-label">Notes</div><p style="font-size:13px;color:var(--txt2);line-height:1.6">${esc(v.notes)}</p></div>`:''}
+      ${(v.tags||[]).length?`<div class="sec">${v.tags.map(tg=>`<span class="tag">${esc(tg)}</span>`).join('')}</div>`:''}
+      <div class="sec"><div class="sec-label">Events at this venue (${evts.length})</div>
+        ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No events here yet.</p>'}</div>`;
+  }
+};
+function ctLabel(ct){return {guarantee:'Guarantee',door:'Door split',guarantee_plus:'Guarantee+',rental:'Rental (flat fee)',rental_greater_of:'Rental (greater of flat or %)',rental_plus_pct:'Rental (flat fee + % of net)'}[ct]||'—';}
+
+function venueCard(v){
+  const t=v.terms||{};
+  return `<div class="card" onclick="go('venues','${v.id}')">
+    <div class="card-top"><div><div class="card-title">${esc(v.name)}</div>
+    <div class="card-sub">${esc(v.city)}, ${esc(v.province)}</div></div>
+    <span class="badge gray">${esc(v.type||'')}</span></div>
+    <div class="card-meta">
+      <div class="meta"><label>Capacity</label><span>${v.capacity||'—'}</span></div>
+      <div class="meta"><label>Deal</label><span>${ctLabel(t.contractType)}</span></div>
+      <div class="meta"><label>Guarantee</label><span>${t.guarantee?money0(t.guarantee):'—'}</span></div>
+      <div class="meta"><label>Split</label><span>${t.doorSplit?t.doorSplit+'%':'—'}</span></div>
+    </div></div>`;
+}
+
+function feeMode(t,key){ return (t[key+'Mode'])||'fixed'; }
+function feeToggleField(label,id,val,mode){
+  return `<div class="field"><label>${label}</label>
+    <div style="display:flex;gap:6px">
+      <input id="${id}" type="number" value="${val||''}" style="flex:1">
+      <select id="${id}-mode" style="width:64px;padding:8px 6px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);font-size:13px">
+        <option value="fixed" ${mode==='fixed'?'selected':''}>$</option>
+        <option value="pct" ${mode==='pct'?'selected':''}>%</option>
+      </select>
+    </div></div>`;
+}
+function venueForm(id, prefill){
+  const v=id?get(DB.venues,id):(prefill||{});
+  const ct=v.contractType||'rental';
+  const body=`
+    <div class="field"><label>Venue name</label><input id="vf-name" value="${esc(v.name||'')}"></div>
+    <div class="row2">
+      <div class="field"><label>Hall / room</label><input id="vf-hall" value="${esc(v.hall||'')}"></div>
+      <div class="field"><label>Type</label><select id="vf-type">
+        ${['Club','Theatre','Arena','Festival','Bar','Corporate','Other'].map(x=>`<option ${v.type===x?'selected':''}>${x}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>City</label><input id="vf-city" value="${esc(v.city||'')}"></div>
+      <div class="field"><label>Province</label><input id="vf-prov" value="${esc(v.province||'')}"></div>
+      <div class="field"><label>Capacity</label><input id="vf-cap" type="number" value="${v.capacity||''}"></div>
+    </div>
+    <div class="field"><label>Address</label><input id="vf-addr" value="${esc(v.address||'')}"></div>
+    <div class="form-section">Primary contact</div>
+    <div class="row2">
+      <div class="field"><label>Contact name</label><input id="vf-cname" value="${esc(v.contactName||'')}"></div>
+      <div class="field"><label>Role / title</label><input id="vf-crole" value="${esc(v.contactRole||'')}" placeholder="e.g. Facility Coordinator"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Email</label><input id="vf-cemail" type="email" value="${esc(v.contactEmail||'')}"></div>
+      <div class="field"><label>Phone</label><input id="vf-cphone" value="${esc(v.contactPhone||'')}"></div>
+    </div>
+    <div class="form-section">Default deal terms <span style="font-weight:400;font-size:11px;color:var(--txt3)">(auto-fills when venue is selected on an event — always overridable)</span></div>
+    <div class="field"><label>Contract type</label>
+      <select id="vf-ct" onchange="toggleVenueDealFields()">
+        <option value="guarantee" ${ct==='guarantee'?'selected':''}>Guarantee</option>
+        <option value="door" ${ct==='door'?'selected':''}>Door split</option>
+        <option value="guarantee_plus" ${ct==='guarantee_plus'?'selected':''}>Guarantee + % (greater of)</option>
+        <option value="rental" ${ct==='rental'?'selected':''}>Rental (flat fee)</option>
+        <option value="rental_greater_of" ${ct==='rental_greater_of'?'selected':''}>Rental (greater of flat or %)</option>
+        <option value="rental_plus_pct" ${ct==='rental_plus_pct'?'selected':''}>Rental (flat + % of net)</option>
+      </select>
+    </div>
+    <div id="vf-deal-fields">
+      <div class="row2" id="vfd-guarantee-row" style="display:none">
+        <div class="field"><label>Guarantee ($)</label><input id="vf-guarantee" type="number" value="${v.guarantee||''}"></div>
+      </div>
+      <div class="row2" id="vfd-rental-row" style="display:none">
+        <div class="field"><label>Rental flat fee ($)</label><input id="vf-rental" type="number" step="0.01" value="${v.rental||''}"></div>
+      </div>
+      <div class="row2" id="vfd-split-row" style="display:none">
+        <div class="field"><label>Split / % of net (%)</label><input id="vf-split" type="number" step="0.1" value="${v.doorSplit||v.rentalPct||''}"></div>
+      </div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="vf-notes">${esc(v.notes||'')}</textarea></div>
+    <div class="field"><label>Tags (comma separated)</label><input id="vf-tags" value="${esc((v.tags||[]).join(', '))}"></div>`;
+  openModal(id?'Edit venue':'Add venue', body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveVenue('${id||''}')">Save venue</button>`);
+  setTimeout(toggleVenueDealFields, 50);
+}
+
+function toggleVenueDealFields(){
+  const ct=document.getElementById('vf-ct')?.value||'rental';
+  const showGuarantee=['guarantee','guarantee_plus'].includes(ct);
+  const showRental=['rental','rental_greater_of','rental_plus_pct'].includes(ct);
+  const showSplit=['door','guarantee_plus','rental_greater_of','rental_plus_pct'].includes(ct);
+  const gr=document.getElementById('vfd-guarantee-row');
+  const rr=document.getElementById('vfd-rental-row');
+  const sr=document.getElementById('vfd-split-row');
+  if(gr) gr.style.display=showGuarantee?'':'none';
+  if(rr) rr.style.display=showRental?'':'none';
+  if(sr) sr.style.display=showSplit?'':'none';
+}
+
+function saveVenue(id){
+  const ct=fv('vf-ct');
+  const rec={
+    name:fv('vf-name'),hall:fv('vf-hall'),type:fv('vf-type'),city:fv('vf-city'),
+    province:fv('vf-prov'),capacity:fvn('vf-cap'),address:fv('vf-addr'),
+    contactName:fv('vf-cname'),contactRole:fv('vf-crole'),
+    contactEmail:fv('vf-cemail'),contactPhone:fv('vf-cphone'),
+    notes:fv('vf-notes'),tags:fv('vf-tags').split(',').map(s=>s.trim()).filter(Boolean),
+    contractType:ct,
+    guarantee:fvn('vf-guarantee'),
+    rental:fvn('vf-rental'),
+    doorSplit:fvn('vf-split'),
+    rentalPct:fvn('vf-split'),
+  };
+  if(id){ Object.assign(get(DB.venues,id),rec); logActivity('edited','Venue',rec.name); }
+  else { rec.id=uid('v'); DB.venues.push(rec); logActivity('created','Venue',rec.name); }
+  persist();closeModal();render();
+}
+
+/* ---- Paste contract data → review in venue form ---- */
+function pasteContract(){
+  const body=`<p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+    Paste contract data below as a JSON block. Ask Claude to "extract this contract" and paste the result here — it fills the form for your review before saving. Nothing saves automatically.</p>
+    <div class="field"><textarea id="paste-json" style="min-height:160px;font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder='{"name":"Capitol Theatre","city":"Moncton",...}'></textarea></div>
+    <p class="muted" style="font-size:11px">Tip: any field can also be filled or corrected by hand after import.</p>`;
+  openModal('Paste contract data', body,
+    `<button class="btn" onclick="venueForm()">Back</button>
+     <button class="btn primary" onclick="applyPastedContract()">Fill form</button>`);
+}
+function applyPastedContract(){
+  let d;
+  try { d=JSON.parse(fv('paste-json')); }
+  catch(e){ alert('That doesn\'t look like valid data. Paste the JSON block exactly as provided.'); return; }
+  const t=d.terms||{};
+  venueForm(null, {
+    name:d.name||'',hall:d.hall||'',type:d.type||'Theatre',city:d.city||'',province:d.province||'',
+    capacity:d.capacity||'',address:d.address||'',
+    notes:d.notes||'',tags:d.tags||[],
+    terms:{contractType:t.contractType||'rental',doorSplit:t.doorSplit||'',guarantee:t.guarantee||'',
+      rental:t.rental||'',rentalMode:t.rentalMode||'fixed',
+      boxOffice:t.boxOffice||'',boxOfficeMode:t.boxOfficeMode||'fixed',
+      crew:t.crew||'',crewMode:t.crewMode||'fixed',merchPct:t.merchPct||'',
+      taxRate:t.taxRate!=null?t.taxRate:null,taxOn:t.taxOn||null,ticketNotes:t.ticketNotes||''}
+  });
+}
+
+/* ============================================================
+   VIEW: TOURS
+   ============================================================ */
+VIEWS.tours={
+  render(c,a){
+    if(route.id) return this.detail(c,a,route.id);
+    a.innerHTML=`<button class="btn primary" onclick="tourForm()">+ New tour</button>`;
+    let tlist=inArtistView()?artistTours(ARTIST_VIEW):DB.tours;
+    c.innerHTML=`
+      <div class="field" style="max-width:340px;margin-bottom:16px">
+        <input id="tr-search" placeholder="Search tours by name, artist…" oninput="filterCards('tr')" style="width:100%">
+      </div>
+      <div id="tr-list" class="cards-grid">${tlist.map(tourCard).join('')||emptyState('↝','No tours yet')}</div>`;
+  },
+  detail(c,a,id){
+    const t=get(DB.tours,id); if(!t){go('tours');return;}
+    const evts=DB.events.filter(e=>e.tourId===id);
+    let rev=0,net=0;evts.forEach(e=>{const f=eventBest(e);rev+=f.gross;net+=f.artistNet;});
+    const mgr=get(DB.contacts,t.managerId);
+    a.innerHTML=`<button class="btn sm" onclick="tourForm('${id}')">Edit</button>
+      <button class="btn sm danger" onclick="deleteTour('${id}')">Delete</button>
+      <button class="btn primary sm" onclick="eventForm(null,'${id}')">+ Add show</button>`;
+    c.innerHTML=`
+      <div class="detail-head"><span class="back" onclick="go('tours')">← Tours</span>
+        <span class="detail-title">${esc(t.name)}</span>
+        <span class="badge ${statusColor(t.status)}">${esc(t.status)}</span></div>
+      <div class="stats">
+        <div class="stat"><div class="stat-val">${evts.length}</div><div class="stat-lbl">Shows</div></div>
+        <div class="stat"><div class="stat-val">${money0(rev)}</div><div class="stat-lbl">Gross</div></div>
+        <div class="stat"><div class="stat-val ${net>=0?'pos':'neg'}">${money0(net)}</div><div class="stat-lbl">Net</div></div>
+        <div class="stat"><div class="stat-val" style="font-size:15px">${esc(t.start||'—')}</div><div class="stat-lbl">Start</div></div>
+      </div>
+      <div class="sec"><div class="sec-label">Tour info</div>
+        <div class="info-grid">
+          <div class="info"><label>Artist</label><span>${esc(t.artist)}</span></div>
+          <div class="info"><label>Manager</label><span>${mgr?esc(mgr.name):'—'}</span></div>
+          <div class="info"><label>Dates</label><span>${esc(t.start||'—')} – ${esc(t.end||'—')}</span></div>
+        </div>
+        ${t.notes?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(t.notes)}</p>`:''}
+      </div>
+      <div class="sec"><div class="sec-label">Shows</div>
+        ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No shows yet.</p>'}</div>`;
+  }
+};
+function tourForm(id){
+  const t=id?get(DB.tours,id):{};
+  const mgrs=DB.contacts.filter(c=>c.role==='Manager'||true);
+  const body=`
+    <div class="field"><label>Tour name</label><input id="tf-name" value="${esc(t.name||'')}"></div>
+    <div class="row2">
+      <div class="field"><label>Artist</label><input id="tf-artist" value="${esc(t.artist||'')}"></div>
+      <div class="field"><label>Manager</label><select id="tf-mgr"><option value="">—</option>
+        ${mgrs.map(c=>`<option value="${c.id}" ${t.managerId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>Start</label><input id="tf-start" type="date" value="${t.start||''}"></div>
+      <div class="field"><label>End</label><input id="tf-end" type="date" value="${t.end||''}"></div>
+      <div class="field"><label>Status</label><select id="tf-status">
+        ${['Routing','Confirmed','Completed'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="tf-notes">${esc(t.notes||'')}</textarea></div>`;
+  openModal(id?'Edit tour':'New tour',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveTour('${id||''}')">Save tour</button>`);
+}
+function saveTour(id){
+  const rec={name:fv('tf-name'),artist:fv('tf-artist'),managerId:fv('tf-mgr'),
+    start:fv('tf-start'),end:fv('tf-end'),status:fv('tf-status'),notes:fv('tf-notes')};
+  if(id){Object.assign(get(DB.tours,id),rec);logActivity('edited','Tour',rec.name);}
+  else{rec.id=uid('t');DB.tours.push(rec);logActivity('created','Tour',rec.name);}
+  persist();closeModal();render();
+}
+
+/* ============================================================
+   VIEW: EVENTS  (full deal intake + calculator + files)
+   ============================================================ */
+VIEWS.events={
+  render(c,a){
+    if(route.id) return this.detail(c,a,route.id);
+    a.innerHTML=`<button class="btn primary" onclick="eventForm()">+ New event</button>`;
+    let list=[...DB.events].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    if(inArtistView()) list=list.filter(e=>artistEvents(ARTIST_VIEW).some(ae=>ae.id===e.id));
+    c.innerHTML=`
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <input id="ev-search" placeholder="Search events, venues, artists…" oninput="filterList('ev')" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
+        <select id="ev-filter-status" onchange="filterList('ev')" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
+          <option value="">All statuses</option>
+          ${['Routing','Confirmed','Completed'].map(s=>`<option>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div id="ev-list">${list.length?tableEventsSearchable(list):emptyState('◉','No events yet')}</div>`;
+  },
+  detail(c,a,id){
+    const e=get(DB.events,id); if(!e){go('events');return;}
+    const v=get(DB.venues,e.venueId), t=get(DB.tours,e.tourId);
+    const tab=route.tab||'overview';
+    a.innerHTML=`<button class="btn sm" onclick="eventForm('${id}')">Edit deal</button>
+      <button class="btn sm" onclick="duplicateEvent('${id}')">Duplicate</button>
+      <button class="btn sm danger" onclick="deleteEvent('${id}')">Delete</button>`;
+    c.innerHTML=`
+      <div class="detail-head"><span class="back" onclick="go('events')">← Events</span>
+        <span class="detail-title">${esc(e.name)}</span>
+        <span class="badge ${statusColor(e.status)}">${esc(e.status)}</span></div>
+      <div class="tabs">
+        ${[['overview','Overview'],['settlement','Settlement'],['people','People'],['files','Files']].map(([tb,lbl])=>
+          `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}')">${lbl}</div>`).join('')}
+      </div>
+      <div id="ev-tab"></div>`;
+    const host=document.getElementById('ev-tab');
+    if(tab==='overview') eventOverview(host,e,v,t);
+    else if(tab==='settlement') eventSettlement(host,e);
+    else if(tab==='people') eventPeople(host,e);
+    else if(tab==='files') eventFiles(host,e);
+  }
+};
+
+// Searchable wrapper around tableEvents — adds data-search to rows
+function tableEventsSearchable(list){
+  const html=tableEvents(list);
+  // inject data-search attributes by re-mapping; simpler: wrap rows via a parallel build
+  return html;
+}
+
+function filterCards(prefix){
+  const q=(document.getElementById(prefix+'-search')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('#'+prefix+'-list .card').forEach(card=>{
+    card.style.display=!q||card.textContent.toLowerCase().includes(q)?'':'none';
+  });
+}
+
+function filterList(prefix){
+  const q=(document.getElementById(prefix+'-search')?.value||'').toLowerCase().trim();
+  const statusEl=document.getElementById(prefix+'-filter-status');
+  const status=statusEl?statusEl.value:'';
+  const rows=document.querySelectorAll('#'+prefix+'-list tbody tr');
+  rows.forEach(r=>{
+    const txt=r.textContent.toLowerCase();
+    const matchQ=!q||txt.includes(q);
+    const matchS=!status||txt.includes(status.toLowerCase());
+    r.style.display=(matchQ&&matchS)?'':'none';
+  });
+}
+
+function duplicateEvent(id){
+  const e=get(DB.events,id); if(!e) return;
+  const copy=JSON.parse(JSON.stringify(e));
+  copy.id=uid('e');
+  copy.name=(e.name||'Event')+' (copy)';
+  copy.date=''; // reset date
+  copy.presales=0;
+  // reset settlement actuals but keep cost structure
+  copy.settlement={ticketsSold:0,grossOverride:'',expenses:(e.settlement&&e.settlement.expenses||[]).filter(x=>x.payer!=='venue'?false:false),settled:false,notes:''};
+  // keep showCosts, terms, pricing, projection expenses
+  copy.settlement.expenses=[];
+  DB.events.push(copy);
+  logActivity('created','Event',copy.name+' (duplicated)');
+  persist();
+  go('events',copy.id,'overview');
+}
+
+const CHECKLIST_ITEMS={
+  deposit:{label:'Deposit sent',icon:'💳'},
+  insurance:{label:'Insurance sent',icon:'🛡'},
+  techRider:{label:'Tech rider sent',icon:'🎛'}
+};
+function renderEventChecklist(e){
+  const cl=e.checklist||{};
+  const allDone=Object.keys(CHECKLIST_ITEMS).every(k=>cl[k]&&cl[k].confirmed);
+  const items=Object.entries(CHECKLIST_ITEMS).map(([key,item])=>{
+    const done=cl[key]&&cl[key].confirmed;
+    return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:${done?'var(--green-soft)':'var(--surf2)'};border-radius:var(--rad);margin-bottom:6px">
+      <span style="font-size:18px;margin-top:1px">${done?'✅':'⬜'}</span>
+      <div style="flex:1">
+        <div style="font-weight:500;font-size:13px">${item.icon} ${item.label}</div>
+        ${done
+          ?`<div style="font-size:12px;color:var(--txt2);margin-top:4px;white-space:pre-wrap">${esc(cl[key].note)}</div>`
+          :`<div style="margin-top:8px">
+              <textarea id="cl-${e.id}-${key}" placeholder="Paste confirmation email (min. 20 characters)…" style="width:100%;min-height:60px;font-size:12px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-family:inherit;resize:vertical" oninput="checklistEnableBtn('${e.id}','${key}')"></textarea>
+              <button id="cl-btn-${e.id}-${key}" class="btn sm primary" style="margin-top:6px;opacity:.4;pointer-events:none" onclick="confirmChecklist('${e.id}','${key}')">Confirm</button>
+            </div>`}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="sec">
+    <div class="sec-label" style="display:flex;justify-content:space-between">
+      <span>Show checklist</span>
+      <span style="font-weight:400;font-size:12px;color:${allDone?'var(--green)':'var(--amber)'}">${allDone?'✓ All confirmed':'Pending items'}</span>
+    </div>
+    ${items}
+  </div>`;
+}
+function checklistEnableBtn(eid,key){
+  const ta=document.getElementById('cl-'+eid+'-'+key);
+  const btn=document.getElementById('cl-btn-'+eid+'-'+key);
+  if(!ta||!btn) return;
+  const ok=(ta.value||'').trim().length>=20;
+  btn.style.opacity=ok?'1':'0.4';
+  btn.style.pointerEvents=ok?'auto':'none';
+}
+function confirmChecklist(eid,key){
+  const ta=document.getElementById('cl-'+eid+'-'+key);
+  if(!ta) return;
+  const note=(ta.value||'').trim();
+  if(note.length<20){ alert('Please paste at least 20 characters of confirmation.'); return; }
+  const e=get(DB.events,eid); if(!e) return;
+  e.checklist=e.checklist||{};
+  e.checklist[key]={confirmed:true,note,confirmedAt:new Date().toISOString()};
+  logActivity('edited','Event',e.name+' (checklist: '+CHECKLIST_ITEMS[key].label+')');
+  persist();
+  go('events',eid,'overview');
+}
+
+// Split events into confirmed/completed vs routing and sum financials
+function splitTotals(events){
+  const firm=events.filter(e=>['Confirmed','Completed'].includes(e.status));
+  const routing=events.filter(e=>!['Confirmed','Completed'].includes(e.status));
+  const sum=list=>{let gross=0,comm=0,net=0; list.forEach(e=>{const f=eventBest(e);gross+=f.gross;comm+=f.commission;net+=f.artistNet;}); return {gross,comm,net,count:list.length};};
+  return {firm:sum(firm),routing:sum(routing),all:sum(events)};
+}
+
+function eventOverview(host,e,v,t){
+  e.projection = e.projection || {ticketsEst: defaultEstimate(e), expenses:[]};
+  e.settlement = e.settlement || {ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''};
+  const pf=projectionFigures(e);
+  const sf=settlementFigures(e);
+  const hasActuals = (+e.settlement.ticketsSold>0) || e.settlement.settled || (e.settlement.expenses&&e.settlement.expenses.length>0);
+  const pb=priceBreakdown(e.pricing);
+
+  const cmpRow=(label,proj,act,opts={})=>{
+    const diff=act-proj;
+    const showDiff=hasActuals && opts.diff!==false;
+    const diffColor = diff>0?'var(--green)':diff<0?'var(--red)':'var(--txt3)';
+    const fmt=opts.count ? (v=>Math.round(v).toLocaleString()) : money0;
+    return `<tr>
+      <td style="padding:7px 0;${opts.b?'font-weight:600':'color:var(--txt2)'}">${label}</td>
+      <td style="text-align:right;padding:7px 12px;${opts.b?'font-weight:600':''}">${fmt(proj)}</td>
+      <td style="text-align:right;padding:7px 12px;${opts.b?'font-weight:600':''}">${hasActuals?fmt(act):'<span class="muted">—</span>'}</td>
+      <td style="text-align:right;padding:7px 0;font-size:12px;color:${diffColor}">${showDiff?(diff>=0?'+':'−')+money0(Math.abs(diff)):''}</td>
+    </tr>`;
+  };
+
+  host.innerHTML=`
+    ${renderEventChecklist(e)}
+    <div class="stats">
+      <div class="stat"><div class="stat-val ${sf.artistNet>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
+      <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.yourTotal):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'To you (actual)':'To you (projected)'}</div></div>
+      <div class="stat"><div class="stat-val">${hasActuals?sf.soldActual:pf.sold}</div><div class="stat-lbl">${hasActuals?'Tickets sold':'Tickets (est.)'} / ${e.capacityAlloc}</div></div>
+      <div class="stat"><div class="stat-val">${money0(hasActuals?sf.payout:pf.payout)}</div><div class="stat-lbl">Venue payout (pot)</div></div>
+    </div>
+
+    <div class="sec"><div class="sec-label">Projected vs actual</div>
+      ${!hasActuals?'<p class="muted" style="font-size:12px;margin:-4px 0 12px">No actuals yet — showing projection. Enter real numbers in the Settlement tab and they\'ll appear here side by side.</p>':''}
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;font-size:10px">
+          <th style="text-align:left;padding-bottom:6px">Line</th>
+          <th style="text-align:right;padding:0 12px 6px">Projected</th>
+          <th style="text-align:right;padding:0 12px 6px">Actual</th>
+          <th style="text-align:right;padding-bottom:6px">Δ</th></tr></thead>
+        <tbody>
+          ${cmpRow('Tickets sold', pf.sold, sf.soldActual, {diff:false, count:true})}
+          ${cmpRow('Gross box office', pf.grossBoxOffice, sf.grossBoxOffice)}
+          ${cmpRow('Venue deductions', 0, sf.venueDeductions)}
+          ${cmpRow('Venue payout (pot)', pf.payout, sf.payout, {b:1})}
+          ${cmpRow('Mgmt commission', pf.commission, sf.commission)}
+          ${cmpRow('Producer expenses + markup', pf.producerTotal, sf.producerTotal)}
+          ${cmpRow('To you (total)', pf.yourTotal, sf.yourTotal, {b:1})}
+          ${cmpRow('Artist gross', pf.artistGross, sf.artistGross, {b:1})}
+          ${cmpRow('Artist expenses (direct)', pf.artistTracked, sf.artistTracked)}
+          ${cmpRow('Artist net', pf.artistNet, sf.artistNet, {b:1})}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec"><div class="sec-label">Event details</div>
+      <div class="info-grid">
+        <div class="info"><label>Venue</label><span>${v?esc(v.name):'—'}</span></div>
+        <div class="info"><label>Tour</label><span>${t?esc(t.name):'—'}</span></div>
+        <div class="info"><label>Date</label><span>${esc(e.date)}</span></div>
+        <div class="info"><label>Show / load-in</label><span>${esc(e.showTime||'—')} / ${esc(e.loadIn||'—')}</span></div>
+        <div class="info"><label>Ticket (base)</label><span>${money(pb.base)}</span></div>
+        <div class="info"><label>Patron pays</label><span>${money(pb.total)}</span></div>
+        <div class="info"><label>Capacity</label><span>${e.capacityAlloc}</span></div>
+        <div class="info"><label>Status</label><span>${esc(e.status)}${e.settlement.settled?' · Settled':''}</span></div>
+      </div>
+    </div>
+    <div class="sec"><div class="sec-label">Deal terms — negotiated for this show</div>
+      <div class="info-grid">
+        <div class="info"><label>Contract</label><span>${ctLabel(e.terms.contractType)}</span></div>
+        <div class="info"><label>Guarantee</label><span>${e.terms.guarantee?money0(e.terms.guarantee):'—'}</span></div>
+        <div class="info"><label>Door split</label><span>${e.terms.doorSplit?e.terms.doorSplit+'%':'—'}</span></div>
+        <div class="info"><label>Rental</label><span>${e.terms.rental?money0(e.terms.rental):'—'}</span></div>
+        <div class="info"><label>Mgmt commission</label><span>${e.mgmtPct}%</span></div>
+      </div>
+    </div>
+    ${(()=>{
+      const sc=e.showCosts||{};
+      const crew=sc.crew||[], equip=sc.equipment||[], fees=sc.fees||[];
+      if(!crew.length&&!equip.length&&!fees.length) return '';
+      const crewTotal=crew.reduce((s,l)=>s+(+l.hours||0)*(+l.rate||0),0);
+      const equipTotal=equip.reduce((s,l)=>s+(+l.amount||0),0);
+      const feesTotal=fees.reduce((s,l)=>s+(+l.amount||0),0);
+      const grand=crewTotal+equipTotal+feesTotal;
+      return `<div class="sec"><div class="sec-label">Venue / show costs — ${money0(grand)} total</div>
+        <div style="font-size:13px">
+          ${crew.length?`<div style="margin-bottom:8px"><span class="muted">Crew:</span>
+            ${crew.map(l=>`<span style="margin-left:10px">${esc(l.desc||'—')} ${l.hours}h × ${money0(l.rate)} = <strong>${money0((+l.hours||0)*(+l.rate||0))}</strong></span>`).join('')}</div>`:''}
+          ${equip.length?`<div style="margin-bottom:8px"><span class="muted">Equipment:</span>
+            ${equip.map(l=>`<span style="margin-left:10px">${esc(l.desc||'—')}: <strong>${money0(l.amount)}</strong></span>`).join('')}</div>`:''}
+          ${fees.length?`<div><span class="muted">Fees:</span>
+            ${fees.map(l=>`<span style="margin-left:10px">${esc(l.desc||'—')}: <strong>${money0(l.amount)}</strong></span>`).join('')}</div>`:''}
+        </div></div>`;
+    })()}`;
+}
+
+/* ---- Projection tab: estimates with same expense model as settlement ---- */
+const PROJ_PAYERS=[['producer','Producer (you front)'],['artist','Artist (direct)']];
+
+function eventCalculator(host,e){
+  e.projection = e.projection || {ticketsEst: defaultEstimate(e), expenses:[]};
+  const p=e.projection;
+  host.innerHTML=`
+    <div class="banner">Projected figures for planning and artist proposals. Defaults to a realistic estimate; drag to model scenarios. Click "Save projection" to keep changes, then "Generate artist proposal" to produce a statement.</div>
+    <div class="row2" style="align-items:start">
+      <div>
+        <div class="sec-label">Estimated tickets sold</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="cl-sold" min="0" max="${e.capacityAlloc}" value="${p.ticketsEst}" oninput="document.getElementById('cl-sold-num').value=this.value;recalcEvent('${e.id}')" style="flex:1">
+          <input type="number" id="cl-sold-num" min="0" max="${e.capacityAlloc}" value="${p.ticketsEst}" oninput="document.getElementById('cl-sold').value=this.value;recalcEvent('${e.id}')" style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+        </div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:4px"><span id="cl-pct-lbl"></span></div>
+      </div>
+      <div>
+        <div class="sec-label">Management commission</div>
+        <div class="field"><input type="number" id="cl-mgmt" value="${e.mgmtPct}" oninput="recalcEvent('${e.id}')"></div>
+      </div>
+    </div>
+    <div class="sec-label" style="margin-top:14px">Projected expenses</div>
+    <div id="cl-items"></div>
+    <button class="btn sm" style="margin-top:8px" onclick="addProjExpense('${e.id}')">+ Add expense</button>
+    <div class="sec-label" style="margin-top:20px">Payout waterfall</div>
+    <div id="cl-waterfall"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn primary sm" onclick="saveCalcToEvent('${e.id}')">Save projection</button>
+      <button class="btn sm" onclick="openProposal('${e.id}')">Generate artist proposal</button>
+    </div>
+    <div class="sec-label" style="margin-top:22px">Projections by attendance</div>
+    <div id="cl-proj" style="overflow-x:auto"></div>`;
+  renderProjExpenses(e);
+  recalcEvent(e.id);
+}
+
+// Realistic default: 60% of capacity (or presales if higher), rounded.
+function defaultEstimate(e){
+  const cap=+e.capacityAlloc||0;
+  const guess=Math.round(cap*0.6);
+  return Math.max(guess, +e.presales||0);
+}
+
+let _calcState={};
+function calcModel(id){
+  const e=get(DB.events,id);
+  if(!_calcState[id]) _calcState[id]={expenses:JSON.parse(JSON.stringify((e.projection&&e.projection.expenses)||[]))};
+  return _calcState[id];
+}
+function renderProjExpenses(e){
+  const st=calcModel(e.id);
+  const host=document.getElementById('cl-items');
+  if(!host) return;
+  if(!st.expenses.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses. Add travel, ads, accommodation, etc. — mark who pays and any markup.</p>'; return; }
+  host.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
+    </div>
+    ${st.expenses.map((x,i)=>{
+      const isProd=x.payer==='producer';
+      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
+      const billsOut=isProd?(+x.amount||0)+markup:0;
+      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Travel" oninput="setProjExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <input type="number" value="${x.amount||0}" oninput="setProjExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <select onchange="setProjExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          ${PROJ_PAYERS.map(([v,l])=>`<option value="${v}" ${x.payer===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setProjExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
+        <span style="text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
+        <button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp('${e.id}',${i})">×</button>
+      </div>`;
+    }).join('')}`;
+}
+function addProjExpense(id){
+  calcModel(id).expenses.push({desc:'',amount:0,payer:'producer',markupPct:DB.settings.serviceFeePct});
+  renderProjExpenses(get(DB.events,id)); recalcEvent(id);
+}
+function setProjExp(id,i,field,val){
+  const st=calcModel(id);
+  st.expenses[i][field] = (field==='desc'||field==='payer') ? val : (+val||0);
+  if(field==='payer') renderProjExpenses(get(DB.events,id));
+  recalcEvent(id);
+}
+function removeProjExp(id,i){
+  calcModel(id).expenses.splice(i,1);
+  renderProjExpenses(get(DB.events,id)); recalcEvent(id);
+}
+
+function recalcEvent(id){
+  const e=get(DB.events,id);
+  const sold=fvn('cl-sold'), mgmt=fvn('cl-mgmt');
+  const model={...e, mgmtPct:mgmt, projection:{ticketsEst:sold, expenses:calcModel(id).expenses}};
+  const f=projectionFigures(model,sold);
+  const pl=document.getElementById('cl-pct-lbl');
+  if(pl) pl.textContent=Math.round(sold/(e.capacityAlloc||1)*100)+'% of capacity';
+  renderProjWaterfall(document.getElementById('cl-waterfall'),f,calcModel(id).expenses);
+  renderProjections(document.getElementById('cl-proj'),model);
+}
+
+function renderProjWaterfall(host,f,expenses){
+  const max=Math.max(f.grossBoxOffice,f.payout,1);
+  const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist').map(x=>(
+    {label:'Less: '+(x.desc||'artist expense'),val:-(+x.amount||0),c:'#c98a3f'}
+  ));
+  const rows=[
+    {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
+    {label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'},
+    null,
+    {label:'Venue payout (pot)',val:f.payout,c:'var(--green)',b:1},
+    {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
+    {label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'},
+    {label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'},
+    null,
+    {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
+    ...artistExpRows,
+    ...(artistExpRows.length?[null,{label:'Artist net',val:f.artistNet,c:f.artistNet>=0?'var(--green)':'var(--red)',b:1}]:[])
+  ];
+  let html=rows.map(r=>{
+    if(!r) return `<div style="height:1px;background:var(--bord);margin:7px 0 7px 175px"></div>`;
+    const w=Math.min(100,Math.abs(r.val)/max*100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:3px">
+      <div style="width:175px;font-size:12px;text-align:right;color:${r.b?'var(--txt)':'var(--txt2)'};${r.b?'font-weight:600':''}">${r.label}</div>
+      <div style="flex:1;height:24px;background:var(--surf2);border-radius:6px;overflow:hidden">
+        <div style="height:100%;width:${w}%;background:${r.c};border-radius:6px;transition:width .2s"></div></div>
+      <div style="width:88px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;${r.b?'font-weight:600':''};color:${r.val<0?'var(--red)':r.b?'var(--txt)':'var(--txt2)'}">${r.val<0?'−':''}${money0(Math.abs(r.val))}</div>
+    </div>`;
+  }).join('');
+  if(f.yourTotal>0){
+    html+=`<div style="margin-top:12px;padding:9px 12px;background:var(--blue-soft);border-radius:var(--rad);font-size:12px;color:var(--blue)">
+      Projected to you: <strong style="font-weight:600">${money0(f.yourTotal)}</strong> (commission ${money0(f.commission)} + producer ${money0(f.producerTotal)})</div>`;
+  }
+  host.innerHTML=html;
+}
+
+function renderProjections(host,model){
+  const cap=+model.capacityAlloc||1;
+  const be=projectionBreakeven(model);
+  const pcts=[10,25,40,50,60,70,80,90,100];
+  const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
+  host.innerHTML=`<table class="tbl"><thead><tr>
+    <th>Tickets</th><th class="num">% cap</th><th class="num">Gross</th>
+    <th class="num">Venue payout</th><th class="num">Mgmt</th>
+    <th class="num">Producer</th><th class="num">To you</th><th class="num">Artist gross</th><th class="num">Artist net</th></tr></thead><tbody>
+    ${pcts.map(p=>{
+      const sold=Math.round(cap*p/100);
+      const f=projectionFigures(model,sold);
+      const hl=p===beStep;
+      return `<tr style="${hl?'background:var(--green-soft)':''}cursor:default">
+        <td>${sold}</td><td class="num">${p}%</td>
+        <td class="num">${money0(f.grossBoxOffice)}</td>
+        <td class="num">${money0(f.payout)}</td>
+        <td class="num">${money0(f.commission)}</td>
+        <td class="num">${money0(f.producerTotal)}</td>
+        <td class="num pos">${money0(f.yourTotal)}</td>
+        <td class="num">${money0(f.artistGross)}</td>
+        <td class="num ${f.artistNet>=0?'pos':'neg'}" style="font-weight:500">${f.artistNet>=0?'+':'−'}${money0(Math.abs(f.artistNet))}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Breakeven for the artist at ${be} tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
+}
+
+function saveCalcToEvent(id){
+  const e=get(DB.events,id);
+  e.mgmtPct=fvn('cl-mgmt');
+  e.projection={ticketsEst:fvn('cl-sold'), expenses:JSON.parse(JSON.stringify(calcModel(id).expenses))};
+  persist();
+  go('events',id,'overview');
+}
+
+/* ---- Artist proposal / estimate (fully transparent, printable) ---- */
+function openProposal(id){
+  const e=get(DB.events,id);
+  const sold=fvn('cl-sold')||(e.projection&&e.projection.ticketsEst)||defaultEstimate(e);
+  const mgmt=fvn('cl-mgmt')||e.mgmtPct;
+  const model={...e, mgmtPct:mgmt, projection:{ticketsEst:sold, expenses:calcModel(id).expenses}};
+  const v=get(DB.venues,e.venueId), t=get(DB.tours,e.tourId);
+  const f=projectionFigures(model,sold);
+  const exps=calcModel(id).expenses||[];
+  const prodExps=exps.filter(x=>x.payer==='producer');
+  const artistExps=exps.filter(x=>x.payer==='artist');
+  const cap=+e.capacityAlloc||1;
+  const pcts=[25,50,60,75,90,100];
+  const body=`
+    <div id="proposal-doc" style="font-size:13px;line-height:1.6">
+      <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid var(--txt)">
+        <div style="font-size:18px;font-weight:600">${esc(t?t.artist:'')||'Artist'} — Show Proposal</div>
+        <div class="muted">${esc(e.name)} · ${esc(v?v.name:'')} · ${esc(e.date)}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr><td style="padding:5px 0">Projected attendance</td><td style="text-align:right">${sold} of ${e.capacityAlloc} (${f.pctSold}%)</td></tr>
+        <tr><td style="padding:5px 0">Ticket price (base)</td><td style="text-align:right">${money(priceBreakdown(e.pricing).base)}</td></tr>
+        <tr><td style="padding:5px 0">Projected base ticket revenue</td><td style="text-align:right">${money0(f.baseRevenue)}</td></tr>
+        <tr><td colspan="2" style="border-top:1px solid var(--bord);padding-top:8px"></td></tr>
+        <tr><td style="padding:5px 0"><strong style="font-weight:600">Venue payout</strong> (${ctLabel(e.terms.contractType)})</td><td style="text-align:right;font-weight:600">${money0(f.payout)}</td></tr>
+        <tr><td style="padding:5px 0">Management commission (${model.mgmtPct}%)</td><td style="text-align:right">−${money0(f.commission)}</td></tr>
+      </table>
+      ${prodExps.length?`
+      <div style="margin-top:14px;font-weight:600">Expenses covered by producer (billed back to artist)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">
+        <thead><tr style="color:var(--txt3);text-align:left"><th style="padding:4px 0;font-weight:500">Item</th><th style="text-align:right;font-weight:500">Cost</th><th style="text-align:right;font-weight:500">Markup</th><th style="text-align:right;font-weight:500">Billed</th></tr></thead>
+        <tbody>${prodExps.map(x=>{const cost=+x.amount||0,mk=cost*((+x.markupPct||0)/100);return `<tr><td style="padding:4px 0">${esc(x.desc||'Expense')}</td><td style="text-align:right">${money0(cost)}</td><td style="text-align:right">${money0(mk)} (${x.markupPct||0}%)</td><td style="text-align:right">${money0(cost+mk)}</td></tr>`;}).join('')}
+        <tr style="border-top:1px solid var(--bord)"><td style="padding:5px 0">Total billed to artist</td><td></td><td style="text-align:right">incl. ${money0(f.producerMarkup)} markup</td><td style="text-align:right;font-weight:600">${money0(f.producerTotal)}</td></tr></tbody>
+      </table>`:''}
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:14px;border-top:2px solid var(--txt)">
+        <tr><td style="padding:8px 0;font-weight:600">Projected artist gross</td><td style="text-align:right;font-weight:600">${money0(f.artistGross)}</td></tr>
+      </table>
+      ${artistExps.length?`<div style="margin-top:10px"><div style="font-weight:600;font-size:12px;margin-bottom:4px">Less: artist's own expenses (paid directly by artist)</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--txt2)">
+        ${artistExps.map(x=>`<tr><td style="padding:3px 0">${esc(x.desc||'Expense')}</td><td style="text-align:right">−${money0(x.amount)}</td></tr>`).join('')}
+        <tr style="border-top:1px solid var(--bord)"><td style="padding:4px 0">Total artist expenses</td><td style="text-align:right">−${money0(f.artistTracked)}</td></tr>
+        </table></div>`:''}
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px;border-top:2px solid var(--txt)">
+        <tr><td style="padding:10px 0;font-weight:600">Projected artist net</td><td style="text-align:right;font-weight:600;color:${f.artistNet>=0?'var(--green)':'var(--red)'}">${money0(f.artistNet)}</td></tr>
+      </table>
+      <div style="margin-top:18px;font-weight:600;font-size:12px">Scenarios by attendance</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
+        <thead><tr style="color:var(--txt3);text-align:left">
+          <th style="padding:4px 0;font-weight:500">Tickets</th><th style="text-align:right;font-weight:500">% cap</th>
+          <th style="text-align:right;font-weight:500">Venue payout</th><th style="text-align:right;font-weight:500">Commission</th>
+          <th style="text-align:right;font-weight:500">Artist gross</th><th style="text-align:right;font-weight:500">Artist net</th></tr></thead>
+        <tbody>${pcts.map(p=>{const s=Math.round(cap*p/100);const ff=projectionFigures(model,s);return `<tr><td style="padding:3px 0">${s}</td><td style="text-align:right">${p}%</td><td style="text-align:right">${money0(ff.payout)}</td><td style="text-align:right">${money0(ff.commission)}</td><td style="text-align:right">${money0(ff.artistGross)}</td><td style="text-align:right;color:${ff.artistNet>=0?'var(--green)':'var(--red)'}">${money0(ff.artistNet)}</td></tr>`;}).join('')}</tbody>
+      </table>
+      <p class="muted" style="font-size:11px;margin-top:14px">All commissions and markups are charged by the management/booking company and are disclosed in full above. Artist's own direct expenses are shown for reference and reduce the artist's net. Figures are projections based on the stated attendance and are subject to final settlement.</p>
+    </div>`;
+  openModal('Artist proposal — '+(t?t.artist:e.name), body,
+    `<button class="btn" onclick="closeModal()">Close</button>
+     <button class="btn primary" onclick="printProposal()">Print / Save PDF</button>`);
+}
+function printProposal(){
+  const doc=document.getElementById('proposal-doc').innerHTML;
+  const w=window.open('','_blank');
+  w.document.write('<html><head><title>Artist Proposal</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#1c1c1a}table{width:100%}</style></head><body>'+doc+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
+}
+
+/* ---- Settlement tab: real figures + scenario slider ---- */
+function eventSettlement(host,e){
+  e.settlement = e.settlement || {ticketsSold:0, grossOverride:'', expenses:[], settled:false, notes:''};
+  const s=e.settlement;
+  const f=settlementFigures(e);
+  const pb=priceBreakdown(e.pricing);
+  const cap=+e.capacityAlloc||1;
+  const defaultSlider=+s.ticketsSold||Math.round(cap*0.6);
+  host.innerHTML=`
+    ${f.settled?'<div class="banner">● Settled</div>':''}
+
+    <div class="sec-label">Ticket sales</div>
+    <div class="row3" style="margin-bottom:6px">
+      <div class="field"><label>Tickets sold (actual)</label><input type="number" id="st-sold" value="${s.ticketsSold||0}" oninput="updateSettlement('${e.id}')"></div>
+      <div class="field"><label>Gross box office override ($)</label><input type="number" id="st-gross" value="${s.grossOverride||''}" placeholder="auto: ${money0(pb.total*(s.ticketsSold||0))}" oninput="updateSettlement('${e.id}')"></div>
+      <div class="field"><label>Capacity</label><input type="number" value="${e.capacityAlloc||0}" disabled style="background:var(--surf2)"></div>
+    </div>
+    <p class="muted" style="font-size:12px;margin-bottom:18px">Leave override blank to auto-calculate from tickets × ${money(pb.total)} (base ${money(pb.base)} + fees/tax).</p>
+
+    <div class="sec-label">Expenses</div>
+    <div id="st-expenses"></div>
+    <button class="btn sm" style="margin-top:8px" onclick="addSettlementExpense('${e.id}')">+ Add expense</button>
+
+    <div class="sec-label" style="margin-top:24px">Waterfall</div>
+    <div id="st-waterfall"></div>
+
+    <div class="sec-label" style="margin-top:22px">Summary</div>
+    <div id="st-summary"></div>
+
+    <div style="margin-top:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary sm" onclick="saveSettlement('${e.id}')">Save</button>
+      <button class="btn sm" onclick="toggleSettled('${e.id}')">${f.settled?'Reopen':'Mark as settled'}</button>
+      <button class="btn sm" onclick="printSettlement('${e.id}')">Print statement</button>
+      <button class="btn sm" onclick="openProposalFromSettlement('${e.id}')">Artist proposal</button>
+    </div>
+
+    <div class="divider" style="margin-top:28px"></div>
+    <div class="sec-label" style="margin-top:18px">Scenarios — using these costs &amp; deal terms</div>
+    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance. All expenses and deal terms above are used in the calculation.</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <input type="range" id="sc-slider" min="0" max="${cap}" value="${defaultSlider}"
+        oninput="document.getElementById('sc-num').value=this.value;renderScenario('${e.id}')"
+        style="flex:1">
+      <input type="number" id="sc-num" min="0" max="${cap}" value="${defaultSlider}"
+        oninput="document.getElementById('sc-slider').value=this.value;renderScenario('${e.id}')"
+        style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+      <span class="muted" style="font-size:12px" id="sc-pct"></span>
+    </div>
+    <div id="sc-waterfall"></div>
+    <div style="overflow-x:auto;margin-top:18px"><div id="sc-table"></div></div>`;
+
+  renderSettlementExpenses(e);
+  renderSettlementWaterfall(e);
+  renderScenario(e.id);
+}
+
+function renderScenario(id){
+  const e=get(DB.events,id);
+  const n=+document.getElementById('sc-num')?.value||0;
+  const cap=+e.capacityAlloc||1;
+  const pct=document.getElementById('sc-pct');
+  if(pct) pct.textContent=Math.round(n/cap*100)+'% of capacity';
+
+  // Build a model that uses settlement expenses mapped to projection types
+  const settlExps=e.settlement?.expenses||[];
+  const projExps=settlExps.filter(x=>x.payer!=='venue').map(x=>({
+    desc:x.desc, amount:x.amount,
+    payer:x.payer==='producer'?'producer':'artist',
+    markupPct:x.markupPct||0
+  }));
+  const model={...e, projection:{ticketsEst:n, expenses:projExps}};
+  const f=projectionFigures(model,n);
+
+  // Waterfall
+  renderProjWaterfall(document.getElementById('sc-waterfall'),f,projExps);
+
+  // Scenarios table at 10% increments
+  const pcts=[10,25,40,50,60,70,80,90,100];
+  const be=projectionBreakeven(model);
+  const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
+  const tbl=document.getElementById('sc-table');
+  if(tbl) tbl.innerHTML=`<table class="tbl"><thead><tr>
+    <th>Tickets</th><th class="num">% cap</th><th class="num">Gross</th>
+    <th class="num">Venue payout</th><th class="num">Your commission</th>
+    <th class="num">Artist gross</th><th class="num">Artist net</th></tr></thead><tbody>
+    ${pcts.map(p=>{
+      const sold=Math.round(cap*p/100);
+      const ff=projectionFigures(model,sold);
+      const hl=p===beStep;
+      return `<tr style="${hl?'background:var(--green-soft)':''}cursor:default">
+        <td>${sold}</td><td class="num">${p}%</td>
+        <td class="num">${money0(ff.grossBoxOffice)}</td>
+        <td class="num">${money0(ff.payout)}</td>
+        <td class="num pos">${money0(ff.commission)}</td>
+        <td class="num">${money0(ff.artistGross)}</td>
+        <td class="num ${ff.artistNet>=0?'pos':'neg'}" style="font-weight:500">${ff.artistNet>=0?'+':'−'}${money0(Math.abs(ff.artistNet))}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Artist breakeven at ${be} tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
+}
+
+function openProposalFromSettlement(id){
+  const e=get(DB.events,id);
+  // Seed calcModel from settlement expenses so proposal uses same costs
+  const settlExps=e.settlement?.expenses||[];
+  _calcState[id]={expenses:settlExps.filter(x=>x.payer!=='venue').map(x=>({
+    desc:x.desc, amount:x.amount,
+    payer:x.payer==='producer'?'producer':'artist',
+    markupPct:x.markupPct||0
+  }))};
+  const sliderVal=+document.getElementById('sc-num')?.value||(e.settlement?.ticketsSold||defaultEstimate(e));
+  // Temporarily set tickets est to slider value for proposal
+  if(!e.projection) e.projection={ticketsEst:sliderVal,expenses:[]};
+  e.projection.ticketsEst=sliderVal;
+  e.projection.expenses=_calcState[id].expenses;
+  openProposal(id);
+}
+
+const EXPENSE_PAYERS=[['venue','Venue (off box office)'],['producer','Producer (you front)'],['artist','Artist (direct)']];
+
+function renderSettlementExpenses(e){
+  const s=e.settlement; const host=document.getElementById('st-expenses');
+  if(!host) return;
+  if(!s.expenses.length){ host.innerHTML='<p class="muted" style="font-size:13px">No expenses logged. Add marketing, insurance, travel, etc.</p>'; return; }
+  host.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
+    </div>
+    ${s.expenses.map((x,i)=>{
+      const isProd=x.payer==='producer';
+      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
+      const billsOut=isProd?(+x.amount||0)+markup:0;
+      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Marketing package" oninput="setSettlementExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <input type="number" value="${x.amount||0}" oninput="setSettlementExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <select onchange="setSettlementExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          ${EXPENSE_PAYERS.map(([v,l])=>`<option value="${v}" ${x.payer===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setSettlementExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
+        <span style="text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
+        <button class="btn ghost sm" style="padding:3px 6px" onclick="removeSettlementExp('${e.id}',${i})">×</button>
+      </div>`;
+    }).join('')}`;
+}
+
+function addSettlementExpense(id){
+  const e=get(DB.events,id);
+  e.settlement.expenses.push({desc:'',amount:0,payer:'venue',markupPct:0});
+  renderSettlementExpenses(e); renderSettlementWaterfall(e);
+}
+function setSettlementExp(id,i,field,val){
+  const e=get(DB.events,id);
+  e.settlement.expenses[i][field] = (field==='desc'||field==='payer') ? val : (+val||0);
+  if(field==='payer') renderSettlementExpenses(e); // re-render to enable/disable markup
+  renderSettlementWaterfall(e);
+}
+function removeSettlementExp(id,i){
+  const e=get(DB.events,id);
+  e.settlement.expenses.splice(i,1);
+  renderSettlementExpenses(e); renderSettlementWaterfall(e);
+}
+function updateSettlement(id){
+  const e=get(DB.events,id);
+  e.settlement.ticketsSold=fvn('st-sold');
+  e.settlement.grossOverride=fv('st-gross');
+  renderSettlementWaterfall(e);
+  // refresh the auto placeholder on gross field
+  const pb=priceBreakdown(e.pricing);
+  const g=document.getElementById('st-gross');
+  if(g) g.placeholder='auto: '+money0(pb.total*(e.settlement.ticketsSold||0));
+}
+
+function renderSettlementWaterfall(e){
+  const f=settlementFigures(e);
+  const wf=document.getElementById('st-waterfall');
+  const sm=document.getElementById('st-summary');
+  if(!wf) return;
+  const max=Math.max(f.grossBoxOffice,f.baseRevenue,f.payout,1);
+
+  // Build named deduction rows from show costs
+  const sc=e.showCosts||{};
+  const showCostRows=[
+    ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>
+      ({label:'Less: '+(l.desc||'crew'),val:-((+l.hours||0)*(+l.rate||0)),c:'var(--red)'})),
+    ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>
+      ({label:'Less: '+(l.desc||'equipment'),val:-(+l.amount||0),c:'var(--red)'})),
+    ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>
+      ({label:'Less: '+(l.desc||'fee'),val:-(+l.amount||0),c:'var(--red)'})),
+  ];
+  // Settlement tab venue expenses (added on the fly)
+  const settlVenueRows=(e.settlement.expenses||[]).filter(x=>x.payer==='venue'&&+x.amount>0).map(x=>
+    ({label:'Less: '+(x.desc||'venue expense'),val:-(+x.amount||0),c:'var(--red)'}));
+
+  const ct=e.terms.contractType;
+  const artistExpRows=(e.settlement.expenses||[]).filter(x=>x.payer==='artist').map(x=>(
+    {label:'Less: '+(x.desc||'artist expense'),val:-(+x.amount||0),c:'#c98a3f'}
+  ));
+  const rows=[
+    {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
+    {label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'},
+    ...showCostRows,
+    ...settlVenueRows,
+    ...(f.dealRentalFlat>0&&ct!=='rental'?[{label:'Less: rental flat fee',val:-f.dealRentalFlat,c:'var(--red)'}]:[]),
+    ...(f.dealRentalPct>0?[{label:'Less: box office % ('+(+e.terms.doorSplit||0)+'%)',val:-f.dealRentalPct,c:'var(--red)'}]:[]),
+    null,
+    {label:'Net box office',val:f.netBoxOffice,c:'#6fa8dc',b:1},
+    {label:'Venue payout ('+ctLabel(e.terms.contractType)+')',val:f.payout,c:'var(--green)',b:1},
+    {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
+    {label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'},
+    {label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'},
+    null,
+    {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
+    ...artistExpRows,
+    ...(artistExpRows.length?[null,{label:'Artist net',val:f.artistNet,c:f.artistNet>=0?'var(--green)':'var(--red)',b:1}]:[])
+  ];
+  wf.innerHTML=rows.map(r=>{
+    if(!r) return `<div style="height:1px;background:var(--bord);margin:7px 0 7px 175px"></div>`;
+    const w=Math.min(100,Math.abs(r.val)/max*100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:3px">
+      <div style="width:175px;font-size:12px;text-align:right;color:${r.b?'var(--txt)':'var(--txt2)'};${r.b?'font-weight:600':''}">${r.label}</div>
+      <div style="flex:1;height:24px;background:var(--surf2);border-radius:6px;overflow:hidden">
+        <div style="height:100%;width:${w}%;background:${r.c};border-radius:6px;transition:width .2s"></div></div>
+      <div style="width:88px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;${r.b?'font-weight:600':''};color:${r.val<0?'var(--red)':r.b?'var(--txt)':'var(--txt2)'}">${r.val<0?'−':''}${money0(Math.abs(r.val))}</div>
+    </div>`;
+  }).join('');
+
+  if(sm){
+    sm.innerHTML=`
+      <div class="stats" style="margin-bottom:0">
+        <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Pot to split</div></div>
+        <div class="stat"><div class="stat-val pos">${money0(f.yourTotal)}</div><div class="stat-lbl">Your total (you keep)</div></div>
+        <div class="stat"><div class="stat-val">${money0(f.artistGross)}</div><div class="stat-lbl">Artist gross</div></div>
+        <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net (after their costs)</div></div>
+      </div>
+      ${f.artistTracked>0?`<p class="muted" style="font-size:12px;margin-top:12px">Artist's direct expenses of ${money0(f.artistTracked)} are paid by the artist and reduce artist net (gross ${money0(f.artistGross)} − ${money0(f.artistTracked)} = ${money0(f.artistNet)}).</p>`:''}`;
+  }
+}
+
+function saveSettlement(id){
+  const e=get(DB.events,id);
+  e.settlement.ticketsSold=fvn('st-sold');
+  e.settlement.grossOverride=fv('st-gross');
+  persist();
+  openModal('Saved','<p style="font-size:13px;color:var(--green)">✓ Settlement saved.</p>','<button class="btn primary" onclick="closeModal()">Done</button>');
+}
+function toggleSettled(id){
+  const e=get(DB.events,id);
+  e.settlement.ticketsSold=fvn('st-sold');
+  e.settlement.grossOverride=fv('st-gross');
+  e.settlement.settled=!e.settlement.settled;
+  persist();
+  go('events',id,'settlement');
+}
+
+function printSettlement(id){
+  const e=get(DB.events,id);
+  e.settlement.ticketsSold=fvn('st-sold'); e.settlement.grossOverride=fv('st-gross');
+  const f=settlementFigures(e);
+  const v=get(DB.venues,e.venueId), t=get(DB.tours,e.tourId);
+  const s=e.settlement;
+  const prodExps=s.expenses.filter(x=>x.payer==='producer');
+  const venueExps=s.expenses.filter(x=>x.payer==='venue');
+  const artistExps=s.expenses.filter(x=>x.payer==='artist');
+  const row=(l,val,opts={})=>`<tr><td style="padding:5px 0;${opts.b?'font-weight:600':''}">${l}</td><td style="text-align:right;${opts.b?'font-weight:600':''};${opts.neg?'color:#a32d2d':''}">${opts.neg?'−':''}${money0(Math.abs(val))}</td></tr>`;
+  const doc=`
+    <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
+      <div style="font-size:18px;font-weight:600">Settlement Statement</div>
+      <div style="color:#5f5e58;font-size:13px">${esc(e.name)} · ${esc(v?v.name:'')} · ${esc(e.date)}${t?' · '+esc(t.artist):''}</div>
+      ${f.settled?'<div style="font-size:12px;color:#3b6d11;margin-top:4px">● Settled</div>':''}
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      ${row('Tickets sold', f.soldActual)}
+      ${row('Gross box office', f.grossBoxOffice)}
+      ${row('Base ticket revenue', f.baseRevenue)}
+      ${(()=>{
+        const sc2=e.showCosts||{};
+        const lines=[
+          ...(sc2.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>row('&nbsp;&nbsp;'+(l.desc||'Crew'), -((+l.hours||0)*(+l.rate||0)), {neg:1})),
+          ...(sc2.equipment||[]).filter(l=>+l.amount>0).map(l=>row('&nbsp;&nbsp;'+(l.desc||'Equipment'), -(+l.amount||0), {neg:1})),
+          ...(sc2.fees||[]).filter(l=>+l.amount>0).map(l=>row('&nbsp;&nbsp;'+(l.desc||'Fee'), -(+l.amount||0), {neg:1})),
+        ];
+        return lines.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Show costs</td></tr>`+lines.join(''):'';
+      })()}
+      ${venueExps.length?`<tr><td colspan="2" style="padding-top:6px;font-weight:600;font-size:12px">Additional venue expenses</td></tr>`:''}
+      ${venueExps.map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Venue expense'), -(+x.amount||0), {neg:1})).join('')}
+      ${f.dealRentalFlat>0&&e.terms.contractType!=='rental'?row('&nbsp;&nbsp;Rental flat fee', -f.dealRentalFlat, {neg:1}):''}
+      ${f.dealRentalPct>0?row('&nbsp;&nbsp;Box office '+e.terms.doorSplit+'% of net', -f.dealRentalPct, {neg:1}):''}
+      ${row('Net box office', f.netBoxOffice, {b:1})}
+      <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
+      ${row('Venue payout ('+ctLabel(e.terms.contractType)+')', f.payout, {b:1})}
+      ${row('Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
+      ${prodExps.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Producer-covered expenses</td></tr>`:''}
+      ${prodExps.map(x=>{const m=(+x.amount||0)*((+x.markupPct||0)/100);return row('&nbsp;&nbsp;'+esc(x.desc||'Expense')+(x.markupPct?` (incl. ${x.markupPct}% markup)`:''), -((+x.amount||0)+m), {neg:1});}).join('')}
+      <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding-top:8px"></td></tr>
+      ${row('Artist gross', f.artistGross, {b:1})}
+      ${artistExps.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Artist's own expenses (paid directly)</td></tr>`:''}
+      ${artistExps.map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Expense'), -(+x.amount||0), {neg:1})).join('')}
+      ${artistExps.length?row('Artist net', f.artistNet, {b:1}):''}
+      <tr><td colspan="2" style="padding-top:6px"></td></tr>
+      ${row('Your total (commission + producer)', f.yourTotal, {b:1})}
+    </table>
+    <p style="font-size:11px;color:#908e85;margin-top:16px">Generated by TourDesk · ${new Date().toLocaleDateString()}</p>`;
+  const w=window.open('','_blank');
+  w.document.write('<html><head><title>Settlement — '+esc(e.name)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#1c1c1a}table{width:100%}</style></head><body>'+doc+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
+}
+
+function eventPeople(host,e){
+  const grp=(ids,label,role)=>{
+    const people=(ids||[]).map(i=>get(DB.contacts,i)).filter(Boolean);
+    return `<div class="sec"><div class="sec-label">${label}</div>
+      ${people.length?people.map(p=>`<div class="card" style="cursor:pointer;margin-bottom:8px" onclick="go('contacts','${p.id}')">
+        <div class="card-title">${esc(p.name)}</div><div class="card-sub">${esc(p.role)}${p.company?' · '+esc(p.company):''}</div></div>`).join('')
+        :'<p class="muted" style="font-size:13px">None assigned.</p>'}
+      <button class="btn sm" style="margin-top:8px" onclick="assignPeople('${e.id}','${role}')">+ Assign ${label.toLowerCase()}</button></div>`;
+  };
+  host.innerHTML=grp(e.talentIds,'Talent','talentIds')+grp(e.vendorIds,'Vendors','vendorIds')+grp(e.crewIds,'Crew','crewIds');
+}
+function assignPeople(eid,field){
+  const e=get(DB.events,eid);
+  const sel=e[field]||[];
+  const body=`<p class="muted" style="font-size:12px;margin-bottom:12px">Select contacts to attach to this event.</p>
+    ${DB.contacts.map(c=>`<label style="display:flex;align-items:center;gap:9px;padding:8px;border-bottom:1px solid var(--bord);cursor:pointer">
+      <input type="checkbox" value="${c.id}" ${sel.includes(c.id)?'checked':''} style="width:auto">
+      <span><strong style="font-weight:500">${esc(c.name)}</strong> <span class="muted">${esc(c.role)}${c.company?' · '+esc(c.company):''}</span></span></label>`).join('')}
+    <button class="btn sm" style="margin-top:12px" onclick="closeModal();contactForm()">+ New contact</button>`;
+  openModal('Assign people',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveAssign('${eid}','${field}')">Save</button>`);
+}
+function saveAssign(eid,field){
+  const e=get(DB.events,eid);
+  e[field]=[...document.querySelectorAll('.modal-body input:checked')].map(i=>i.value);
+  persist();closeModal();render();
+}
+
+function eventFiles(host,e){
+  host.innerHTML=`
+    <div class="banner">📁 Files upload to your Drive at <strong style="font-weight:600">TourDesk / ${esc((get(DB.tours,e.tourId)||{}).name||'Tour')} / ${esc(e.name)}</strong> once Google is connected in Settings.</div>
+    <div class="sec-label">Documents</div>
+    ${(e.files||[]).length?(e.files.map(f=>`<div class="card" style="cursor:default;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div><div class="card-title">${esc(f.name)}</div><div class="card-sub">${esc(f.category)} · ${esc(f.date||'')}</div></div>
+        ${f.url?`<a class="btn sm" href="${esc(f.url)}" target="_blank">Open</a>`:'<span class="badge gray">Pending sync</span>'}
+      </div>`).join('')):'<p class="muted" style="font-size:13px">No files yet.</p>'}
+    <button class="btn sm" style="margin-top:10px" onclick="addFileStub('${e.id}')">+ Add file reference</button>`;
+}
+function addFileStub(eid){
+  const body=`<div class="field"><label>File name</label><input id="ff-name" placeholder="Contract_signed.pdf"></div>
+    <div class="field"><label>Category</label><select id="ff-cat">
+      ${['Contract','Insurance','Settlement','Tech / Rider','Misc'].map(x=>`<option>${x}</option>`).join('')}</select></div>
+    <div class="field"><label>Drive link (optional)</label><input id="ff-url" placeholder="https://drive.google.com/..."></div>
+    <p class="muted" style="font-size:12px">Direct upload activates after Google is connected. For now you can record a reference and paste a Drive link.</p>`;
+  openModal('Add file reference',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveFileStub('${eid}')">Add</button>`);
+}
+function saveFileStub(eid){
+  const e=get(DB.events,eid);
+  e.files=e.files||[];
+  e.files.push({name:fv('ff-name'),category:fv('ff-cat'),url:fv('ff-url'),date:todayStr()});
+  persist();closeModal();render();
+}
+
+/* ---- Event deal intake form (every term prompted) ---- */
+function eventForm(id, tourId, prefill, proposalId){
+  _curEventFormId=id||null;
+  _curProposalLink=proposalId||null;
+  const base=prefill||( id?get(DB.events,id):{pricing:{feeType:'fixed',taxOn:'base',taxRate:DB.settings.taxRate},terms:{},showCosts:{crew:[],equipment:[],fees:[]},mgmtPct:DB.settings.mgmtPct,tourId:tourId||''});
+  const e={...base};
+  if(!prefill) initCostState(e); else { _efCosts=JSON.parse(JSON.stringify(e.showCosts||{crew:[],equipment:[],fees:[]})); }
+  const p=e.pricing||{}, t=e.terms||{}, sc=_efCosts;
+  const body=`
+    ${!id?`<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:10px">
+      <button class="btn sm primary" onclick="pasteShowData()">📋 Paste show data</button>
+      <span class="muted" style="font-size:12px">Auto-fill from a contract or quote — fills deal, costs, ticket pricing, dates</span>
+    </div>`:''}
+    <div class="form-section">Event basics</div>
+    <div class="field"><label>Event name</label><input id="ef-name" value="${esc(e.name||'')}"></div>
+    <div class="row2">
+      <div class="field"><label>Tour</label><select id="ef-tour"><option value="">—</option>
+        ${DB.tours.map(x=>`<option value="${x.id}" ${e.tourId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Venue</label><select id="ef-venue" onchange="prefillVenueTerms()"><option value="">—</option>
+        ${DB.venues.map(x=>`<option value="${x.id}" ${e.venueId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>Date</label><input id="ef-date" type="date" value="${e.date||''}"></div>
+      <div class="field"><label>Show time</label><input id="ef-show" value="${esc(e.showTime||'')}" placeholder="20:00"></div>
+      <div class="field"><label>Load-in</label><input id="ef-load" value="${esc(e.loadIn||'')}" placeholder="18:30"></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>Status</label><select id="ef-status">
+        ${['Routing','Confirmed','Completed'].map(s=>`<option ${e.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Capacity allocated</label><input id="ef-cap" type="number" value="${e.capacityAlloc||''}"></div>
+      <div class="field"><label>Presales</label><input id="ef-pre" type="number" value="${e.presales||0}"></div>
+    </div>
+
+    <div class="form-section">Ticket pricing</div>
+    <div class="row2">
+      <div class="field"><label>Base ticket price ($)</label><input id="ef-base" type="number" step="0.01" value="${p.base||''}"></div>
+      <div class="field"><label>Comps</label><input id="ef-comps" type="number" value="${e.comps||0}"></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>Service fee</label><input id="ef-fee" type="number" step="0.01" value="${p.serviceFee||0}"></div>
+      <div class="field"><label>Fee type</label><select id="ef-feetype">
+        <option value="fixed" ${p.feeType==='fixed'?'selected':''}>Fixed $</option>
+        <option value="pct" ${p.feeType==='pct'?'selected':''}>% of base</option></select></div>
+      <div class="field"><label>CC surcharge %</label><input id="ef-cc" type="number" step="0.1" value="${p.ccFee||0}"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Tax rate %</label><input id="ef-tax" type="number" step="0.5" value="${p.taxRate!=null?p.taxRate:13}"></div>
+      <div class="field"><label>Tax applies to</label><select id="ef-taxon">
+        <option value="base" ${p.taxOn==='base'?'selected':''}>Base only</option>
+        <option value="base_fee" ${p.taxOn==='base_fee'?'selected':''}>Base + fee</option>
+        <option value="none" ${p.taxOn==='none'?'selected':''}>Tax exempt</option></select></div>
+    </div>
+
+    <div class="form-section">Deal terms — negotiated for this show</div>
+    <div class="field"><label>Contract type</label>
+      <select id="ef-ct" onchange="toggleDealFields()">
+        ${[['guarantee','Guarantee — venue pays a flat fee regardless of sales'],
+           ['door','Door split — % of net ticket revenue to artist'],
+           ['guarantee_plus','Guarantee+ — higher of flat guarantee or door split'],
+           ['rental','Rental (flat fee) — artist pays flat rental, keeps rest'],
+           ['rental_greater_of','Rental (greater of) — flat fee OR % of net, whichever is higher'],
+           ['rental_plus_pct','Rental (flat fee + % of net) — venue takes both, always']
+          ].map(([val,lab])=>`<option value="${val}" ${t.contractType===val?'selected':''}>${lab}</option>`).join('')}
+      </select>
+    </div>
+    <div id="ef-deal-fields"><!-- populated by toggleDealFields() --></div>
+
+    <div class="form-section">Venue / show costs</div>
+    <p class="muted" style="font-size:12px;margin:-6px 0 10px">These are costs you'll pay the venue — they flow into your fixed costs and settlement deductions.</p>
+    <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Crew</div>
+    <div id="ef-crew-lines">
+      ${(sc.crew||[]).map((l,i)=>`<div class="row3" style="align-items:end">
+        <div class="field"><label style="font-size:11px">Role / description</label><input id="ef-cl-desc-${i}" value="${esc(l.desc||'')}"></div>
+        <div class="field"><label style="font-size:11px">Hours</label><input id="ef-cl-hrs-${i}" type="number" step="0.5" value="${l.hours||''}"></div>
+        <div class="field"><label style="font-size:11px">Rate ($/hr)</label>
+          <div style="display:flex;gap:6px">
+            <input id="ef-cl-rate-${i}" type="number" step="0.01" value="${l.rate||''}" style="flex:1">
+            <button class="btn ghost sm" onclick="removeCostLine('crew',${i})" style="padding:7px 9px">×</button>
+          </div></div>
+      </div>`).join('')}
+    </div>
+    <button class="btn sm" onclick="addCostLine('crew')" style="margin-bottom:14px">+ Add crew</button>
+
+    <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Equipment</div>
+    <div id="ef-equip-lines">
+      ${(sc.equipment||[]).map((l,i)=>`<div style="display:flex;gap:8px;align-items:end;margin-bottom:8px">
+        <div class="field" style="flex:2;margin:0"><label style="font-size:11px">Description</label><input id="ef-el-desc-${i}" value="${esc(l.desc||'')}"></div>
+        <div class="field" style="flex:1;margin:0"><label style="font-size:11px">Amount ($)</label>
+          <div style="display:flex;gap:6px">
+            <input id="ef-el-amt-${i}" type="number" step="0.01" value="${l.amount||''}" style="flex:1">
+            <button class="btn ghost sm" onclick="removeCostLine('equipment',${i})" style="padding:7px 9px">×</button>
+          </div></div>
+      </div>`).join('')}
+    </div>
+    <button class="btn sm" onclick="addCostLine('equipment')" style="margin-bottom:14px">+ Add equipment</button>
+
+    <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Flat fees (box office, SOCAN, etc.)</div>
+    <div id="ef-fees-lines">
+      ${(sc.fees||[]).map((l,i)=>`<div style="display:flex;gap:8px;align-items:end;margin-bottom:8px">
+        <div class="field" style="flex:2;margin:0"><label style="font-size:11px">Description</label><input id="ef-fl-desc-${i}" value="${esc(l.desc||'')}"></div>
+        <div class="field" style="flex:1;margin:0"><label style="font-size:11px">Amount ($)</label>
+          <div style="display:flex;gap:6px">
+            <input id="ef-fl-amt-${i}" type="number" step="0.01" value="${l.amount||''}" style="flex:1">
+            <button class="btn ghost sm" onclick="removeCostLine('fees',${i})" style="padding:7px 9px">×</button>
+          </div></div>
+      </div>`).join('')}
+    </div>
+    <button class="btn sm" onclick="addCostLine('fees')" style="margin-bottom:14px">+ Add flat fee</button>
+
+    <div class="field"><label>Management commission %</label><input id="ef-mgmt" type="number" value="${e.mgmtPct!=null?e.mgmtPct:DB.settings.mgmtPct}"></div>`;
+  openModal(id?'Edit event deal':'New event', body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveEvent('${id||''}')">Save event</button>`);
+  setTimeout(()=>toggleDealFields({guarantee:t.guarantee||'',doorSplit:t.doorSplit||'',rental:t.rental||''}), 30);
+}
+function prefillVenueTerms(){
+  const vid=fv('ef-venue');
+  const v=get(DB.venues,vid); if(!v) return;
+  if(!document.getElementById('ef-cap').value && v.capacity)
+    document.getElementById('ef-cap').value=v.capacity;
+  // Pre-fill deal terms from venue defaults
+  if(v.contractType){
+    const ctEl=document.getElementById('ef-ct');
+    if(ctEl){ ctEl.value=v.contractType; toggleDealFields(); }
+    setTimeout(()=>{
+      if(v.rental) { const el=document.getElementById('ef-rental'); if(el) el.value=v.rental; }
+      if(v.guarantee) { const el=document.getElementById('ef-guar'); if(el) el.value=v.guarantee; }
+      if(v.doorSplit) { const el=document.getElementById('ef-split'); if(el) el.value=v.doorSplit; }
+    }, 80);
+  }
+}
+/* ---- Paste show data → fill event form ---- */
+function pasteShowData(){
+  const body=`
+    <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+      Paste the show data JSON block below. Ask Claude to extract a quote or contract and it will give you this block — it fills the entire event form for review before saving.</p>
+    <div class="field"><textarea id="paste-show-json" style="min-height:200px;font-family:ui-monospace,monospace;font-size:12px" placeholder='{"date":"2026-06-27","showTime":"20:00",...}'></textarea></div>
+    <p class="muted" style="font-size:11px">All fields are editable after pasting. Nothing saves until you click Save event.</p>`;
+  openModal('Paste show data', body,
+    `<button class="btn" onclick="eventForm(_curEventFormId)">Back</button>
+     <button class="btn primary" onclick="applyPastedShow()">Fill form</button>`);
+}
+
+function applyPastedShow(){
+  let d;
+  try { d=JSON.parse(fv('paste-show-json')); }
+  catch(e){ alert('Invalid JSON. Paste the block exactly as provided.'); return; }
+  // Match venue by name if provided
+  let venueId='';
+  if(d.venueName){
+    const match=DB.venues.find(v=>v.name.toLowerCase().includes(d.venueName.toLowerCase()));
+    if(match) venueId=match.id;
+  }
+  // Match tour by name if provided
+  let tourId='';
+  if(d.tourName){
+    const match=DB.tours.find(t=>t.name.toLowerCase().includes(d.tourName.toLowerCase()));
+    if(match) tourId=match.id;
+  }
+  const prefill={
+    name:d.name||'',tourId:tourId,venueId:venueId,
+    date:d.date||'',showTime:d.showTime||'',loadIn:d.loadIn||'',
+    status:d.status||'Confirmed',
+    capacityAlloc:d.capacity||'',presales:d.presales||0,comps:d.comps||0,
+    mgmtPct:d.mgmtPct!=null?d.mgmtPct:DB.settings.mgmtPct,
+    pricing:{
+      base:d.ticketBase||'',serviceFee:d.serviceFee||0,feeType:d.feeType||'fixed',
+      ccFee:d.ccFee||0,taxRate:d.taxRate!=null?d.taxRate:DB.settings.taxRate,
+      taxOn:d.taxOn||'base'
+    },
+    terms:{
+      contractType:d.contractType||'rental',
+      doorSplit:d.doorSplit||'',guarantee:d.guarantee||'',rental:d.rental||''
+    },
+    showCosts:{
+      crew:(d.crew||[]).map(c=>({desc:c.desc||'',hours:c.hours||'',rate:c.rate||''})),
+      equipment:(d.equipment||[]).map(e=>({desc:e.desc||'',amount:e.amount||''})),
+      fees:(d.fees||[]).map(f=>({desc:f.desc||'',amount:f.amount||''}))
+    }
+  };
+  closeModal();
+  eventForm(_curEventFormId, null, prefill);
+  setTimeout(()=>{
+    // toggleDealFields renders the deal input fields dynamically —
+    // pass seed values so they populate correctly on first render.
+    toggleDealFields({guarantee:d.guarantee||'', doorSplit:d.doorSplit||'', rental:d.rental||''});
+    const mb=document.querySelector('.modal-body');
+    if(mb) mb.insertAdjacentHTML('afterbegin',
+      '<div class="banner" style="margin-bottom:12px">✓ Filled from pasted data — review every field before saving.</div>');
+  },80);
+}
+
+/* ---- Show cost line helpers (crew / equipment / fees) ---- */
+let _efCosts={crew:[],equipment:[],fees:[]};
+function initCostState(e){
+  const sc=e.showCosts||{crew:[],equipment:[],fees:[]};
+  _efCosts={
+    crew:JSON.parse(JSON.stringify(sc.crew||[])),
+    equipment:JSON.parse(JSON.stringify(sc.equipment||[])),
+    fees:JSON.parse(JSON.stringify(sc.fees||[]))
+  };
+}
+function addCostLine(type){
+  saveCostState();
+  if(type==='crew') _efCosts.crew.push({desc:'',hours:'',rate:''});
+  else if(type==='equipment') _efCosts.equipment.push({desc:'',amount:''});
+  else _efCosts.fees.push({desc:'',amount:''});
+  reopenEventForm();
+}
+function removeCostLine(type,i){
+  saveCostState();
+  _efCosts[type].splice(i,1);
+  reopenEventForm();
+}
+function saveCostState(){
+  // Read current form values back into _efCosts before re-rendering
+  (_efCosts.crew||[]).forEach((l,i)=>{
+    l.desc=document.getElementById('ef-cl-desc-'+i)?.value||'';
+    l.hours=parseFloat(document.getElementById('ef-cl-hrs-'+i)?.value)||0;
+    l.rate=parseFloat(document.getElementById('ef-cl-rate-'+i)?.value)||0;
+  });
+  (_efCosts.equipment||[]).forEach((l,i)=>{
+    l.desc=document.getElementById('ef-el-desc-'+i)?.value||'';
+    l.amount=parseFloat(document.getElementById('ef-el-amt-'+i)?.value)||0;
+  });
+  (_efCosts.fees||[]).forEach((l,i)=>{
+    l.desc=document.getElementById('ef-fl-desc-'+i)?.value||'';
+    l.amount=parseFloat(document.getElementById('ef-fl-amt-'+i)?.value)||0;
+  });
+}
+function reopenEventForm(){
+  // Preserve form state then re-render with updated cost lines
+  const cur={
+    id:_curEventFormId,tourId:fv('ef-tour'),venueId:fv('ef-venue'),name:fv('ef-name'),
+    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),
+    capacityAlloc:fv('ef-cap'),presales:fv('ef-pre'),comps:fv('ef-comps'),mgmtPct:fv('ef-mgmt'),
+    pricing:{base:fv('ef-base'),serviceFee:fv('ef-fee'),feeType:fv('ef-feetype'),
+      ccFee:fv('ef-cc'),taxRate:fv('ef-tax'),taxOn:fv('ef-taxon')},
+    terms:{contractType:fv('ef-ct'),doorSplit:fv('ef-split'),guarantee:fv('ef-guar'),rental:fv('ef-rental')},
+    showCosts:_efCosts
+  };
+  closeModal();
+  eventForm(cur.id||null, null, cur);
+}
+let _curEventFormId=null;
+let _curProposalLink=null;
+function readShowCosts(){
+  saveCostState();
+  return JSON.parse(JSON.stringify(_efCosts));
+}
+function showCostsTotal(sc){
+  if(!sc) return 0;
+  let t=0;
+  (sc.crew||[]).forEach(l=>t+=(+l.hours||0)*(+l.rate||0));
+  (sc.equipment||[]).forEach(l=>t+=(+l.amount||0));
+  (sc.fees||[]).forEach(l=>t+=(+l.amount||0));
+  return t;
+}
+
+function toggleDealFields(seeds){
+  const ct=fv('ef-ct');
+  const host=document.getElementById('ef-deal-fields');
+  if(!host) return;
+  // Read current values to preserve them on re-render, fallback to seeds
+  const guar=document.getElementById('ef-guar')?.value || (seeds?.guarantee||'');
+  const split=document.getElementById('ef-split')?.value || (seeds?.doorSplit||'');
+  const rental=document.getElementById('ef-rental')?.value || (seeds?.rental||'');
+  const showGuar=ct==='guarantee'||ct==='guarantee_plus';
+  const showSplit=ct==='door'||ct==='guarantee_plus'||ct==='rental_greater_of'||ct==='rental_plus_pct';
+  const showRental=ct==='rental'||ct==='rental_greater_of'||ct==='rental_plus_pct';
+  let html='<div class="row2" style="margin-top:10px">';
+  if(showGuar) html+=`<div class="field"><label>Guarantee ($)</label><input id="ef-guar" type="number" value="${esc(guar)}" placeholder="e.g. 1000"></div>`;
+  if(showSplit) html+=`<div class="field"><label>${ct==='rental_greater_of'?'% of net (the "or" side)':ct==='rental_plus_pct'?'% of net (added on top)':'Door split % to artist'}</label><input id="ef-split" type="number" value="${esc(split)}" placeholder="e.g. 15"></div>`;
+  if(showRental) html+=`<div class="field"><label>Rental fee ($)${ct==='rental_greater_of'?' — flat minimum':ct==='rental_plus_pct'?' — flat portion':''}</label><input id="ef-rental" type="number" value="${esc(rental)}" placeholder="e.g. 2400"></div>`;
+  html+='</div>';
+  if(ct==='rental_greater_of'){
+    html+=`<p class="muted" style="font-size:12px;margin-top:4px">Venue takes whichever is higher: the flat rental <em>or</em> the % of net. e.g. Capitol: greater of $1,800 or 10% of net.</p>`;
+  } else if(ct==='rental_plus_pct'){
+    html+=`<p class="muted" style="font-size:12px;margin-top:4px">Venue takes the flat rental <em>plus</em> the % of net on top — both always apply. e.g. Keyano: $2,400 flat + 15% of net ticket sales.</p>`;
+  } else if(ct==='guarantee_plus'){
+    html+=`<p class="muted" style="font-size:12px;margin-top:4px">Artist receives whichever is higher: the guarantee <em>or</em> their % of the door.</p>`;
+  }
+  host.innerHTML=html;
+}
+
+function saveEvent(id){
+  const rec={
+    name:fv('ef-name'),tourId:fv('ef-tour'),venueId:fv('ef-venue'),date:fv('ef-date'),
+    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),
+    capacityAlloc:fvn('ef-cap'),presales:fvn('ef-pre'),comps:fvn('ef-comps'),
+    mgmtPct:fvn('ef-mgmt'),
+    pricing:{base:fvn('ef-base'),serviceFee:fvn('ef-fee'),feeType:fv('ef-feetype'),
+      ccFee:fvn('ef-cc'),taxRate:fvn('ef-tax'),taxOn:fv('ef-taxon')},
+    terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
+    showCosts:readShowCosts()
+  };
+  if(id){ const e=get(DB.events,id); Object.assign(e,rec); logActivity('edited','Event',rec.name); }
+  else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
+    if(_curProposalLink){ const p=get(DB.proposals,_curProposalLink); if(p){ p.eventIds=p.eventIds||[]; p.eventIds.push(rec.id);} } }
+  const linkedProp=_curProposalLink; _curProposalLink=null;
+  persist();closeModal();
+  if(linkedProp && !id) go('proposals',linkedProp);
+  else if(id) go('events',id,'overview'); else render();
+}
+
+/* ============================================================
+   VIEW: CONTACTS (CRM)
+   ============================================================ */
+VIEWS.contacts={
+  render(c,a){
+    if(route.id) return this.detail(c,a,route.id);
+    a.innerHTML=`<button class="btn sm" onclick="bulkContactModal()">Bulk import</button>
+      <button class="btn primary" onclick="contactForm()">+ Add contact</button>`;
+    c.innerHTML=`<div class="cards-grid">${DB.contacts.map(contactCard).join('')||emptyState('☺','No contacts yet')}</div>`;
+  },
+  detail(c,a,id){
+    const ct=get(DB.contacts,id); if(!ct){go('contacts');return;}
+    const linkedEvents=DB.events.filter(e=>[...(e.talentIds||[]),...(e.vendorIds||[]),...(e.crewIds||[])].includes(id));
+    const venue=ct.venueId?get(DB.venues,ct.venueId):null;
+    a.innerHTML=`<button class="btn sm" onclick="contactForm('${id}')">Edit</button>
+      <button class="btn sm danger" onclick="deleteContact('${id}')">Delete</button>`;
+    c.innerHTML=`
+      <div class="detail-head"><span class="back" onclick="go('contacts')">← Contacts</span>
+        <span class="detail-title">${esc(ct.name)}</span>
+        <span class="badge blue">${esc(ct.role||'')}</span></div>
+      <div class="sec"><div class="sec-label">Contact info</div>
+        <div class="info-grid">
+          <div class="info"><label>Company</label><span>${esc(ct.company||'—')}</span></div>
+          <div class="info"><label>Email</label><span>${ct.email?`<a href="mailto:${esc(ct.email)}">${esc(ct.email)}</a>`:'—'}</span></div>
+          <div class="info"><label>Phone</label><span>${esc(ct.phone||'—')}</span></div>
+          ${venue?`<div class="info"><label>Venue</label><span><a onclick="go('venues','${venue.id}')" style="cursor:pointer">${esc(venue.name)}</a></span></div>`:''}
+        </div>
+        ${ct.notes?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(ct.notes)}</p>`:''}
+      </div>
+      <div class="sec"><div class="sec-label">Event history (${linkedEvents.length})</div>
+        ${linkedEvents.length?tableEvents(linkedEvents):'<p class="muted" style="font-size:13px">Not attached to any events yet.</p>'}</div>
+      <div class="banner">✉ Gmail threads with ${esc(ct.email||'this contact')} will appear here once Google is connected in Settings.</div>`;
+  }
+};
+function contactCard(ct){
+  return `<div class="card" onclick="go('contacts','${ct.id}')">
+    <div class="card-top"><div><div class="card-title">${esc(ct.name)}</div>
+    <div class="card-sub">${esc(ct.company||'')}</div></div>
+    <span class="badge blue">${esc(ct.role||'')}</span></div>
+    <div class="card-meta">
+      <div class="meta"><label>Email</label><span style="font-size:11px">${esc(ct.email||'—')}</span></div>
+      <div class="meta"><label>Phone</label><span style="font-size:11px">${esc(ct.phone||'—')}</span></div>
+    </div></div>`;
+}
+function contactForm(id){
+  const ct=id?get(DB.contacts,id):{};
+  const body=`
+    <div class="field"><label>Name</label><input id="cf-name" value="${esc(ct.name||'')}"></div>
+    <div class="row2">
+      <div class="field"><label>Role</label><select id="cf-role">
+        ${['Talent','Agent','Manager','Booker','Promoter','Sound','Lighting','Transport','Hospitality','Vendor','Crew','Other'].map(r=>`<option ${ct.role===r?'selected':''}>${r}</option>`).join('')}</select></div>
+      <div class="field"><label>Company</label><input id="cf-company" value="${esc(ct.company||'')}"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Email</label><input id="cf-email" type="email" value="${esc(ct.email||'')}"></div>
+      <div class="field"><label>Phone</label><input id="cf-phone" value="${esc(ct.phone||'')}"></div>
+    </div>
+    <div class="field"><label>Linked venue (optional)</label><select id="cf-venue"><option value="">—</option>
+      ${DB.venues.map(v=>`<option value="${v.id}" ${ct.venueId===v.id?'selected':''}>${esc(v.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Notes</label><textarea id="cf-notes">${esc(ct.notes||'')}</textarea></div>`;
+  openModal(id?'Edit contact':'Add contact',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveContact('${id||''}')">Save contact</button>`);
+}
+function saveContact(id){
+  const rec={name:fv('cf-name'),role:fv('cf-role'),company:fv('cf-company'),
+    email:fv('cf-email'),phone:fv('cf-phone'),venueId:fv('cf-venue'),notes:fv('cf-notes')};
+  if(id){Object.assign(get(DB.contacts,id),rec);logActivity('edited','Contact',rec.name);}
+  else{rec.id=uid('c');DB.contacts.push(rec);logActivity('created','Contact',rec.name);}
+  persist();closeModal();render();
+}
+
+/* ============================================================
+   VIEW: ARTISTS (roster + prospects)
+   ============================================================ */
+VIEWS.artists={
+  render(c,a){
+    if(route.id) return this.detail(c,a,route.id);
+    const tab=route.tab||'roster';
+    a.innerHTML=`<button class="btn sm" onclick="bulkArtistModal()">Bulk import</button>
+      <button class="btn primary" onclick="artistForm()">+ Add artist</button>`;
+    const roster=DB.artists.filter(x=>x.type==='roster');
+    const prospects=DB.artists.filter(x=>x.type==='prospect');
+    c.innerHTML=`
+      <div class="tabs">
+        <div class="tab ${tab==='roster'?'active':''}" onclick="go('artists',null,'roster')">Roster (${roster.length})</div>
+        <div class="tab ${tab==='prospects'?'active':''}" onclick="go('artists',null,'prospects')">Prospects (${prospects.length})</div>
+      </div>
+      <div id="artists-tab"></div>`;
+    const host=document.getElementById('artists-tab');
+    if(tab==='roster'){
+      host.innerHTML=`<div class="cards-grid">${roster.map(artistCard).join('')||emptyState('♪','No roster artists yet — add one to get started')}</div>`;
+    } else {
+      host.innerHTML=`<div class="cards-grid">${prospects.map(artistCard).join('')||emptyState('♪','No prospects yet — add scouting notes and links here')}</div>`;
+    }
+  },
+  detail(c,a,id){
+    const ar=get(DB.artists,id); if(!ar){go('artists');return;}
+    const tab=route.tab||'overview';
+    const contact=get(DB.contacts,ar.contactId);
+    // Auto-pull events and tours for this artist
+    const tours=DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===ar.name.toLowerCase());
+    const allEvents=DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(e.talentIds&&e.talentIds.includes(ar.contactId)));
+    let totalEarned=0, totalShows=allEvents.length;
+    allEvents.forEach(e=>{const f=eventBest(e);totalEarned+=f.artistNet;});
+    a.innerHTML=`${ar.type==='roster'?`<button class="btn sm primary" onclick="enterArtistView('${id}')">View as ${esc(ar.name.split(' ')[0])}</button>`:''}
+      <button class="btn sm" onclick="artistForm('${id}')">Edit</button>
+      <button class="btn sm danger" onclick="deleteArtist('${id}')">Delete</button>`;
+    c.innerHTML=`
+      <div class="detail-head">
+        <span class="back" onclick="go('artists',null,'${ar.type==='prospect'?'prospects':'roster'}')">← Artists</span>
+        <span class="detail-title">${esc(ar.name)}</span>
+        <span class="badge ${ar.type==='roster'?'green':'amber'}">${ar.type==='roster'?'Roster':'Prospect'}</span>
+        ${ar.status?`<span class="badge gray">${esc(ar.status)}</span>`:''}
+      </div>
+      <div class="tabs">
+        ${[['overview','Overview'],['deals','Deals & tours'],['notes','Notes & scouting']].map(([tb,lbl])=>
+          `<div class="tab ${tab===tb?'active':''}" onclick="go('artists','${id}','${tb}')">${lbl}</div>`).join('')}
+      </div>
+      <div id="artist-tab"></div>`;
+    const host=document.getElementById('artist-tab');
+    if(tab==='overview') artistOverview(host,ar,contact,tours,allEvents,totalShows,totalEarned);
+    else if(tab==='deals') artistDeals(host,ar,tours,allEvents);
+    else if(tab==='notes') artistNotes(host,ar);
+  }
+};
+
+function artistCard(ar){
+  const tours=DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===ar.name.toLowerCase());
+  const evts=DB.events.filter(e=>tours.some(t=>t.id===e.tourId));
+  const {firm,routing}=splitTotals(evts);
+  return `<div class="card" onclick="go('artists','${ar.id}')">
+    <div class="card-top">
+      <div><div class="card-title">${esc(ar.name)}</div>
+      <div class="card-sub">${esc(ar.genre||'')}</div></div>
+      <span class="badge ${ar.type==='roster'?'green':'amber'}">${ar.type==='roster'?'Roster':'Prospect'}</span>
+    </div>
+    <div class="card-meta">
+      <div class="meta"><label>Shows</label><span>${evts.length}</span></div>
+      ${ar.type==='roster'
+        ?`<div class="meta"><label>Commission (firm)</label><span class="pos">${money0(firm.comm)}</span></div>
+          <div class="meta"><label>Artist net (firm)</label><span class="${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</span></div>`
+        :`<div class="meta"><label>Status</label><span>${esc(ar.status||'—')}</span></div>
+          <div class="meta"><label>Mgmt %</label><span>${ar.mgmtPct||'—'}${ar.mgmtPct?'%':''}</span></div>`}
+      <div class="meta"><label>Tags</label><span style="font-size:11px">${(ar.tags||[]).slice(0,2).join(', ')||'—'}</span></div>
+    </div>
+    ${ar.type==='roster'&&routing.count?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--bord2)">
+      <span style="font-size:11px;color:var(--txt3)">+ ${routing.count} routing: comm ${money0(routing.comm)} · artist ${money0(routing.net)}</span>
+    </div>`:''}
+  </div>`;
+}
+
+function artistOverview(host,ar,contact,tours,allEvents,totalShows,totalEarned){
+  // Total commission earned through this artist's events
+  let commEarned=0; allEvents.forEach(e=>{commEarned+=eventBest(e).commission;});
+  // Build a combined scouting feed: links (dated) + a notes preview, newest first
+  const links=(ar.links||[]).slice().reverse(); // newest added shown first
+  const feed=links.slice(0,5);
+  host.innerHTML=`
+    <div class="stats">
+      <div class="stat"><div class="stat-val">${totalShows}</div><div class="stat-lbl">Total shows</div></div>
+      <div class="stat"><div class="stat-val">${tours.length}</div><div class="stat-lbl">Tours</div></div>
+      <div class="stat"><div class="stat-val ${totalEarned>=0?'pos':'neg'}">${money0(totalEarned)}</div><div class="stat-lbl">Career artist net</div></div>
+      <div class="stat"><div class="stat-val pos">${money0(commEarned)}</div><div class="stat-lbl">Commission earned</div></div>
+    </div>
+    <div class="sec"><div class="sec-label">Artist info</div>
+      <div class="info-grid">
+        <div class="info"><label>Genre</label><span>${esc(ar.genre||'—')}</span></div>
+        <div class="info"><label>Type</label><span>${ar.type==='roster'?'Active roster':'Prospect'}</span></div>
+        <div class="info"><label>Status</label><span>${esc(ar.status||'—')}</span></div>
+        ${contact?`<div class="info"><label>Contact</label><span><a onclick="go('contacts','${contact.id}')" style="cursor:pointer">${esc(contact.name)}</a></span></div>`:''}
+        ${contact&&contact.email?`<div class="info"><label>Email</label><span><a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a></span></div>`:''}
+      </div>
+      ${(ar.tags||[]).length?`<div style="margin-top:12px">${ar.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
+    </div>
+    <div class="sec">
+      <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Scouting &amp; notes</span>
+        <a onclick="go('artists','${ar.id}','notes')" style="cursor:pointer;font-size:12px;font-weight:400;text-transform:none;letter-spacing:0">Edit →</a>
+      </div>
+      ${ar.notes?`<p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:${feed.length?'14px':'0'}">${esc(ar.notes).replace(/\n/g,'<br>')}</p>`:''}
+      ${feed.length?`<div style="display:flex;flex-direction:column;gap:8px">
+        ${feed.map(l=>`<a href="${esc(l.url)}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border-radius:var(--rad);text-decoration:none;color:var(--txt)">
+          <span style="color:var(--blue);font-size:14px">↗</span>
+          <span style="font-size:13px;flex:1">${esc(l.label||l.url)}</span>
+          <span style="font-size:11px;color:var(--txt3)">${esc(l.url.replace(/^https?:\/\//,'').split('/')[0])}</span>
+        </a>`).join('')}
+      </div>`:(!ar.notes?'<p class="muted" style="font-size:13px">No scouting notes or links yet. Add them in the Notes &amp; scouting tab.</p>':'')}
+      ${links.length>5?`<p class="muted" style="font-size:12px;margin-top:10px">+ ${links.length-5} more in Notes &amp; scouting</p>`:''}
+    </div>
+    ${totalShows?`<div class="sec"><div class="sec-label">Recent shows</div>${tableEvents(allEvents.slice(-5).reverse())}</div>`:''}`;
+}
+
+function artistDeals(host,ar,tours,allEvents){
+  if(!tours.length&&!allEvents.length){
+    host.innerHTML=emptyState('◉','No tours or events linked to this artist yet. Create a tour with this artist\'s name to see it here.');
+    return;
+  }
+  host.innerHTML=`
+    ${tours.map(t=>{
+      const evts=allEvents.filter(e=>e.tourId===t.id);
+      let rev=0,net=0;evts.forEach(e=>{const f=eventBest(e);rev+=f.gross;net+=f.artistNet;});
+      return `<div class="sec">
+        <div class="sec-label" style="display:flex;justify-content:space-between">
+          <span>${esc(t.name)}</span>
+          <span class="badge ${statusColor(t.status)}">${esc(t.status)}</span>
+        </div>
+        <div class="info-grid" style="margin-bottom:12px">
+          <div class="info"><label>Shows</label><span>${evts.length}</span></div>
+          <div class="info"><label>Gross</label><span>${money0(rev)}</span></div>
+          <div class="info"><label>Artist net</label><span class="${net>=0?'pos':'neg'}">${money0(net)}</span></div>
+          <div class="info"><label>Dates</label><span>${esc(t.start||'—')} – ${esc(t.end||'—')}</span></div>
+        </div>
+        ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No shows yet.</p>'}
+      </div>`;
+    }).join('')}
+    ${allEvents.filter(e=>!e.tourId).length?`<div class="sec"><div class="sec-label">One-off shows</div>${tableEvents(allEvents.filter(e=>!e.tourId))}</div>`:''}`;
+}
+
+function artistNotes(host,ar){
+  const saved=(ar.links||[]).filter(l=>l.url);
+  host.innerHTML=`
+    <div class="sec"><div class="sec-label">Scouting notes</div>
+      <textarea id="ar-notes" style="width:100%;min-height:140px;padding:10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px;font-family:inherit;line-height:1.6;resize:vertical"
+        placeholder="Add scouting notes, impressions, pitch ideas...">${esc(ar.notes||'')}</textarea>
+    </div>
+    ${saved.length?`<div class="sec"><div class="sec-label">Saved links — click to open</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${saved.map(l=>`<a href="${esc(l.url)}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border-radius:var(--rad);text-decoration:none;color:var(--txt)">
+          <span style="color:var(--blue);font-size:14px">↗</span>
+          <span style="font-size:13px;flex:1">${esc(l.label||l.url)}</span>
+          <span style="font-size:11px;color:var(--txt3)">${esc(l.url.replace(/^https?:\/\//,'').split('/')[0])}</span>
+        </a>`).join('')}
+      </div></div>`:''}
+    <div class="sec"><div class="sec-label">Edit performance links</div>
+      <div id="ar-links">
+        ${(ar.links||[]).map((l,i)=>`<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <input type="text" value="${esc(l.label||'')}" placeholder="Label (e.g. Live at CBC)" id="ar-link-lbl-${i}" style="flex:1;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          <input type="text" value="${esc(l.url||'')}" placeholder="https://..." id="ar-link-url-${i}" style="flex:2;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          ${l.url?`<a href="${esc(l.url)}" target="_blank" class="btn ghost sm" title="Open" style="text-decoration:none">↗</a>`:''}
+          <button class="btn ghost sm" onclick="removeArtistLink('${ar.id}',${i})" title="Remove">×</button>
+        </div>`).join('')}
+      </div>
+      <button class="btn sm" onclick="addArtistLink('${ar.id}')">+ Add link</button>
+    </div>
+    <button class="btn primary sm" style="margin-top:6px" onclick="saveArtistNotes('${ar.id}')">Save notes & links</button>`;
+}
+function readArtistLinkFields(ar){
+  // capture whatever is currently typed before re-render
+  if(document.getElementById('ar-notes')) ar.notes=document.getElementById('ar-notes').value;
+  ar.links=(ar.links||[]).map((l,i)=>({
+    label:document.getElementById('ar-link-lbl-'+i)?.value ?? l.label ?? '',
+    url:document.getElementById('ar-link-url-'+i)?.value ?? l.url ?? ''
+  }));
+}
+function addArtistLink(id){
+  const ar=get(DB.artists,id);
+  ar.links=ar.links||[];
+  readArtistLinkFields(ar);
+  ar.links.push({label:'',url:''});
+  go('artists',id,'notes');
+}
+function removeArtistLink(id,i){
+  const ar=get(DB.artists,id);
+  readArtistLinkFields(ar);
+  ar.links.splice(i,1);
+  persist(); go('artists',id,'notes');
+}
+function saveArtistNotes(id){
+  const ar=get(DB.artists,id);
+  ar.notes=document.getElementById('ar-notes').value;
+  ar.links=(ar.links||[]).map((l,i)=>({
+    label:document.getElementById('ar-link-lbl-'+i)?.value||'',
+    url:document.getElementById('ar-link-url-'+i)?.value||''
+  })).filter(l=>l.url);
+  logActivity('edited','Artist',ar.name+' (notes)');
+  persist();
+  go('artists',id,'notes');
+}
+
+function artistForm(id){
+  const ar=id?get(DB.artists,id):{type:'roster',links:[]};
+  const contacts=DB.contacts;
+  const body=`
+    <div class="row2">
+      <div class="field"><label>Name</label><input id="arf-name" value="${esc(ar.name||'')}"></div>
+      <div class="field"><label>Genre / discipline</label><input id="arf-genre" value="${esc(ar.genre||'')}"></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>Type</label><select id="arf-type">
+        <option value="roster" ${ar.type==='roster'?'selected':''}>Roster (active)</option>
+        <option value="prospect" ${ar.type==='prospect'?'selected':''}>Prospect (scouting)</option>
+      </select></div>
+      <div class="field"><label>Status</label><select id="arf-status">
+        ${['Active','On hold','Inactive','Watching','Approached','Passed'].map(s=>`<option ${ar.status===s?'selected':''}>${s}</option>`).join('')}
+      </select></div>
+      <div class="field"><label>Mgmt commission %</label><input id="arf-mgmt" type="number" value="${ar.mgmtPct||DB.settings.mgmtPct}"></div>
+    </div>
+    <div class="field"><label>Linked contact</label><select id="arf-contact"><option value="">—</option>
+      ${contacts.map(c=>`<option value="${c.id}" ${ar.contactId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Tags (comma separated)</label><input id="arf-tags" value="${esc((ar.tags||[]).join(', '))}"></div>
+    <div class="field"><label>Notes</label><textarea id="arf-notes">${esc(ar.notes||'')}</textarea></div>`;
+  openModal(id?'Edit artist':'Add artist',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveArtist('${id||''}')">Save artist</button>`);
+}
+function saveArtist(id){
+  const rec={name:fv('arf-name'),genre:fv('arf-genre'),type:fv('arf-type'),status:fv('arf-status'),
+    mgmtPct:fvn('arf-mgmt'),contactId:fv('arf-contact'),notes:fv('arf-notes'),
+    tags:fv('arf-tags').split(',').map(s=>s.trim()).filter(Boolean)};
+  if(id){const ar=get(DB.artists,id);rec.links=ar.links||[];Object.assign(ar,rec);logActivity('edited','Artist',rec.name);}
+  else{rec.id=uid('a');rec.links=[];DB.artists.push(rec);logActivity('created','Artist',rec.name);}
+  persist();closeModal();render();
+}
+function deleteArtist(id){
+  const ar=get(DB.artists,id); if(!ar) return;
+  if(!confirm(`Delete artist "${ar.name}"?`)) return;
+  logActivity('deleted','Artist',ar.name);
+  DB.artists=DB.artists.filter(x=>x.id!==id);
+  persist(); go('artists');
+}
+
+/* ============================================================
+   BULK CONTACT UPLOAD + AUTO-ASSOCIATE TO VENUES
+   ============================================================ */
+function bulkContactModal(){
+  const body=`
+    <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">
+      Paste CSV rows below, one contact per line. Columns: <strong>Name, Role, Email, Phone, Company</strong> (phone and company optional). First row can be a header — it will be skipped.</p>
+    <div class="field"><textarea id="bulk-csv" style="min-height:160px;font-size:12px;font-family:ui-monospace,monospace"
+      placeholder="Name,Role,Email,Phone,Company&#10;Jane Smith,Booker,jane@horseshoe.ca,416-555-1234,Horseshoe Tavern&#10;Mike Jones,Promoter,mike@eventsco.com,,Events Co"></textarea></div>
+    <div id="bulk-preview"></div>`;
+  openModal('Bulk import contacts',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn sm" onclick="previewBulkContacts()">Preview</button>
+     <button class="btn primary" id="bulk-import-btn" onclick="importBulkContacts()" disabled>Import contacts</button>`);
+}
+
+function parseCSV(raw){
+  const rows=raw.trim().split('\n').map(r=>r.split(',').map(c=>c.trim().replace(/^"|"$/g,'')));
+  // skip header if first cell looks like "name"
+  const start=rows[0]&&rows[0][0].toLowerCase()==='name'?1:0;
+  return rows.slice(start).filter(r=>r[0]);
+}
+
+function domainOf(email){ const m=(email||'').match(/@(.+)$/); return m?m[1].toLowerCase():''; }
+
+function matchVenue(email){
+  if(!email) return null;
+  const domain=domainOf(email);
+  // Exact match on any existing venue contact's email
+  const exact=DB.contacts.find(c=>c.email&&c.email.toLowerCase()===email.toLowerCase()&&c.venueId);
+  if(exact) return {venueId:exact.venueId, how:'exact'};
+  // Domain match
+  if(domain){
+    for(const v of DB.venues){
+      const vc=get(DB.contacts,v.contactId);
+      if(vc&&domainOf(vc.email)===domain) return {venueId:v.id, how:'domain'};
+      // Also check all contacts linked to this venue
+      const linked=DB.contacts.filter(c=>c.venueId===v.id);
+      if(linked.some(c=>domainOf(c.email)===domain)) return {venueId:v.id, how:'domain'};
+    }
+  }
+  return null;
+}
+
+let _bulkParsed=[];
+function previewBulkContacts(){
+  const raw=fv('bulk-csv'); if(!raw){alert('Paste some CSV data first.');return;}
+  const rows=parseCSV(raw);
+  if(!rows.length){alert('No valid rows found.');return;}
+  _bulkParsed=rows.map(r=>{
+    const [name,role,email,phone,company]=r;
+    const match=matchVenue(email);
+    const venue=match?get(DB.venues,match.venueId):null;
+    return {name:name||'',role:role||'',email:email||'',phone:phone||'',company:company||'',
+      venueId:match?match.venueId:'', venueMatch:match, venueName:venue?venue.name:''};
+  });
+  const host=document.getElementById('bulk-preview');
+  host.innerHTML=`
+    <div class="sec-label" style="margin-top:16px">Preview — ${_bulkParsed.length} contacts</div>
+    <div style="max-height:240px;overflow-y:auto;border:1px solid var(--bord);border-radius:var(--rad);margin-top:6px">
+      <table class="tbl" style="border:none">
+        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Company</th><th>Venue link</th></tr></thead>
+        <tbody>${_bulkParsed.map((c,i)=>`<tr>
+          <td>${esc(c.name)}</td><td>${esc(c.role)}</td><td>${esc(c.email)}</td><td>${esc(c.company)}</td>
+          <td>${c.venueMatch
+            ?`<span class="badge ${c.venueMatch.how==='exact'?'green':'amber'}">${c.venueMatch.how==='exact'?'Auto-linked':'Domain match'}: ${esc(c.venueName)}</span>`
+            :'<span class="muted">—</span>'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:8px">Green = auto-linked (exact email match). Amber = suggested (domain match). Review then click Import.</p>`;
+  document.getElementById('bulk-import-btn').disabled=false;
+}
+
+function importBulkContacts(){
+  if(!_bulkParsed.length) return;
+  let added=0, skipped=0;
+  _bulkParsed.forEach(c=>{
+    if(!c.name){skipped++;return;}
+    const exists=DB.contacts.find(x=>x.email&&x.email.toLowerCase()===c.email.toLowerCase());
+    if(exists){skipped++;return;}
+    DB.contacts.push({id:uid('c'),name:c.name,role:c.role,email:c.email,phone:c.phone,
+      company:c.company,venueId:c.venueId||'',notes:''});
+    added++;
+  });
+  persist(); closeModal(); _bulkParsed=[];
+  openModal('Import complete',
+    `<p style="font-size:13px;color:var(--green)">✓ ${added} contact${added!==1?'s':''} imported.</p>
+     ${skipped?`<p class="muted" style="font-size:12px;margin-top:6px">${skipped} row${skipped!==1?'s':''} skipped (missing name or duplicate email).</p>`:''}`,
+    `<button class="btn primary" onclick="closeModal();go('contacts')">View contacts</button>`);
+}
+
+/* ============================================================
+   BULK ARTIST UPLOAD
+   ============================================================ */
+function bulkArtistModal(){
+  const body=`
+    <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">
+      Paste CSV rows, one artist per line. Columns: <strong>Name, Genre, Type, Status, Mgmt%, Notes</strong>, then any number of <strong>note or link cells</strong> after. URLs become clickable links; other cells are added to notes. Header row is skipped.</p>
+    <div class="field"><textarea id="bulk-art-csv" style="min-height:160px;font-size:12px;font-family:ui-monospace,monospace"
+      placeholder="Name,Genre,Type,Status,Mgmt%,Notes,Link/Note,Link/Note&#10;Jane Comedy,Comedy,prospect,Watching,15,Great crowd work,https://youtube.com/watch?x,Strong closer&#10;The Band,Music,roster,Active,15,,https://spotify.com/artist/y"></textarea></div>
+    <div id="bulk-art-preview"></div>`;
+  openModal('Bulk import artists',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn sm" onclick="previewBulkArtists()">Preview</button>
+     <button class="btn primary" id="bulk-art-btn" onclick="importBulkArtists()" disabled>Import artists</button>`);
+}
+let _bulkArtists=[];
+function previewBulkArtists(){
+  const raw=fv('bulk-art-csv'); if(!raw){alert('Paste some CSV data first.');return;}
+  const rows=parseCSV(raw);
+  if(!rows.length){alert('No valid rows found.');return;}
+  _bulkArtists=rows.map(r=>{
+    const [name,genre,type,status,mgmt,notes,...rest]=r;
+    const links=[], noteBits=[];
+    if(notes) noteBits.push(notes);
+    rest.forEach(cell=>{
+      if(!cell) return;
+      if(/^https?:\/\//i.test(cell)) links.push({label:cell.replace(/^https?:\/\//,'').split('/')[0], url:cell});
+      else noteBits.push(cell);
+    });
+    let t=(type||'').toLowerCase().includes('roster')?'roster':'prospect';
+    return {name:name||'', genre:genre||'', type:t, status:status||(t==='roster'?'Active':'Watching'),
+      mgmtPct:mgmt?(+mgmt||DB.settings.mgmtPct):DB.settings.mgmtPct,
+      notes:noteBits.join(' · '), links};
+  });
+  const host=document.getElementById('bulk-art-preview');
+  host.innerHTML=`
+    <div class="sec-label" style="margin-top:16px">Preview — ${_bulkArtists.length} artists</div>
+    <div style="max-height:240px;overflow-y:auto;border:1px solid var(--bord);border-radius:var(--rad);margin-top:6px">
+      <table class="tbl" style="border:none">
+        <thead><tr><th>Name</th><th>Genre</th><th>Type</th><th>Status</th><th>Links</th><th>Notes</th></tr></thead>
+        <tbody>${_bulkArtists.map(a=>`<tr>
+          <td>${esc(a.name)}</td><td>${esc(a.genre)}</td>
+          <td><span class="badge ${a.type==='roster'?'green':'amber'}">${a.type}</span></td>
+          <td>${esc(a.status)}</td><td>${a.links.length}</td>
+          <td style="font-size:11px;color:var(--txt3)">${esc((a.notes||'').slice(0,40))}${a.notes.length>40?'…':''}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  document.getElementById('bulk-art-btn').disabled=false;
+}
+function importBulkArtists(){
+  if(!_bulkArtists.length) return;
+  let added=0, skipped=0;
+  _bulkArtists.forEach(a=>{
+    if(!a.name){skipped++;return;}
+    const exists=DB.artists.find(x=>x.name.toLowerCase()===a.name.toLowerCase());
+    if(exists){skipped++;return;}
+    DB.artists.push({id:uid('a'),name:a.name,genre:a.genre,type:a.type,status:a.status,
+      mgmtPct:a.mgmtPct,contactId:'',notes:a.notes,links:a.links,tags:[]});
+    added++;
+  });
+  logActivity('created','Artist',added+' via bulk import');
+  persist(); closeModal(); _bulkArtists=[];
+  openModal('Import complete',
+    `<p style="font-size:13px;color:var(--green)">✓ ${added} artist${added!==1?'s':''} imported.</p>
+     ${skipped?`<p class="muted" style="font-size:12px;margin-top:6px">${skipped} row${skipped!==1?'s':''} skipped (missing name or duplicate).</p>`:''}`,
+    `<button class="btn primary" onclick="closeModal();go('artists')">View artists</button>`);
+}
+
+/* ============================================================
+   VIEW: SETTINGS (incl. Google connect stub + data tools)
+   ============================================================ */
+/* ============================================================
+   VIEW: ACTIVITY (audit trail)
+   ============================================================ */
+VIEWS.activity={
+  render(c,a){
+    const log=DB.activity||[];
+    a.innerHTML = log.length?`<button class="btn sm" onclick="clearActivity()">Clear log</button>`:'';
+    if(!log.length){ c.innerHTML=emptyState('⟲','No activity yet — changes will appear here'); return; }
+    // Group by date
+    const groups={};
+    log.forEach(e=>{
+      const d=new Date(e.ts);
+      const day=d.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+      (groups[day]=groups[day]||[]).push(e);
+    });
+    const actionColor=a=>a==='created'?'green':a==='deleted'?'red':a==='edited'?'blue':'gray';
+    c.innerHTML=`
+      <div class="field" style="max-width:320px;margin-bottom:18px">
+        <input id="act-search" placeholder="Search activity…" oninput="filterActivity()" style="width:100%">
+      </div>
+      <div id="act-list">
+      ${Object.entries(groups).map(([day,entries])=>`
+        <div class="sec">
+          <div class="sec-label">${esc(day)}</div>
+          <table class="tbl"><tbody>
+            ${entries.map(e=>{
+              const t=new Date(e.ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+              return `<tr class="act-row" data-search="${esc((e.action+' '+e.recordType+' '+e.recordName+' '+e.user).toLowerCase())}" style="cursor:default">
+                <td style="width:80px;color:var(--txt3);font-size:12px">${t}</td>
+                <td style="width:90px"><span class="badge ${actionColor(e.action)}">${esc(e.action)}</span></td>
+                <td style="width:90px;color:var(--txt2);font-size:12px">${esc(e.recordType)}</td>
+                <td style="font-weight:500">${esc(e.recordName||'—')}</td>
+                <td style="width:120px;color:var(--txt3);font-size:12px;text-align:right">${esc(e.user)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody></table>
+        </div>`).join('')}
+      </div>`;
+  }
+};
+function filterActivity(){
+  const q=(document.getElementById('act-search').value||'').toLowerCase().trim();
+  document.querySelectorAll('.act-row').forEach(r=>{
+    r.style.display = !q || r.dataset.search.includes(q) ? '' : 'none';
+  });
+  // Hide empty date groups
+  document.querySelectorAll('#act-list .sec').forEach(sec=>{
+    const anyVisible=[...sec.querySelectorAll('.act-row')].some(r=>r.style.display!=='none');
+    sec.style.display=anyVisible?'':'none';
+  });
+}
+function clearActivity(){
+  if(!confirm('Clear the entire activity log? This cannot be undone.')) return;
+  DB.activity=[];
+  persist(); render();
+}
+
+/* ============================================================
+   VIEW: PROPOSALS (artist-facing pitches, single show or tour)
+   ============================================================ */
+VIEWS.proposals={
+  render(c,a){
+    if(route.id) return this.detail(c,a,route.id);
+    a.innerHTML=`<button class="btn primary" onclick="proposalForm()">+ New proposal</button>`;
+    let list=DB.proposals||[];
+    if(inArtistView()) list=list.filter(p=>p.artistId===ARTIST_VIEW);
+    if(!list.length){ c.innerHTML=emptyState('◈','No proposals yet — create one to pitch a show or tour to an artist'); return; }
+    c.innerHTML=`<div class="cards-grid">${list.map(proposalCard).join('')}</div>`;
+  },
+  detail(c,a,id){
+    const p=get(DB.proposals,id); if(!p){go('proposals');return;}
+    const artist=p.artistId?get(DB.artists,p.artistId):null;
+    const evts=(p.eventIds||[]).map(eid=>get(DB.events,eid)).filter(Boolean);
+    let totGross=0,totPayout=0,totComm=0,totArtist=0;
+    evts.forEach(e=>{const f=proposalEventFigures(e);totGross+=f.grossBoxOffice;totPayout+=f.payout;totComm+=f.commission;totArtist+=f.artistNet;});
+    a.innerHTML=`<button class="btn sm" onclick="proposalForm('${id}')">Edit details</button>
+      <button class="btn primary sm" onclick="addShowToProposal('${id}')">+ Add show</button>
+      <button class="btn sm" onclick="printProposalDoc('${id}')">Print / PDF</button>
+      <button class="btn sm danger" onclick="deleteProposal('${id}')">Delete</button>`;
+    c.innerHTML=`
+      <div class="detail-head">
+        <span class="back" onclick="go('proposals')">← Proposals</span>
+        <span class="detail-title">${esc(p.title)}</span>
+        <span class="badge ${p.kind==='tour'?'blue':'gray'}">${p.kind==='tour'?'Tour':'Single show'}</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-val">${evts.length}</div><div class="stat-lbl">Shows</div></div>
+        <div class="stat"><div class="stat-val">${money0(totGross)}</div><div class="stat-lbl">Projected gross</div></div>
+        <div class="stat"><div class="stat-val pos">${money0(totComm)}</div><div class="stat-lbl">Your commission</div></div>
+        <div class="stat"><div class="stat-val ${totArtist>=0?'pos':'neg'}">${money0(totArtist)}</div><div class="stat-lbl">Artist net</div></div>
+      </div>
+      <div class="sec"><div class="sec-label">Proposal info</div>
+        <div class="info-grid">
+          <div class="info"><label>Artist</label><span>${artist?esc(artist.name):esc(p.artistName||'—')}</span></div>
+          <div class="info"><label>Type</label><span>${p.kind==='tour'?'Full tour':'Single show'}</span></div>
+          <div class="info"><label>Created</label><span>${esc((p.created||'').slice(0,10))}</span></div>
+        </div>
+        ${p.intro?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(p.intro)}</p>`:''}
+      </div>
+      <div class="sec"><div class="sec-label">Shows in this proposal</div>
+        ${evts.length?`<table class="tbl"><thead><tr>
+          <th>Show</th><th>Date</th><th>Venue</th><th class="num">Cap</th>
+          <th class="num">Proj. gross</th><th class="num">Artist net</th><th></th></tr></thead><tbody>
+          ${evts.map(e=>{const v=get(DB.venues,e.venueId);const f=proposalEventFigures(e);
+            return `<tr>
+              <td style="font-weight:500;cursor:pointer" onclick="go('events','${e.id}')">${esc(e.name)}</td>
+              <td>${esc(e.date||'TBD')}</td>
+              <td>${v?esc(v.name):'—'}</td><td class="num">${e.capacityAlloc||'—'}</td>
+              <td class="num">${money0(f.grossBoxOffice)}</td>
+              <td class="num ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</td>
+              <td style="text-align:right"><button class="btn ghost sm" style="padding:2px 7px" onclick="removeShowFromProposal('${p.id}','${e.id}')" title="Remove from proposal">×</button></td></tr>`;}).join('')}
+          <tr style="border-top:2px solid var(--bord2)"><td colspan="4" style="font-weight:600">${p.kind==='tour'?'Tour total':'Total'}</td>
+            <td class="num" style="font-weight:600">${money0(totGross)}</td>
+            <td class="num ${totArtist>=0?'pos':'neg'}" style="font-weight:600">${money0(totArtist)}</td><td></td></tr>
+          </tbody></table>`:'<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> above to build from an existing event or start blank.</p>'}
+      </div>`;
+  }
+};
+
+function addShowToProposal(pid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const ar=p.artistId?get(DB.artists,p.artistId):null;
+  const arTours=ar?artistTours(ar.id):[];
+  const attached=new Set(p.eventIds||[]);
+  const arEvents=ar?artistEvents(ar.id).filter(e=>!attached.has(e.id)):[];
+  const otherEvents=DB.events.filter(e=>!attached.has(e.id)&&!(ar&&artistEvents(ar.id).some(ae=>ae.id===e.id)));
+  const tourSection=arTours.length?`
+    <div class="sec-label" style="margin-top:16px">Copy an entire tour (all shows cloned as projected)</div>
+    <div style="border:1px solid var(--bord);border-radius:var(--rad);overflow:hidden;margin-top:6px">
+    ${arTours.map(t=>{
+      const tevts=DB.events.filter(e=>e.tourId===t.id&&!attached.has(e.id));
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bord)">
+        <div><div style="font-weight:500;font-size:13px">${esc(t.name)}</div>
+        <div style="font-size:11px;color:var(--txt3)">${tevts.length} shows available</div></div>
+        <button class="btn sm primary" onclick="copyTourToProposal('${pid}','${t.id}')">Copy tour</button>
+      </div>`;
+    }).join('')}
+    </div>`:'';
+  const evtRows=(label,list)=>list.length?`
+    <div class="sec-label" style="margin-top:16px">${label}</div>
+    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--bord);border-radius:var(--rad);margin-top:6px">
+      <table class="tbl" style="border:none"><tbody>
+      ${list.map(e=>{const v=get(DB.venues,e.venueId);return `<tr>
+        <td style="font-weight:500">${esc(e.name)}</td>
+        <td style="color:var(--txt3)">${esc(e.date||'TBD')}</td>
+        <td style="color:var(--txt3)">${v?esc(v.name):'—'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn ghost sm" onclick="attachExistingShow('${pid}','${e.id}')">Attach</button>
+          <button class="btn sm" onclick="cloneShowToProposal('${pid}','${e.id}')">Clone</button>
+        </td></tr>`;}).join('')}
+      </tbody></table></div>`:'' ;
+  const body=`
+    <p style="font-size:12px;color:var(--txt3);margin-bottom:4px"><strong>Attach</strong> links the real event. <strong>Clone</strong> makes a projected copy you can edit freely without affecting the original.</p>
+    ${tourSection}
+    ${evtRows(ar?esc(ar.name)+"'s shows":'Artist shows', arEvents)}
+    ${evtRows('All other events', otherEvents)}
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bord)">
+      <button class="btn sm" onclick="closeModal();eventForm(null,null,null,'${pid}')">+ Create a brand-new show</button>
+    </div>`;
+  openModal('Add show to proposal',body,`<button class="btn" onclick="closeModal()">Done</button>`);
+}
+function copyTourToProposal(pid,tid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const attached=new Set(p.eventIds||[]);
+  const tevts=DB.events.filter(e=>e.tourId===tid&&!attached.has(e.id));
+  if(!tevts.length){ alert('All shows from this tour are already in the proposal.'); return; }
+  tevts.forEach(src=>{
+    const copy=JSON.parse(JSON.stringify(src));
+    copy.id=uid('e'); copy.name=(src.name||'Show')+' (proposed)';
+    copy.presales=0; copy.status='Routing';
+    copy.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''};
+    copy.checklist={};
+    DB.events.push(copy);
+    p.eventIds=p.eventIds||[]; p.eventIds.push(copy.id);
+  });
+  logActivity('edited','Proposal',p.title+' (copied '+tevts.length+' shows from tour)');
+  persist(); closeModal(); go('proposals',pid);
+}
+function attachExistingShow(pid,eid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  p.eventIds=p.eventIds||[];
+  if(!p.eventIds.includes(eid)) p.eventIds.push(eid);
+  logActivity('edited','Proposal',p.title+' (added show)');
+  persist(); closeModal(); go('proposals',pid);
+}
+function cloneShowToProposal(pid,eid){
+  const p=get(DB.proposals,pid), src=get(DB.events,eid);
+  if(!p||!src) return;
+  const copy=JSON.parse(JSON.stringify(src));
+  copy.id=uid('e');
+  copy.name=(src.name||'Show')+' (proposed)';
+  copy.date=''; copy.presales=0;
+  copy.status='Routing';
+  copy.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''};
+  DB.events.push(copy);
+  p.eventIds=p.eventIds||[]; p.eventIds.push(copy.id);
+  logActivity('created','Event',copy.name+' (proposal template)');
+  persist(); closeModal(); go('proposals',pid);
+}
+function removeShowFromProposal(pid,eid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  p.eventIds=(p.eventIds||[]).filter(x=>x!==eid);
+  persist(); go('proposals',pid);
+}
+
+// Proposals use projected figures (slider estimate or 60% default), same engine as scenarios
+function proposalEventFigures(e){
+  const est = (e.projection && e.projection.ticketsEst) ? e.projection.ticketsEst : Math.round((+e.capacityAlloc||0)*0.6);
+  const projExps=((e.settlement&&e.settlement.expenses)||(e.projection&&e.projection.expenses)||[])
+    .filter(x=>x.payer!=='venue').map(x=>({desc:x.desc,amount:x.amount,payer:x.payer==='producer'?'producer':'artist',markupPct:x.markupPct||0}));
+  const model={...e, projection:{ticketsEst:est, expenses:projExps}};
+  return projectionFigures(model,est);
+}
+
+function proposalCard(p){
+  const artist=p.artistId?get(DB.artists,p.artistId):null;
+  const evts=(p.eventIds||[]).map(eid=>get(DB.events,eid)).filter(Boolean);
+  let net=0;evts.forEach(e=>net+=proposalEventFigures(e).artistNet);
+  return `<div class="card" onclick="go('proposals','${p.id}')">
+    <div class="card-top"><div><div class="card-title">${esc(p.title)}</div>
+    <div class="card-sub">${artist?esc(artist.name):esc(p.artistName||'')}</div></div>
+    <span class="badge ${p.kind==='tour'?'blue':'gray'}">${p.kind==='tour'?'Tour':'Show'}</span></div>
+    <div class="card-meta">
+      <div class="meta"><label>Shows</label><span>${evts.length}</span></div>
+      <div class="meta"><label>Artist net</label><span class="${net>=0?'pos':'neg'}">${money0(net)}</span></div>
+    </div></div>`;
+}
+
+function proposalForm(id){
+  const p=id?get(DB.proposals,id):{kind:'single',eventIds:[]};
+  const body=`
+    <div class="field"><label>Proposal title</label><input id="pf-title" value="${esc(p.title||'')}" placeholder="e.g. Be Nice Tour — Atlantic Run"></div>
+    <div class="row2">
+      <div class="field"><label>Type</label><select id="pf-kind">
+        <option value="single" ${p.kind==='single'?'selected':''}>Single show</option>
+        <option value="tour" ${p.kind==='tour'?'selected':''}>Full tour</option>
+      </select></div>
+      <div class="field"><label>Artist</label><select id="pf-artist"><option value="">—</option>
+        ${DB.artists.map(ar=>`<option value="${ar.id}" ${p.artistId===ar.id?'selected':''}>${esc(ar.name)}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="field"><label>Intro / pitch note (optional)</label><textarea id="pf-intro" placeholder="A line or two framing the proposal for the artist...">${esc(p.intro||'')}</textarea></div>
+    <p class="muted" style="font-size:12px">Once saved, open the proposal to add shows — you can build from your existing events or start blank.</p>`;
+  openModal(id?'Edit proposal':'New proposal',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveProposal('${id||''}')">Save proposal</button>`);
+}
+function saveProposal(id){
+  const artistId=fv('pf-artist');
+  const rec={title:fv('pf-title'),kind:fv('pf-kind'),artistId,
+    artistName:artistId?(get(DB.artists,artistId)||{}).name:'',
+    intro:fv('pf-intro')};
+  if(id){Object.assign(get(DB.proposals,id),rec);logActivity('edited','Proposal',rec.title);}
+  else{rec.id=uid('p');rec.created=new Date().toISOString();rec.eventIds=[];DB.proposals.push(rec);logActivity('created','Proposal',rec.title);}
+  persist();closeModal();
+  go('proposals',id||DB.proposals[DB.proposals.length-1].id);
+}
+function deleteProposal(id){
+  const p=get(DB.proposals,id); if(!p) return;
+  if(!confirm(`Delete proposal "${p.title}"?`)) return;
+  DB.proposals=DB.proposals.filter(x=>x.id!==id);
+  logActivity('deleted','Proposal',p.title);
+  persist(); go('proposals');
+}
+
+function printProposalDoc(id){
+  const p=get(DB.proposals,id); if(!p) return;
+  const artist=p.artistId?get(DB.artists,p.artistId):null;
+  const evts=(p.eventIds||[]).map(eid=>get(DB.events,eid)).filter(Boolean);
+  let totGross=0,totPayout=0,totComm=0,totArtist=0;
+  evts.forEach(e=>{const f=proposalEventFigures(e);totGross+=f.grossBoxOffice;totPayout+=f.payout;totComm+=f.commission;totArtist+=f.artistNet;});
+  const rows=evts.map(e=>{
+    const v=get(DB.venues,e.venueId);const f=proposalEventFigures(e);
+    return `<tr>
+      <td style="padding:6px 0">${esc(e.name)}</td>
+      <td>${esc(e.date||'TBD')}</td>
+      <td>${v?esc(v.name):'—'}</td>
+      <td style="text-align:right">${f.sold}</td>
+      <td style="text-align:right">${money0(f.grossBoxOffice)}</td>
+      <td style="text-align:right">${money0(f.payout)}</td>
+      <td style="text-align:right">${money0(f.commission)}</td>
+      <td style="text-align:right;font-weight:600">${money0(f.artistNet)}</td></tr>`;
+  }).join('');
+  const doc=`
+    <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
+      <div style="font-size:20px;font-weight:600">${esc(p.title)}</div>
+      <div style="color:#5f5e58;font-size:13px">Proposal for ${esc(artist?artist.name:p.artistName||'Artist')} · ${new Date().toLocaleDateString()}</div>
+    </div>
+    ${p.intro?`<p style="font-size:13px;line-height:1.6;margin-bottom:16px">${esc(p.intro)}</p>`:''}
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:#908e85;text-align:left;border-bottom:1px solid #e4e2da">
+        <th style="padding:6px 0;font-weight:500">Show</th><th style="font-weight:500">Date</th>
+        <th style="font-weight:500">Venue</th><th style="text-align:right;font-weight:500">Est. tickets</th>
+        <th style="text-align:right;font-weight:500">Gross</th><th style="text-align:right;font-weight:500">Venue payout</th>
+        <th style="text-align:right;font-weight:500">Commission</th><th style="text-align:right;font-weight:500">Artist net</th></tr></thead>
+      <tbody>${rows}
+        <tr style="border-top:2px solid #1c1c1a;font-weight:600">
+          <td style="padding:8px 0" colspan="4">Tour total (${evts.length} shows)</td>
+          <td style="text-align:right">${money0(totGross)}</td>
+          <td style="text-align:right">${money0(totPayout)}</td>
+          <td style="text-align:right">${money0(totComm)}</td>
+          <td style="text-align:right">${money0(totArtist)}</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:#908e85;margin-top:16px">All figures are projections based on estimated attendance and are subject to confirmation and final settlement. Management commission and any disclosed fees are shown in full. Generated by TourDesk.</p>`;
+  const w=window.open('','_blank');
+  w.document.write('<html><head><title>'+esc(p.title)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1c1c1a}table{width:100%}</style></head><body>'+doc+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
+}
+
+VIEWS.settings={
+  render(c){
+    c.innerHTML=`
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Defaults</div>
+        <div class="row2">
+          <div class="field"><label>Management commission %</label><input type="number" id="set-mgmt" value="${DB.settings.mgmtPct}"></div>
+          <div class="field"><label>Default tax rate %</label><input type="number" id="set-tax" value="${DB.settings.taxRate}"></div>
+        </div>
+        <div class="field"><label>Default service fee % (on booked items)</label><input type="number" id="set-svc" value="${DB.settings.serviceFeePct}"></div>
+        <button class="btn sm" onclick="saveSettings()">Save defaults</button>
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Supabase (cloud sync)</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+          Connect to Supabase for real-time sync across all your devices. Free account at <a href="https://supabase.com" target="_blank">supabase.com</a>.</p>
+        <div class="field"><label>Project URL</label><input id="set-sb-url" placeholder="https://yourproject.supabase.co" value="${esc((DB.settings.supabaseConfig?.projectUrl)||'')}"></div>
+        <div class="field"><label>API Key (anon/public)</label><input id="set-sb-key" placeholder="Paste your anon key" value="${esc((DB.settings.supabaseConfig?.apiKey)||'')}"></div>
+        <button class="btn sm" onclick="connectSupabase()">Connect Supabase</button>
+        <p class="muted" style="font-size:12px;margin-top:8px">Status: ${SBDB?'<span class="pos">Connected & syncing</span>':'<span class="muted">Not connected</span>'}</p>
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Data</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" onclick="exportData()">Export backup (data + app)</button>
+          <button class="btn sm" onclick="document.getElementById('import-file').click()">Import backup</button>
+          <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this.files[0])">
+          <button class="btn sm danger" onclick="resetData()">Reset to sample data</button>
+        </div>
+      </div>`;
+  }
+};
+function saveSettings(){ 
+  DB.settings.mgmtPct=fvn('set-mgmt'); 
+  DB.settings.taxRate=fvn('set-tax'); 
+  DB.settings.serviceFeePct=fvn('set-svc');
+  const sbUrl=fv('set-sb-url'), sbKey=fv('set-sb-key');
+  if(sbUrl && sbKey){
+    DB.settings.supabaseConfig={projectUrl:sbUrl,apiKey:sbKey};
+  }
+  persist(); render(); 
+}
+
+
+async function connectSupabase(){
+  const url=fv('set-sb-url'), key=fv('set-sb-key');
+  if(!url || !key){
+    alert('Fill in both Supabase fields first.');
+    return;
+  }
+  DB.settings.supabaseConfig={projectUrl:url,apiKey:key};
+  persist();
+  try{
+    SBDB=window.supabase.createClient(url, key);
+    // Test the connection
+    const { data, error } = await SBDB.from('tourdesk_data').select('id').limit(1);
+    if(error && error.code!=='PGRST116'){ // PGRST116 = table doesn't exist yet, that's ok
+      throw new Error(error.message);
+    }
+    // Try to load existing data
+    const { data: existing } = await SBDB.from('tourdesk_data').select('data').eq('id',1).single();
+    if(existing && existing.data){
+      const loaded=typeof existing.data==='string'?JSON.parse(existing.data):existing.data;
+      Object.assign(DB,loaded);
+    }else{
+      // First time; upload current data
+      await SBDB.from('tourdesk_data').upsert({id:1,data:DB},{onConflict:'id'});
+    }
+    // Set up real-time listener
+    SBSUB=SBDB.channel('tourdesk_changes').on('postgres_changes',
+      {event:'*',schema:'public',table:'tourdesk_data'},
+      payload=>{
+        if(payload.new && payload.new.data){
+          const d=typeof payload.new.data==='string'?JSON.parse(payload.new.data):payload.new.data;
+          Object.assign(DB,d);
+          if(route && route.view) render();
+        }
+      }).subscribe();
+    updateSyncBadge();
+    openModal('Supabase connected','<p style="font-size:13px;color:var(--green)">✓ Connected. Your data is now syncing across all devices.</p>','<button class="btn primary" onclick="closeModal();render()">Done</button>');
+  }catch(err){
+    alert('Connection failed: '+err.message+'\n\nDouble-check your Project URL and API Key at supabase.com');
+  }
+}
+function connectGoogle(){
+  DB.settings.apiKey=fv('set-apikey'); DB.settings.clientId=fv('set-clientid');
+  if(DB.settings.apiKey && DB.settings.clientId){
+    openModal('Google setup','<p style="font-size:13px;line-height:1.7;color:var(--txt2)">Credentials saved. The live OAuth handshake and Sheets/Drive/Gmail sync need the Google API libraries loaded and your Cloud project authorized for this file\'s origin. Since you\'re running this as a local file, we\'ll set the authorized origin together. Ask me to "set up the Google connection" and I\'ll walk through it step by step.</p>','<button class="btn primary" onclick="closeModal()">Got it</button>');
+  } else {
+    openModal('Missing credentials','<p style="font-size:13px;color:var(--txt2)">Please paste both your API key and OAuth client ID first.</p>','<button class="btn" onclick="closeModal()">OK</button>');
+  }
+  persist();updateSyncBadge();
+}
+function exportData(){
+  // 1. Download the data JSON
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='tourdesk-backup-'+todayStr()+'.json';a.click();
+  // 2. Download a copy of the app itself so the JSON can always be opened
+  setTimeout(()=>{
+    const html=document.documentElement.outerHTML;
+    const hblob=new Blob(['<!DOCTYPE html>\n'+html],{type:'text/html'});
+    const h=document.createElement('a');h.href=URL.createObjectURL(hblob);
+    h.download='tourdesk-app.html';h.click();
+    openModal('Backup exported',
+      '<p style="font-size:13px;line-height:1.6;color:var(--txt2)">Two files downloaded:<br><br>'+
+      '<strong>tourdesk-backup-'+todayStr()+'.json</strong> — all your data<br>'+
+      '<strong>tourdesk-app.html</strong> — the app itself<br><br>'+
+      'Keep them together. To restore: open the HTML file, go to Settings → Import backup, and load the JSON. Store both in Google Drive or Dropbox for safekeeping.</p>',
+      '<button class="btn primary" onclick="closeModal()">Done</button>');
+  },400);
+}
+function importData(file){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); Object.assign(DB,d); persist(); go('dashboard'); }catch(e){ alert('Invalid backup file'); } };
+  r.readAsText(file);
+}
+function resetData(){
+  if(confirm('Reset all data to the sample set? This erases your current data.')){
+    localStorage.removeItem('tourdesk_db');
+    for(const k in DB) delete DB[k];
+    Object.assign(DB,{venues:[],tours:[],events:[],contacts:[],artists:[],proposals:[],activity:[],settings:{mgmtPct:15,taxRate:13,serviceFeePct:5,supabaseConfig:null,googleConnected:false,theme:DB.settings.theme||'light'},_seq:{v:1,t:1,e:1,c:1,a:1,p:1}});
+    seed(); go('dashboard');
+  }
+}
+
+/* ============================================================
+   DELETE HANDLERS (with link-aware guards)
+   ============================================================ */
+function deleteContact(id){
+  const ct=get(DB.contacts,id); if(!ct) return;
+  const linked=DB.events.filter(e=>[...(e.talentIds||[]),...(e.vendorIds||[]),...(e.crewIds||[])].includes(id));
+  const isMgr=DB.tours.filter(t=>t.managerId===id);
+  const isVenueContact=DB.venues.filter(v=>v.contactId===id);
+  let warn='';
+  if(linked.length) warn+=`\n• attached to ${linked.length} event(s)`;
+  if(isMgr.length) warn+=`\n• manager on ${isMgr.length} tour(s)`;
+  if(isVenueContact.length) warn+=`\n• primary contact for ${isVenueContact.length} venue(s)`;
+  if(!confirm(`Delete contact "${ct.name}"?`+(warn?`\n\nStill linked:${warn}\n\nThe contact will be removed and these links cleared.`:''))) return;
+  logActivity('deleted','Contact',ct.name);
+  DB.contacts=DB.contacts.filter(c=>c.id!==id);
+  DB.events.forEach(e=>{['talentIds','vendorIds','crewIds'].forEach(k=>{ if(e[k]) e[k]=e[k].filter(x=>x!==id); });});
+  DB.tours.forEach(t=>{ if(t.managerId===id) t.managerId=''; });
+  DB.venues.forEach(v=>{ if(v.contactId===id) v.contactId=''; });
+  persist(); go('contacts');
+}
+function deleteVenue(id){
+  const v=get(DB.venues,id); if(!v) return;
+  const linked=DB.events.filter(e=>e.venueId===id);
+  if(linked.length){ alert(`Can't delete "${v.name}" — it's used by ${linked.length} event(s). Reassign or delete those events first.`); return; }
+  if(!confirm(`Delete venue "${v.name}"?`)) return;
+  logActivity('deleted','Venue',v.name);
+  DB.venues=DB.venues.filter(x=>x.id!==id);
+  DB.contacts.forEach(c=>{ if(c.venueId===id) c.venueId=''; });
+  persist(); go('venues');
+}
+function deleteTour(id){
+  const t=get(DB.tours,id); if(!t) return;
+  const linked=DB.events.filter(e=>e.tourId===id);
+  if(!confirm(`Delete tour "${t.name}"?`+(linked.length?`\n\n${linked.length} event(s) will be unassigned from this tour (the events themselves stay).`:''))) return;
+  logActivity('deleted','Tour',t.name);
+  DB.tours=DB.tours.filter(x=>x.id!==id);
+  DB.events.forEach(e=>{ if(e.tourId===id) e.tourId=''; });
+  persist(); go('tours');
+}
+function deleteEvent(id){
+  const e=get(DB.events,id); if(!e) return;
+  if(!confirm(`Delete event "${e.name}"? This can't be undone.`)) return;
+  logActivity('deleted','Event',e.name);
+  DB.events=DB.events.filter(x=>x.id!==id);
+  persist(); go('events');
+}
+
+/* ============================================================
+   GOOGLE SYNC (Sheets / Drive / Gmail) — wired, activates with creds
+   ============================================================ */
+const SYNC = {
+  /* These functions are the integration surface. They no-op until
+     DB.settings.googleConnected is true and the gapi/GIS libraries
+     are loaded. Ask Claude to "set up the Google connection" to
+     activate: it will inject the gapi loader, run the OAuth flow,
+     create the TourDesk Sheet + Drive folder tree, and replace
+     these stubs with live calls. */
+  async pushAll(){ if(!DB.settings.googleConnected) return; /* write DB to Sheets */ },
+  async pullAll(){ if(!DB.settings.googleConnected) return; /* read Sheets into DB */ },
+  async uploadFile(eventId, file, category){ /* upload to Drive folder tree */ },
+  async threadsFor(email){ if(!DB.settings.googleConnected) return []; return []; /* Gmail search */ }
+};
+
+/* ---------- NAV BIND ---------- */
+document.getElementById('nav').addEventListener('click',e=>{
+  const item=e.target.closest('.nav-item');
+  if(item) go(item.dataset.view);
+});
+
+/* ---------- BOOT ---------- */
+initAuth();
+if(AUTH_USER) {
+  load();
+  // Restore artist-view mode if it was active
+  const savedAV=localStorage.getItem('tourdesk_artistview');
+  if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
+  applyArtistViewChrome();
+  go('dashboard');
+  updateSyncBadge();
+}
+
+function updateSyncBadge(){
+  const dot=document.getElementById('sync-dot'), txt=document.getElementById('sync-text');
+  if(SBDB){ dot.className='dot ok'; txt.textContent='Syncing to Supabase'; }
+  else { dot.className='dot off'; txt.textContent='Local only'; }
+}
+</script>
+</body>
+</html>
