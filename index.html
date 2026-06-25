@@ -219,7 +219,7 @@ function logActivity(action, recordType, recordName){
   DB.activity = DB.activity || [];
   DB.activity.unshift({
     ts: new Date().toISOString(),
-    user: (typeof AUTH_USER!=='undefined' && AUTH_USER) ? AUTH_USER.name : 'Unknown',
+    user: (typeof AUTH_USER!=='undefined' && AUTH_USER) ? AUTH_USER.displayName : 'Unknown',
     action, recordType, recordName
   });
   // Keep the log bounded — last 1000 entries
@@ -244,17 +244,35 @@ function toggleTheme(){
 /* ============================================================
    AUTHENTICATION — simple username / password
    ============================================================ */
-const APP_USER = 'AdamLanger';
-const APP_PASS = 'KermitTheDog';
+const USERS = [
+  { username:'AdamLanger', password:'KermitTheDog', role:'admin', displayName:'Adam Langer' },
+  { username:'DrewDudley',  password:'TigerTheLion',  role:'producer', displayName:'Drew Dudley' }
+];
+
+// Role capabilities
+// admin    — full access
+// producer — view all, create proposals, edit own proposals, mark ready for review
+//            cannot: edit/delete events, tours, venues, contacts, artists, settings, accept proposals
 
 let AUTH_USER = null;
 
+function canDo(action){
+  if(!AUTH_USER) return false;
+  if(AUTH_USER.role==='admin') return true;
+  const producerAllow=['view','create_proposal','edit_own_proposal','mark_ready'];
+  return producerAllow.includes(action);
+}
+
 function initAuth(){
-  if(localStorage.getItem('tourdesk_session')==='ok'){
-    AUTH_USER = {name: APP_USER};
-  } else {
-    showLogin();
+  const saved=localStorage.getItem('tourdesk_session');
+  if(saved){
+    try{
+      const u=JSON.parse(saved);
+      const found=USERS.find(x=>x.username===u.username);
+      if(found){ AUTH_USER={...found}; return; }
+    }catch(e){}
   }
+  showLogin();
 }
 
 function showLogin(){
@@ -277,9 +295,10 @@ function showLogin(){
 function doLogin(){
   const u=document.getElementById('li-user').value.trim();
   const p=document.getElementById('li-pass').value;
-  if(u===APP_USER && p===APP_PASS){
-    localStorage.setItem('tourdesk_session','ok');
-    AUTH_USER={name:APP_USER};
+  const found=USERS.find(x=>x.username===u && x.password===p);
+  if(found){
+    localStorage.setItem('tourdesk_session', JSON.stringify({username:found.username}));
+    AUTH_USER={...found};
     location.reload();
   } else {
     const err=document.getElementById('li-err');
@@ -668,9 +687,14 @@ function artistEvents(arId){ const tours=artistTours(arId); return DB.events.fil
 function applyArtistViewChrome(){
   const nav=document.getElementById('nav');
   // In artist view: only Dashboard, Tours, Events, Proposals visible
-  const allowed=['dashboard','tours','events','proposals'];
+  const avAllowed=['dashboard','tours','events','proposals'];
+  // Producer cannot access settings, activity, artists, contacts, venues
+  const producerBlocked=['settings','activity','artists','contacts','venues'];
   nav.querySelectorAll('.nav-item').forEach(n=>{
-    n.style.display = (!inArtistView() || allowed.includes(n.dataset.view)) ? '' : 'none';
+    const view=n.dataset.view;
+    const blockedByAV=inArtistView()&&!avAllowed.includes(view);
+    const blockedByRole=!canDo('view')===false && AUTH_USER?.role==='producer'&&producerBlocked.includes(view);
+    n.style.display=(blockedByAV||blockedByRole)?'none':'';
   });
   // Hide manage/sales section labels selectively is overkill; keep labels
   // Build/refresh the top-bar artist dropdown
@@ -713,7 +737,7 @@ function render(){
   if(AUTH_USER){
     const userInfo=document.getElementById('user-info');
     if(userInfo){
-      userInfo.innerHTML=`<span>${esc(AUTH_USER.name)}</span>`;
+      userInfo.innerHTML=`<span>${esc(AUTH_USER.displayName)}</span>`;
     }
   }
   const R=VIEWS[route.view];
@@ -825,7 +849,7 @@ function emptyState(ico,msg){return `<div class="empty"><div class="empty-ico">$
 VIEWS.venues={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
-    a.innerHTML=`<button class="btn primary" onclick="venueForm()">+ Add venue</button>`;
+    a.innerHTML=canDo('admin')?`<button class="btn primary" onclick="venueForm()">+ Add venue</button>`:'';
     c.innerHTML=`
       <div class="field" style="max-width:340px;margin-bottom:16px">
         <input id="vn-search" placeholder="Search venues by name, city…" oninput="filterCards('vn')" style="width:100%">
@@ -836,8 +860,8 @@ VIEWS.venues={
     const v=get(DB.venues,id); if(!v){go('venues');return;}
     const contact=get(DB.contacts,v.contactId);
     const evts=DB.events.filter(e=>e.venueId===id);
-    a.innerHTML=`<button class="btn sm" onclick="venueForm('${id}')">Edit</button>
-      <button class="btn sm danger" onclick="deleteVenue('${id}')">Delete</button>`;
+    a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueForm('${id}')">Edit</button>
+      <button class="btn sm danger" onclick="deleteVenue('${id}')">Delete</button>`:'';
     const t=v.terms||{};
     c.innerHTML=`
       <div class="detail-head">
@@ -1015,37 +1039,36 @@ function applyPastedContract(){
 VIEWS.tours={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
-    a.innerHTML=`<button class="btn primary" onclick="tourForm()">+ New tour</button>`;
+    // No "New tour" — tours are created from accepted proposals
     let tlist=inArtistView()?artistTours(ARTIST_VIEW):DB.tours;
     c.innerHTML=`
       <div class="field" style="max-width:340px;margin-bottom:16px">
         <input id="tr-search" placeholder="Search tours by name, artist…" oninput="filterCards('tr')" style="width:100%">
       </div>
-      <div id="tr-list" class="cards-grid">${tlist.map(tourCard).join('')||emptyState('↝','No tours yet')}</div>`;
+      <div id="tr-list" class="cards-grid">${tlist.map(tourCard).join('')||emptyState('↝','No tours yet — accept a proposal to create one')}`;
   },
   detail(c,a,id){
     const t=get(DB.tours,id); if(!t){go('tours');return;}
     const evts=DB.events.filter(e=>e.tourId===id);
-    let rev=0,net=0;evts.forEach(e=>{const f=eventBest(e);rev+=f.gross;net+=f.artistNet;});
-    const mgr=get(DB.contacts,t.managerId);
-    a.innerHTML=`<button class="btn sm" onclick="tourForm('${id}')">Edit</button>
+    const {firm,routing}=splitTotals(evts);
+    a.innerHTML=`${canDo('admin')?`<button class="btn sm" onclick="tourFormEdit('${id}')">Edit</button>
       <button class="btn sm danger" onclick="deleteTour('${id}')">Delete</button>
-      <button class="btn primary sm" onclick="eventForm(null,'${id}')">+ Add show</button>`;
+      <button class="btn primary sm" onclick="eventForm(null,'${id}')">+ Add show</button>`:'<span class="badge gray" style="font-size:11px">View only</span>'}`;
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="go('tours')">← Tours</span>
         <span class="detail-title">${esc(t.name)}</span>
         <span class="badge ${statusColor(t.status)}">${esc(t.status)}</span></div>
       <div class="stats">
         <div class="stat"><div class="stat-val">${evts.length}</div><div class="stat-lbl">Shows</div></div>
-        <div class="stat"><div class="stat-val">${money0(rev)}</div><div class="stat-lbl">Gross</div></div>
-        <div class="stat"><div class="stat-val ${net>=0?'pos':'neg'}">${money0(net)}</div><div class="stat-lbl">Net</div></div>
-        <div class="stat"><div class="stat-val" style="font-size:15px">${esc(t.start||'—')}</div><div class="stat-lbl">Start</div></div>
+        <div class="stat"><div class="stat-val pos">${money0(firm.comm)}</div><div class="stat-lbl">Commission (confirmed)</div></div>
+        <div class="stat"><div class="stat-val ${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</div><div class="stat-lbl">Artist net (confirmed)</div></div>
+        <div class="stat"><div class="stat-val" style="color:var(--txt2)">${money0(routing.net)}</div><div class="stat-lbl">Artist net (routing)</div></div>
       </div>
       <div class="sec"><div class="sec-label">Tour info</div>
         <div class="info-grid">
-          <div class="info"><label>Artist</label><span>${esc(t.artist)}</span></div>
-          <div class="info"><label>Manager</label><span>${mgr?esc(mgr.name):'—'}</span></div>
+          <div class="info"><label>Artist</label><span>${esc(t.artist||'—')}</span></div>
           <div class="info"><label>Dates</label><span>${esc(t.start||'—')} – ${esc(t.end||'—')}</span></div>
+          ${t.proposalId?`<div class="info"><label>From proposal</label><span><a onclick="go('proposals','${t.proposalId}')" style="cursor:pointer">View proposal</a></span></div>`:''}
         </div>
         ${t.notes?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(t.notes)}</p>`:''}
       </div>
@@ -1053,151 +1076,52 @@ VIEWS.tours={
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No shows yet.</p>'}</div>`;
   }
 };
-// Helper: get most recent event at a venue (excluding a specific event)
-function mostRecentEventAtVenue(venueId, excludeId){
+
+// Helper: get most recent event at a venue
+function mostRecentEventAtVenue(venueId){
   return DB.events
-    .filter(e=>e.venueId===venueId && e.id!==excludeId)
+    .filter(e=>e.venueId===venueId)
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0]||null;
 }
 
-// Tour builder state
-let _tbVenues=[]; // [{venueId, date, ticketBase, capacity}]
-
-function tourForm(id){
-  if(id) return tourFormEdit(id);
-  // New tour — full builder
-  _tbVenues=[];
-  const body=`
-    <div class="row2">
-      <div class="field"><label>Tour name</label><input id="tf-name" placeholder="e.g. Be Nice Tour 2027"></div>
-      <div class="field"><label>Artist</label><select id="tf-artist"><option value="">— select —</option>
-        ${DB.artists.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="row3">
-      <div class="field"><label>Tour start (optional)</label><input id="tf-start" type="date"></div>
-      <div class="field"><label>Tour end (optional)</label><input id="tf-end" type="date"></div>
-      <div class="field"><label>Status</label><select id="tf-status">
-        <option>Routing</option><option>Confirmed</option>
-      </select></div>
-    </div>
-    <div class="field"><label>Base ticket price ($) <span style="font-weight:400;color:var(--txt3)">— applies to all shows, editable per venue below</span></label>
-      <input id="tf-base" type="number" step="0.01" placeholder="45.00" oninput="tbSyncBase()">
-    </div>
-    <div class="form-section">Venues <span style="font-weight:400;font-size:11px;color:var(--txt3)">— select venues to add shows; costs auto-fill from last event at each venue</span></div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <select id="tf-venue-pick" style="flex:1;padding:7px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px;background:var(--surf);color:var(--txt)">
-        <option value="">Add a venue…</option>
-        ${DB.venues.map(v=>`<option value="${v.id}">${esc(v.name)}${v.city?' — '+esc(v.city):''}</option>`).join('')}
-      </select>
-      <button class="btn sm" onclick="tbAddVenue()">+ Add</button>
-    </div>
-    <div id="tb-venue-list"></div>`;
-  openModal('New tour',body,
-    `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="saveTourBuilder()">Create tour &amp; shows</button>`);
-  tbRenderVenues();
+// Build a show data object from a venue for a proposal
+function proposalShowFromVenue(venueId, ticketBase){
+  const v=get(DB.venues,venueId); if(!v) return null;
+  const prev=mostRecentEventAtVenue(venueId);
+  const terms=prev?{...prev.terms}:{
+    contractType:v.contractType||'rental',
+    rental:+v.rental||0, guarantee:+v.guarantee||0,
+    doorSplit:+v.doorSplit||+v.rentalPct||0
+  };
+  const showCosts=prev?JSON.parse(JSON.stringify(prev.showCosts||{crew:[],equipment:[],fees:[]}))
+    :{crew:[],equipment:[],fees:[]};
+  const taxRate=prev?.pricing?.taxRate??DB.settings.taxRate;
+  const taxOn=prev?.pricing?.taxOn||'base';
+  const capacity=+v.capacity||0;
+  const base=ticketBase||+prev?.pricing?.base||0;
+  return {
+    _sid:'s'+Date.now()+Math.random().toString(36).slice(2),
+    venueId, date:'', showTime:'', loadIn:'',
+    ticketBase:base, capacity, taxRate, taxOn,
+    terms, showCosts,
+    ticketsEst:Math.round(capacity*0.6),
+    _fromPrev:prev?prev.name:null
+  };
 }
 
-function tbSyncBase(){
-  const base=document.getElementById('tf-base')?.value||'';
-  document.querySelectorAll('.tb-base-inp').forEach(inp=>{ if(!inp.dataset.edited) inp.value=base; });
-}
-
-function tbAddVenue(){
-  const sel=document.getElementById('tf-venue-pick');
-  const vid=sel?.value; if(!vid) return;
-  if(_tbVenues.find(x=>x.venueId===vid)){ alert('Venue already added.'); return; }
-  const v=get(DB.venues,vid);
-  const prev=mostRecentEventAtVenue(vid,null);
-  const base=+(document.getElementById('tf-base')?.value)||+(prev?.pricing?.base)||0;
-  _tbVenues.push({venueId:vid,date:'',ticketBase:base,capacity:v?.capacity||0,_prevId:prev?.id||null});
-  sel.value='';
-  tbRenderVenues();
-}
-
-function tbRemoveVenue(i){
-  _tbVenues.splice(i,1); tbRenderVenues();
-}
-
-function tbRenderVenues(){
-  const host=document.getElementById('tb-venue-list'); if(!host) return;
-  if(!_tbVenues.length){ host.innerHTML='<p class="muted" style="font-size:13px">No venues added yet.</p>'; return; }
-  host.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px">
-    <thead><tr style="color:var(--txt3);font-size:11px;border-bottom:1px solid var(--bord2)">
-      <th style="padding:5px 4px;text-align:left">Venue</th>
-      <th style="padding:5px 4px;text-align:left">Date</th>
-      <th style="padding:5px 4px;text-align:right;width:90px">Ticket $</th>
-      <th style="padding:5px 4px;text-align:right;width:70px">Cap</th>
-      <th style="padding:5px 4px;text-align:right;width:80px">Contract</th>
-      <th style="width:30px"></th>
-    </tr></thead>
-    <tbody>
-    ${_tbVenues.map((row,i)=>{
-      const v=get(DB.venues,row.venueId);
-      const prev=row._prevId?get(DB.events,row._prevId):null;
-      const ct=(prev?.terms?.contractType||v?.contractType||'—');
-      return `<tr style="border-bottom:1px solid var(--bord)">
-        <td style="padding:6px 4px;font-weight:500">${v?esc(v.name):'?'}${prev?`<div style="font-size:10px;color:var(--txt3)">Auto-filled from ${esc(prev.name||'prev. event')}</div>`:`<div style="font-size:10px;color:var(--amber)">No history — using venue defaults</div>`}</td>
-        <td style="padding:6px 4px"><input type="date" value="${row.date||''}" onchange="_tbVenues[${i}].date=this.value" style="padding:4px 5px;border:1px solid var(--bord2);border-radius:5px;font-size:12px;background:var(--surf);color:var(--txt)"></td>
-        <td style="padding:6px 4px"><input type="number" step="0.01" value="${row.ticketBase||''}" class="tb-base-inp" onchange="_tbVenues[${i}].ticketBase=+this.value;this.dataset.edited='1'" style="width:80px;padding:4px 5px;border:1px solid var(--bord2);border-radius:5px;font-size:12px;text-align:right;background:var(--surf);color:var(--txt)"></td>
-        <td style="padding:6px 4px;text-align:right;color:var(--txt2)">${row.capacity||'—'}</td>
-        <td style="padding:6px 4px;text-align:right"><span class="badge gray" style="font-size:10px">${ctLabel(ct)}</span></td>
-        <td style="padding:6px 4px;text-align:right"><button class="btn ghost sm" style="padding:2px 7px" onclick="tbRemoveVenue(${i})">×</button></td>
-      </tr>`;
-    }).join('')}
-    </tbody></table>`;
-}
-
-function saveTourBuilder(){
-  const name=fv('tf-name'), artistSel=document.getElementById('tf-artist');
-  const artist=artistSel?artistSel.value:'';
-  if(!name){ alert('Tour name is required.'); return; }
-  if(!artist){ alert('Please select an artist.'); return; }
-  if(!_tbVenues.length){ alert('Add at least one venue.'); return; }
-
-  // Create the tour
-  const tourRec={id:uid('t'),name,artist,managerId:'',
-    start:fv('tf-start'),end:fv('tf-end'),status:fv('tf-status'),notes:''};
-  DB.tours.push(tourRec);
-  logActivity('created','Tour',name);
-
-  // Create one event per venue
-  _tbVenues.forEach((row,i)=>{
-    const v=get(DB.venues,row.venueId); if(!v) return;
-    const prev=row._prevId?get(DB.events,row._prevId):null;
-    // Base event structure from previous event or venue defaults
-    const terms=prev?{...prev.terms}:{
-      contractType:v.contractType||'rental',
-      rental:v.rental||0, guarantee:v.guarantee||0,
-      doorSplit:v.doorSplit||v.rentalPct||0
-    };
-    const showCosts=prev?JSON.parse(JSON.stringify(prev.showCosts||{crew:[],equipment:[],fees:[]}))
-      :{crew:[],equipment:[],fees:[]};
-    const taxRate=prev?.pricing?.taxRate??DB.settings.taxRate;
-    const taxOn=prev?.pricing?.taxOn||'base';
-    const eventRec={
-      id:uid('e'),
-      name:`${esc(v.city||v.name)} — ${esc(v.name)}`,
-      tourId:tourRec.id, venueId:v.id,
-      date:row.date||'', showTime:'', loadIn:'',
-      status:fv('tf-status'),
-      capacityAlloc:row.capacity||v.capacity||0,
-      presales:0, comps:0,
-      mgmtPct:DB.settings.mgmtPct,
-      pricing:{base:row.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,taxRate,taxOn},
-      terms, showCosts,
-      projection:{ticketsEst:Math.round((row.capacity||v.capacity||0)*0.6),expenses:[]},
-      settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''},
-      logistics:JSON.parse(JSON.stringify(DEFAULT_LOGISTICS.map((item,i)=>({id:'lg'+(Date.now()+i+Math.random()),label:item.label,confirmed:false,note:'',confirmedAt:null})))),
-      talentIds:[],vendorIds:[],crewIds:[],files:[]
-    };
-    DB.events.push(eventRec);
-    logActivity('created','Event',eventRec.name+' (tour builder)');
-  });
-
-  _tbVenues=[];
-  persist(); closeModal(); go('tours',tourRec.id);
+// Compute projected financials for a proposal show (self-contained, not a real event)
+function proposalShowFigures(s){
+  // Build a fake event object for the financial engines
+  const fakeEvent={
+    capacityAlloc:s.capacity||0,
+    mgmtPct:DB.settings.mgmtPct,
+    pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,taxRate:+s.taxRate||0,taxOn:s.taxOn||'base'},
+    terms:s.terms||{},
+    showCosts:s.showCosts||{crew:[],equipment:[],fees:[]},
+    projection:{ticketsEst:+s.ticketsEst||0,expenses:[]},
+    settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false}
+  };
+  return projectionFigures(fakeEvent, +s.ticketsEst||0);
 }
 
 function tourFormEdit(id){
@@ -1218,15 +1142,13 @@ function tourFormEdit(id){
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveTour('${id}')">Save</button>`);
 }
-
 function saveTour(id){
-  const rec={name:fv('tf-name'),artist:fv('tf-artist'),managerId:fv('tf-mgr')||'',
+  const rec={name:fv('tf-name'),artist:fv('tf-artist'),
     start:fv('tf-start'),end:fv('tf-end'),status:fv('tf-status'),notes:fv('tf-notes')||''};
   if(id){Object.assign(get(DB.tours,id),rec);logActivity('edited','Tour',rec.name);}
   else{rec.id=uid('t');DB.tours.push(rec);logActivity('created','Tour',rec.name);}
   persist();closeModal();render();
 }
-
 
 /* ============================================================
    VIEW: EVENTS  (full deal intake + calculator + files)
@@ -1255,9 +1177,9 @@ VIEWS.events={
     const refProp=route.ref||null;
     const backLabel=refProp?'← Proposal':'← Events';
     const backAction=refProp?`go('proposals','${refProp}')`:`go('events')`;
-    a.innerHTML=`<button class="btn sm" onclick="eventForm('${id}',null,null,null,'${refProp||''}')">Edit deal</button>
+    a.innerHTML=`${canDo('admin')?`<button class="btn sm" onclick="eventForm('${id}',null,null,null,'${refProp||''}')">Edit deal</button>
       <button class="btn sm" onclick="duplicateEvent('${id}')">Duplicate</button>
-      <button class="btn sm danger" onclick="deleteEvent('${id}')">Delete</button>`;
+      <button class="btn sm danger" onclick="deleteEvent('${id}')">Delete</button>`:'<span class="badge gray" style="font-size:11px">View only</span>'}`;
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="${backAction}">${backLabel}</span>
         <span class="detail-title">${esc(e.name)}</span>
@@ -2149,30 +2071,66 @@ function saveAssign(eid,field){
 }
 
 function eventFiles(host,e){
+  const files=e.files||[];
+  const driveFolder=DB.settings.driveFolder||'';
   host.innerHTML=`
-    <div class="banner">📁 Files upload to your Drive at <strong style="font-weight:600">TourDesk / ${esc((get(DB.tours,e.tourId)||{}).name||'Tour')} / ${esc(e.name)}</strong> once Google is connected in Settings.</div>
-    <div class="sec-label">Documents</div>
-    ${(e.files||[]).length?(e.files.map(f=>`<div class="card" style="cursor:default;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-        <div><div class="card-title">${esc(f.name)}</div><div class="card-sub">${esc(f.category)} · ${esc(f.date||'')}</div></div>
-        ${f.url?`<a class="btn sm" href="${esc(f.url)}" target="_blank">Open</a>`:'<span class="badge gray">Pending sync</span>'}
-      </div>`).join('')):'<p class="muted" style="font-size:13px">No files yet.</p>'}
-    <button class="btn sm" style="margin-top:10px" onclick="addFileStub('${e.id}')">+ Add file reference</button>`;
+    <div style="max-width:600px">
+      ${driveFolder?`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--blue-soft);border-radius:var(--rad);margin-bottom:16px;font-size:13px">
+        📁 <span style="flex:1">Folder: <strong>${esc(driveFolder.length>50?driveFolder.slice(0,50)+'…':driveFolder)}</strong></span>
+        <a href="${esc(driveFolder)}" target="_blank" class="btn sm">Open folder ↗</a>
+      </div>`:`<div style="padding:10px 14px;background:var(--surf2);border-radius:var(--rad);margin-bottom:16px;font-size:13px;color:var(--txt2)">
+        No Drive folder set. Paste your folder URL in <a onclick="go('settings')" style="cursor:pointer">Settings</a> to link this event's folder.
+      </div>`}
+      <div class="sec-label" style="margin-bottom:10px">Files</div>
+      ${files.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        ${files.map((f,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surf2);border-radius:var(--rad)">
+          <span style="font-size:16px">${f.category==='Contract'?'📄':f.category==='Insurance'?'🛡':f.category==='Settlement'?'💰':f.category==='Tech / Rider'?'🎛':'📎'}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:13px">${esc(f.name)}</div>
+            <div style="font-size:11px;color:var(--txt3)">${esc(f.category)} · ${esc(f.date||'')}</div>
+          </div>
+          ${f.url?`<a href="${esc(f.url)}" target="_blank" class="btn sm">Open ↗</a>`:''}
+          ${canDo('admin')?`<button class="btn ghost sm" style="padding:2px 7px" onclick="deleteFile('${e.id}',${i})" title="Remove">×</button>`:''}
+        </div>`).join('')}
+      </div>`:`<p class="muted" style="font-size:13px;margin-bottom:16px">No files yet.</p>`}
+      ${canDo('admin')?`<button class="btn sm" onclick="addFileRef('${e.id}')">+ Add file link</button>`:''}
+    </div>`;
 }
-function addFileStub(eid){
-  const body=`<div class="field"><label>File name</label><input id="ff-name" placeholder="Contract_signed.pdf"></div>
+
+function addFileRef(eid){
+  openModal('Add file link',`
+    <div class="field"><label>File name</label><input id="ff-name" placeholder="e.g. Keyano_Contract_signed.pdf"></div>
     <div class="field"><label>Category</label><select id="ff-cat">
-      ${['Contract','Insurance','Settlement','Tech / Rider','Misc'].map(x=>`<option>${x}</option>`).join('')}</select></div>
-    <div class="field"><label>Drive link (optional)</label><input id="ff-url" placeholder="https://drive.google.com/..."></div>
-    <p class="muted" style="font-size:12px">Direct upload activates after Google is connected. For now you can record a reference and paste a Drive link.</p>`;
-  openModal('Add file reference',body,
+      ${['Contract','Insurance','Settlement','Tech / Rider','Misc'].map(x=>`<option>${x}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Google Drive link</label>
+      <input id="ff-url" placeholder="Paste Drive file URL here…">
+      <p class="muted" style="font-size:11px;margin-top:4px">Right-click the file in Drive → Share → Copy link, then paste here.</p>
+    </div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="saveFileStub('${eid}')">Add</button>`);
+     <button class="btn primary" onclick="saveFileRef('${eid}')">Add</button>`);
 }
-function saveFileStub(eid){
-  const e=get(DB.events,eid);
+
+function saveFileRef(eid){
+  const e=get(DB.events,eid); if(!e) return;
+  const name=fv('ff-name');
+  if(!name){alert('Please enter a file name.');return;}
   e.files=e.files||[];
-  e.files.push({name:fv('ff-name'),category:fv('ff-cat'),url:fv('ff-url'),date:todayStr()});
-  persist();closeModal();render();
+  e.files.push({name,category:fv('ff-cat'),url:fv('ff-url'),date:todayStr()});
+  logActivity('edited','Event',e.name+' (file added: '+name+')');
+  persist();closeModal();
+  const v=e.venueId?get(DB.venues,e.venueId):null;
+  const host=document.getElementById('ev-tab');
+  if(host) eventFiles(host,e);
+}
+
+function deleteFile(eid,idx){
+  if(!confirm('Remove this file link?')) return;
+  const e=get(DB.events,eid); if(!e) return;
+  e.files=(e.files||[]).filter((_,i)=>i!==idx);
+  persist();
+  const host=document.getElementById('ev-tab');
+  if(host) eventFiles(host,e);
 }
 
 function eventVenueHistory(host,e,v){
@@ -3103,203 +3061,403 @@ function clearActivity(){
 /* ============================================================
    VIEW: PROPOSALS (artist-facing pitches, single show or tour)
    ============================================================ */
+/* ============================================================
+   VIEW: PROPOSALS (self-contained planning layer)
+   Shows stay inside proposals until accepted → real events created
+   ============================================================ */
+
+// Proposal show state for the builder (live in the proposal record as p.shows[])
+let _pbShows=[]; // working copy while form is open
+
 VIEWS.proposals={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
-    a.innerHTML=`<button class="btn primary" onclick="proposalForm()">+ New proposal</button>`;
-    let list=DB.proposals||[];
+    a.innerHTML=`<button class="btn primary" onclick="proposalNew()">+ New proposal</button>`;
+    let list=(DB.proposals||[]).filter(p=>p.status!=='Accepted'||(route.showAccepted));
     if(inArtistView()) list=list.filter(p=>p.artistId===ARTIST_VIEW);
-    if(!list.length){ c.innerHTML=emptyState('◈','No proposals yet — create one to pitch a show or tour to an artist'); return; }
-    c.innerHTML=`<div class="cards-grid">${list.map(proposalCard).join('')}</div>`;
+    const accepted=(DB.proposals||[]).filter(p=>p.status==='Accepted');
+    if(!list.length&&!accepted.length){ c.innerHTML=emptyState('◈','No proposals yet — create one to plan a show or tour'); return; }
+    c.innerHTML=`
+      <div class="cards-grid" id="prop-list">${list.map(proposalCard).join('')}</div>
+      ${accepted.length?`<div style="margin-top:20px">
+        <div class="sec-label" style="margin-bottom:10px">Accepted proposals</div>
+        <div class="cards-grid">${accepted.map(proposalCard).join('')}</div>
+      </div>`:''}`;
   },
   detail(c,a,id){
     const p=get(DB.proposals,id); if(!p){go('proposals');return;}
     const artist=p.artistId?get(DB.artists,p.artistId):null;
-    const evts=(p.eventIds||[]).map(eid=>get(DB.events,eid)).filter(Boolean);
-    let totGross=0,totPayout=0,totComm=0,totArtist=0;
-    evts.forEach(e=>{const f=proposalEventFigures(e);totGross+=f.grossBoxOffice;totPayout+=f.payout;totComm+=f.commission;totArtist+=f.artistNet;});
-    a.innerHTML=`<button class="btn sm" onclick="proposalForm('${id}')">Edit details</button>
-      <button class="btn primary sm" onclick="addShowToProposal('${id}')">+ Add show</button>
+    const shows=p.shows||[];
+    let totGross=0,totComm=0,totArtist=0;
+    shows.forEach(s=>{const f=proposalShowFigures(s);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;});
+    const isAccepted=p.status==='Accepted';
+    const isOwner=!p.createdBy || p.createdBy===AUTH_USER?.username;
+    const isAdmin=canDo('admin');
+    const isReadyForReview=p.status==='Ready for review';
+    a.innerHTML=`
+      ${(isAdmin||(isOwner&&!isAccepted))?`<button class="btn sm" onclick="proposalEditMeta('${id}')">Edit details</button>
+        <button class="btn primary sm" onclick="proposalAddVenue('${id}')">+ Add venue</button>`:''}
       <button class="btn sm" onclick="printProposalDoc('${id}')">Print / PDF</button>
-      <button class="btn sm danger" onclick="deleteProposal('${id}')">Delete</button>`;
+      ${isAdmin&&!isAccepted?`<button class="btn primary" onclick="acceptProposal('${id}')">✓ Accept proposal</button>`:''}
+      ${!isAdmin&&isOwner&&!isAccepted?`<button class="btn ${isReadyForReview?'':'primary'} sm" onclick="markProposalReady('${id}')">${isReadyForReview?'✓ Ready for review':'Mark ready for review'}</button>`:''}
+      ${(isAdmin||isOwner)&&!isAccepted?`<button class="btn sm danger" onclick="deleteProposal('${id}')">Delete</button>`:''}`;
     c.innerHTML=`
       <div class="detail-head">
         <span class="back" onclick="go('proposals')">← Proposals</span>
         <span class="detail-title">${esc(p.title)}</span>
-        <span class="badge ${p.kind==='tour'?'blue':'gray'}">${p.kind==='tour'?'Tour':'Single show'}</span>
+        <span class="badge ${isAccepted?'green':p.status==='Ready for review'?'amber':p.kind==='tour'?'blue':'gray'}">${isAccepted?'Accepted':p.status==='Ready for review'?'Ready for review':p.kind==='tour'?'Tour':'Single show'}</span>
       </div>
       <div class="stats">
-        <div class="stat"><div class="stat-val">${evts.length}</div><div class="stat-lbl">Shows</div></div>
-        <div class="stat"><div class="stat-val">${money0(totGross)}</div><div class="stat-lbl">Projected gross</div></div>
+        <div class="stat"><div class="stat-val">${shows.length}</div><div class="stat-lbl">Shows</div></div>
+        <div class="stat"><div class="stat-val">${money0(totGross)}</div><div class="stat-lbl">Proj. gross</div></div>
         <div class="stat"><div class="stat-val pos">${money0(totComm)}</div><div class="stat-lbl">Your commission</div></div>
         <div class="stat"><div class="stat-val ${totArtist>=0?'pos':'neg'}">${money0(totArtist)}</div><div class="stat-lbl">Artist net</div></div>
       </div>
-      <div class="sec"><div class="sec-label">Proposal info</div>
+      <div class="sec"><div class="sec-label">Info</div>
         <div class="info-grid">
           <div class="info"><label>Artist</label><span>${artist?esc(artist.name):esc(p.artistName||'—')}</span></div>
           <div class="info"><label>Type</label><span>${p.kind==='tour'?'Full tour':'Single show'}</span></div>
-          <div class="info"><label>Created</label><span>${esc((p.created||'').slice(0,10))}</span></div>
+          <div class="info"><label>Base ticket</label><span>${p.basePrice?money0(p.basePrice):'—'}</span></div>
+          <div class="info"><label>Created</label><span>${(p.created||'').slice(0,10)}</span></div>
+          ${isAccepted&&p.acceptedAt?`<div class="info"><label>Accepted</label><span>${p.acceptedAt.slice(0,10)}</span></div>`:''}
         </div>
         ${p.intro?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(p.intro)}</p>`:''}
       </div>
-      <div class="sec"><div class="sec-label">Shows in this proposal</div>
-        ${evts.length?`<table class="tbl"><thead><tr>
-          <th>Show</th><th>Date</th><th>Venue</th><th class="num">Cap</th>
-          <th class="num">Proj. gross</th><th class="num">Artist net</th><th></th></tr></thead><tbody>
-          ${evts.map(e=>{const v=get(DB.venues,e.venueId);const f=proposalEventFigures(e);
-            return `<tr>
-              <td style="font-weight:500;cursor:pointer" onclick="go('events','${e.id}','overview',null,'${p.id}')">${esc(e.name)}</td>
-              <td>${esc(e.date||'TBD')}</td>
-              <td>${v?esc(v.name):'—'}</td><td class="num">${e.capacityAlloc||'—'}</td>
-              <td class="num">${money0(f.grossBoxOffice)}</td>
-              <td class="num ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</td>
-              <td style="text-align:right"><button class="btn ghost sm" style="padding:2px 7px" onclick="removeShowFromProposal('${p.id}','${e.id}')" title="Remove from proposal">×</button></td></tr>`;}).join('')}
-          <tr style="border-top:2px solid var(--bord2)"><td colspan="4" style="font-weight:600">${p.kind==='tour'?'Tour total':'Total'}</td>
-            <td class="num" style="font-weight:600">${money0(totGross)}</td>
-            <td class="num ${totArtist>=0?'pos':'neg'}" style="font-weight:600">${money0(totArtist)}</td><td></td></tr>
-          </tbody></table>`:'<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> above to build from an existing event or start blank.</p>'}
-      </div>`;
+      <div class="sec">
+        <div class="sec-label">Shows</div>
+        ${shows.length?proposalShowsTable(p,shows,isAccepted)
+          :`<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add venue</strong> to build the show list.</p>`}
+      </div>
+      ${isAccepted&&p.createdTourId?`<div class="sec"><div class="sec-label">Created records</div>
+        <p style="font-size:13px;color:var(--txt2)">This proposal was accepted and converted to real events.
+        <a onclick="go('tours','${p.createdTourId}')" style="cursor:pointer">View tour →</a></p></div>`:''}
+      ${isAccepted&&p.createdEventIds&&!p.createdTourId?`<div class="sec"><div class="sec-label">Created records</div>
+        <p style="font-size:13px;color:var(--txt2)">${p.createdEventIds.length} event${p.createdEventIds.length!==1?'s':''} created from this proposal.</p></div>`:''}`;
   }
 };
 
-function addShowToProposal(pid){
-  const p=get(DB.proposals,pid); if(!p) return;
-  const ar=p.artistId?get(DB.artists,p.artistId):null;
-  const arTours=ar?artistTours(ar.id):[];
-  const attached=new Set(p.eventIds||[]);
-  const arEvents=ar?artistEvents(ar.id).filter(e=>!attached.has(e.id)):[];
-  const otherEvents=DB.events.filter(e=>!attached.has(e.id)&&!(ar&&artistEvents(ar.id).some(ae=>ae.id===e.id)));
-  const tourSection=arTours.length?`
-    <div class="sec-label" style="margin-top:16px">Copy an entire tour (all shows cloned as projected)</div>
-    <div style="border:1px solid var(--bord);border-radius:var(--rad);overflow:hidden;margin-top:6px">
-    ${arTours.map(t=>{
-      const tevts=DB.events.filter(e=>e.tourId===t.id&&!attached.has(e.id));
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bord)">
-        <div><div style="font-weight:500;font-size:13px">${esc(t.name)}</div>
-        <div style="font-size:11px;color:var(--txt3)">${tevts.length} shows available</div></div>
-        <button class="btn sm primary" onclick="copyTourToProposal('${pid}','${t.id}')">Copy tour</button>
-      </div>`;
+function proposalShowsTable(p,shows,isAccepted){
+  return `<div style="overflow-x:auto">
+    <table class="tbl" style="min-width:560px"><thead><tr>
+      <th>Venue</th><th>Date</th><th class="num">Ticket $</th><th class="num">Cap</th>
+      <th class="num">Est. sold</th><th class="num">Gross</th><th class="num">Artist net</th>
+      ${!isAccepted?'<th></th>':''}
+    </tr></thead><tbody>
+    ${shows.map((s,i)=>{
+      const v=get(DB.venues,s.venueId);
+      const f=proposalShowFigures(s);
+      return `<tr>
+        <td><div style="font-weight:500">${v?esc(v.name):'—'}</div>
+          ${v&&v.city?`<div style="font-size:11px;color:var(--txt3)">${esc(v.city)}</div>`:''}
+          ${s._fromPrev?`<div style="font-size:10px;color:var(--txt3)">costs from: ${esc(s._fromPrev)}</div>`:''}
+        </td>
+        <td>${s.date||'<span class="muted">TBD</span>'}</td>
+        <td class="num">${money0(s.ticketBase)}</td>
+        <td class="num">${s.capacity||'—'}</td>
+        <td class="num">${s.ticketsEst||'—'}</td>
+        <td class="num">${money0(f.grossBoxOffice)}</td>
+        <td class="num ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</td>
+        ${!isAccepted?`<td style="text-align:right;white-space:nowrap">
+          <button class="btn ghost sm" onclick="proposalEditShow('${p.id}',${i})">Edit</button>
+          <button class="btn ghost sm" style="padding:2px 7px" onclick="proposalRemoveShow('${p.id}',${i})" title="Remove">×</button>
+        </td>`:''}
+      </tr>`;
     }).join('')}
-    </div>`:'';
-  const evtRows=(label,list)=>list.length?`
-    <div class="sec-label" style="margin-top:16px">${label}</div>
-    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--bord);border-radius:var(--rad);margin-top:6px">
-      <table class="tbl" style="border:none"><tbody>
-      ${list.map(e=>{const v=get(DB.venues,e.venueId);return `<tr>
-        <td style="font-weight:500">${esc(e.name)}</td>
-        <td style="color:var(--txt3)">${esc(e.date||'TBD')}</td>
-        <td style="color:var(--txt3)">${v?esc(v.name):'—'}</td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="btn ghost sm" onclick="attachExistingShow('${pid}','${e.id}')">Attach</button>
-          <button class="btn sm" onclick="cloneShowToProposal('${pid}','${e.id}')">Clone</button>
-        </td></tr>`;}).join('')}
-      </tbody></table></div>`:'' ;
-  const body=`
-    <p style="font-size:12px;color:var(--txt3);margin-bottom:4px"><strong>Attach</strong> links the real event. <strong>Clone</strong> makes a projected copy you can edit freely without affecting the original.</p>
-    ${tourSection}
-    ${evtRows(ar?esc(ar.name)+"'s shows":'Artist shows', arEvents)}
-    ${evtRows('All other events', otherEvents)}
-    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--bord)">
-      <button class="btn sm" onclick="closeModal();eventForm(null,null,null,'${pid}')">+ Create a brand-new show</button>
-    </div>`;
-  openModal('Add show to proposal',body,`<button class="btn" onclick="closeModal()">Done</button>`);
-}
-function copyTourToProposal(pid,tid){
-  const p=get(DB.proposals,pid); if(!p) return;
-  const attached=new Set(p.eventIds||[]);
-  const tevts=DB.events.filter(e=>e.tourId===tid&&!attached.has(e.id));
-  if(!tevts.length){ alert('All shows from this tour are already in the proposal.'); return; }
-  tevts.forEach(src=>{
-    const copy=JSON.parse(JSON.stringify(src));
-    copy.id=uid('e'); copy.name=(src.name||'Show')+' (proposed)';
-    copy.presales=0; copy.status='Routing';
-    copy.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''};
-    copy.checklist={};
-    DB.events.push(copy);
-    p.eventIds=p.eventIds||[]; p.eventIds.push(copy.id);
-  });
-  logActivity('edited','Proposal',p.title+' (copied '+tevts.length+' shows from tour)');
-  persist(); closeModal(); go('proposals',pid);
-}
-function attachExistingShow(pid,eid){
-  const p=get(DB.proposals,pid); if(!p) return;
-  p.eventIds=p.eventIds||[];
-  if(!p.eventIds.includes(eid)) p.eventIds.push(eid);
-  logActivity('edited','Proposal',p.title+' (added show)');
-  persist(); closeModal(); go('proposals',pid);
-}
-function cloneShowToProposal(pid,eid){
-  const p=get(DB.proposals,pid), src=get(DB.events,eid);
-  if(!p||!src) return;
-  const copy=JSON.parse(JSON.stringify(src));
-  copy.id=uid('e');
-  copy.name=(src.name||'Show')+' (proposed)';
-  copy.date=''; copy.presales=0;
-  copy.status='Routing';
-  copy.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''};
-  DB.events.push(copy);
-  p.eventIds=p.eventIds||[]; p.eventIds.push(copy.id);
-  logActivity('created','Event',copy.name+' (proposal template)');
-  persist(); closeModal(); go('proposals',pid);
-}
-function removeShowFromProposal(pid,eid){
-  const p=get(DB.proposals,pid); if(!p) return;
-  p.eventIds=(p.eventIds||[]).filter(x=>x!==eid);
-  persist(); go('proposals',pid);
-}
-
-// Proposals use projected figures (slider estimate or 60% default), same engine as scenarios
-function proposalEventFigures(e){
-  const est = (e.projection && e.projection.ticketsEst) ? e.projection.ticketsEst : Math.round((+e.capacityAlloc||0)*0.6);
-  const projExps=((e.settlement&&e.settlement.expenses)||(e.projection&&e.projection.expenses)||[])
-    .filter(x=>x.payer!=='venue').map(x=>({desc:x.desc,amount:x.amount,payer:x.payer==='producer'?'producer':'artist',markupPct:x.markupPct||0}));
-  const model={...e, projection:{ticketsEst:est, expenses:projExps}};
-  return projectionFigures(model,est);
+    <tr style="border-top:2px solid var(--bord2);font-weight:600">
+      <td colspan="5">${p.kind==='tour'?'Tour total':'Total'} (${shows.length} show${shows.length!==1?'s':''})</td>
+      <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s).grossBoxOffice,0))}</td>
+      <td class="num ${shows.reduce((t,s)=>t+proposalShowFigures(s).artistNet,0)>=0?'pos':'neg'}">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s).artistNet,0))}</td>
+      ${!isAccepted?'<td></td>':''}
+    </tr>
+    </tbody></table></div>`;
 }
 
 function proposalCard(p){
   const artist=p.artistId?get(DB.artists,p.artistId):null;
-  const evts=(p.eventIds||[]).map(eid=>get(DB.events,eid)).filter(Boolean);
-  let net=0;evts.forEach(e=>net+=proposalEventFigures(e).artistNet);
+  const shows=p.shows||[];
+  let net=0,gross=0;shows.forEach(s=>{const f=proposalShowFigures(s);net+=f.artistNet;gross+=f.grossBoxOffice;});
+  const isAccepted=p.status==='Accepted';
   return `<div class="card" onclick="go('proposals','${p.id}')">
-    <div class="card-top"><div><div class="card-title">${esc(p.title)}</div>
-    <div class="card-sub">${artist?esc(artist.name):esc(p.artistName||'')}</div></div>
-    <span class="badge ${p.kind==='tour'?'blue':'gray'}">${p.kind==='tour'?'Tour':'Show'}</span></div>
+    <div class="card-top">
+      <div><div class="card-title">${esc(p.title)}</div>
+      <div class="card-sub">${artist?esc(artist.name):esc(p.artistName||'')}</div></div>
+      <span class="badge ${isAccepted?'green':p.status==='Ready for review'?'amber':p.kind==='tour'?'blue':'gray'}">${isAccepted?'Accepted':p.status==='Ready for review'?'Ready for review':p.kind==='tour'?'Tour':'Show'}</span>
+    </div>
     <div class="card-meta">
-      <div class="meta"><label>Shows</label><span>${evts.length}</span></div>
+      <div class="meta"><label>Venues</label><span>${shows.length}</span></div>
+      <div class="meta"><label>Proj. gross</label><span>${money0(gross)}</span></div>
       <div class="meta"><label>Artist net</label><span class="${net>=0?'pos':'neg'}">${money0(net)}</span></div>
     </div></div>`;
 }
 
-function proposalForm(id){
-  const p=id?get(DB.proposals,id):{kind:'single',eventIds:[]};
-  const body=`
-    <div class="field"><label>Proposal title</label><input id="pf-title" value="${esc(p.title||'')}" placeholder="e.g. Be Nice Tour — Atlantic Run"></div>
+function proposalNew(){
+  // Step 1: meta form — opens inline in page, not modal, to allow venue table below
+  openModal('New proposal',`
+    <div class="field"><label>Proposal title</label><input id="pf-title" placeholder="e.g. Be Nice Tour 2027 — Atlantic Run"></div>
+    <div class="row2">
+      <div class="field"><label>Type</label><select id="pf-kind">
+        <option value="single">Single show</option>
+        <option value="tour">Full tour</option>
+      </select></div>
+      <div class="field"><label>Artist (optional)</label><select id="pf-artist">
+        <option value="">—</option>
+        ${DB.artists.map(ar=>`<option value="${ar.id}">${esc(ar.name)}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="field"><label>Base ticket price ($)</label>
+      <input id="pf-base" type="number" step="0.01" placeholder="45.00"></div>
+    <div class="field"><label>Intro / pitch note (optional)</label>
+      <textarea id="pf-intro" placeholder="A line or two framing the proposal for the artist…"></textarea></div>
+    <p class="muted" style="font-size:12px">After saving you can add venues — costs and terms auto-fill from the most recent show at each venue.</p>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveProposalNew()">Save &amp; add venues →</button>`);
+}
+
+function saveProposalNew(){
+  const title=fv('pf-title');
+  if(!title){alert('Please enter a proposal title.');return;}
+  const artistId=fv('pf-artist');
+  const rec={
+    id:uid('p'), title, kind:fv('pf-kind'), artistId,
+    artistName:artistId?(get(DB.artists,artistId)||{}).name:'',
+    basePrice:+document.getElementById('pf-base').value||0,
+    intro:fv('pf-intro'), shows:[], status:'Draft',
+    created:new Date().toISOString(),
+    createdBy:AUTH_USER?.username||''
+  };
+  DB.proposals.push(rec);
+  logActivity('created','Proposal',rec.title);
+  persist(); closeModal(); go('proposals',rec.id);
+}
+
+function proposalEditMeta(id){
+  const p=get(DB.proposals,id); if(!p) return;
+  openModal('Edit proposal',`
+    <div class="field"><label>Proposal title</label><input id="pf-title" value="${esc(p.title||'')}"></div>
     <div class="row2">
       <div class="field"><label>Type</label><select id="pf-kind">
         <option value="single" ${p.kind==='single'?'selected':''}>Single show</option>
         <option value="tour" ${p.kind==='tour'?'selected':''}>Full tour</option>
       </select></div>
-      <div class="field"><label>Artist</label><select id="pf-artist"><option value="">—</option>
+      <div class="field"><label>Artist (optional)</label><select id="pf-artist">
+        <option value="">—</option>
         ${DB.artists.map(ar=>`<option value="${ar.id}" ${p.artistId===ar.id?'selected':''}>${esc(ar.name)}</option>`).join('')}
       </select></div>
     </div>
-    <div class="field"><label>Intro / pitch note (optional)</label><textarea id="pf-intro" placeholder="A line or two framing the proposal for the artist...">${esc(p.intro||'')}</textarea></div>
-    <p class="muted" style="font-size:12px">Once saved, open the proposal to add shows — you can build from your existing events or start blank.</p>`;
-  openModal(id?'Edit proposal':'New proposal',body,
+    <div class="field"><label>Base ticket price ($)</label>
+      <input id="pf-base" type="number" step="0.01" value="${p.basePrice||''}"></div>
+    <div class="field"><label>Intro / pitch note</label>
+      <textarea id="pf-intro">${esc(p.intro||'')}</textarea></div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="saveProposal('${id||''}')">Save proposal</button>`);
+     <button class="btn primary" onclick="saveProposalMeta('${id}')">Save</button>`);
 }
-function saveProposal(id){
+
+function saveProposalMeta(id){
+  const p=get(DB.proposals,id); if(!p) return;
   const artistId=fv('pf-artist');
-  const rec={title:fv('pf-title'),kind:fv('pf-kind'),artistId,
+  Object.assign(p,{
+    title:fv('pf-title'), kind:fv('pf-kind'), artistId,
     artistName:artistId?(get(DB.artists,artistId)||{}).name:'',
-    intro:fv('pf-intro')};
-  if(id){Object.assign(get(DB.proposals,id),rec);logActivity('edited','Proposal',rec.title);}
-  else{rec.id=uid('p');rec.created=new Date().toISOString();rec.eventIds=[];DB.proposals.push(rec);logActivity('created','Proposal',rec.title);}
-  persist();closeModal();
-  go('proposals',id||DB.proposals[DB.proposals.length-1].id);
+    basePrice:+document.getElementById('pf-base').value||p.basePrice||0,
+    intro:fv('pf-intro')
+  });
+  logActivity('edited','Proposal',p.title);
+  persist(); closeModal(); go('proposals',id);
 }
+
+function proposalAddVenue(pid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const existingVids=new Set((p.shows||[]).map(s=>s.venueId));
+  openModal('Add venue to proposal',`
+    <div class="field"><label>Venue</label>
+      <select id="pav-venue" onchange="pavPreview('${pid}')">
+        <option value="">— select venue —</option>
+        ${DB.venues.filter(v=>!existingVids.has(v.id)).map(v=>`<option value="${v.id}">${esc(v.name)}${v.city?' — '+esc(v.city):''}</option>`).join('')}
+      </select></div>
+    <div id="pav-preview"></div>
+    <div class="row2" style="margin-top:12px">
+      <div class="field"><label>Date (optional)</label><input id="pav-date" type="date"></div>
+      <div class="field"><label>Ticket price ($)</label><input id="pav-price" type="number" step="0.01" value="${p.basePrice||''}"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Capacity</label><input id="pav-cap" type="number"></div>
+      <div class="field"><label>Est. tickets sold</label><input id="pav-est" type="number"></div>
+    </div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="pavSave('${pid}')">Add to proposal</button>`);
+}
+
+function pavPreview(pid){
+  const vid=fv('pav-venue'); if(!vid) return;
+  const p=get(DB.proposals,pid);
+  const v=get(DB.venues,vid);
+  const prev=mostRecentEventAtVenue(vid);
+  const cap=v?.capacity||0;
+  const base=+(document.getElementById('pav-price')?.value)||p?.basePrice||+(prev?.pricing?.base)||0;
+  // Pre-fill fields
+  if(document.getElementById('pav-cap')&&!document.getElementById('pav-cap').value) document.getElementById('pav-cap').value=cap||'';
+  if(document.getElementById('pav-price')&&!document.getElementById('pav-price').value) document.getElementById('pav-price').value=base||'';
+  if(document.getElementById('pav-est')&&!document.getElementById('pav-est').value) document.getElementById('pav-est').value=Math.round(cap*0.6)||'';
+  const ct=prev?.terms?.contractType||v?.contractType||'—';
+  const host=document.getElementById('pav-preview'); if(!host) return;
+  host.innerHTML=`<div style="background:var(--surf2);border-radius:var(--rad);padding:10px 12px;margin-top:8px;font-size:12px">
+    <div style="font-weight:600;margin-bottom:4px">${esc(v?.name||'')}</div>
+    <div style="color:var(--txt2)">Contract: ${ctLabel(ct)} ${prev?'· costs auto-filled from: '+esc(prev.name):'· using venue defaults'}</div>
+  </div>`;
+}
+
+function pavSave(pid){
+  const vid=fv('pav-venue'); if(!vid){alert('Please select a venue.');return;}
+  const p=get(DB.proposals,pid); if(!p) return;
+  const base=+(document.getElementById('pav-price')?.value)||p.basePrice||0;
+  const s=proposalShowFromVenue(vid, base);
+  if(!s) return;
+  s.date=fv('pav-date')||'';
+  s.ticketBase=base;
+  const capEl=document.getElementById('pav-cap');
+  const estEl=document.getElementById('pav-est');
+  if(capEl&&capEl.value) s.capacity=+capEl.value;
+  if(estEl&&estEl.value) s.ticketsEst=+estEl.value;
+  else s.ticketsEst=Math.round(s.capacity*0.6);
+  p.shows=p.shows||[]; p.shows.push(s);
+  logActivity('edited','Proposal',p.title+' (added '+((get(DB.venues,vid)||{}).name||'venue')+')');
+  persist(); closeModal(); go('proposals',pid);
+}
+
+function proposalEditShow(pid,idx){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const s=p.shows[idx]; if(!s) return;
+  const v=get(DB.venues,s.venueId);
+  openModal('Edit show — '+(v?esc(v.name):''),`
+    <div class="row2">
+      <div class="field"><label>Date</label><input id="pes-date" type="date" value="${s.date||''}"></div>
+      <div class="field"><label>Ticket price ($)</label><input id="pes-price" type="number" step="0.01" value="${s.ticketBase||''}"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Capacity</label><input id="pes-cap" type="number" value="${s.capacity||''}"></div>
+      <div class="field"><label>Est. tickets sold</label><input id="pes-est" type="number" value="${s.ticketsEst||''}"></div>
+    </div>
+    <div class="field"><label>Contract type</label>
+      <select id="pes-ct" onchange="pesToggle()">
+        ${['guarantee','door','guarantee_plus','rental','rental_greater_of','rental_plus_pct'].map(ct=>`<option value="${ct}" ${s.terms?.contractType===ct?'selected':''}>${ctLabel(ct)}</option>`).join('')}
+      </select></div>
+    <div id="pes-deal-fields"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="pesSave('${pid}',${idx})">Save show</button>`);
+  setTimeout(()=>{
+    pesToggle();
+    // Pre-fill deal amounts
+    if(s.terms?.rental) {const el=document.getElementById('pes-rental');if(el)el.value=s.terms.rental;}
+    if(s.terms?.guarantee) {const el=document.getElementById('pes-guar');if(el)el.value=s.terms.guarantee;}
+    if(s.terms?.doorSplit) {const el=document.getElementById('pes-split');if(el)el.value=s.terms.doorSplit;}
+  },60);
+}
+
+function pesToggle(){
+  const ct=document.getElementById('pes-ct')?.value||'rental';
+  const showG=['guarantee','guarantee_plus'].includes(ct);
+  const showR=['rental','rental_greater_of','rental_plus_pct'].includes(ct);
+  const showS=['door','guarantee_plus','rental_greater_of','rental_plus_pct'].includes(ct);
+  const host=document.getElementById('pes-deal-fields'); if(!host) return;
+  host.innerHTML=`
+    ${showG?`<div class="field"><label>Guarantee ($)</label><input id="pes-guar" type="number" value=""></div>`:''}
+    ${showR?`<div class="field"><label>Rental flat fee ($)</label><input id="pes-rental" type="number" step="0.01" value=""></div>`:''}
+    ${showS?`<div class="field"><label>Split / % of net (%)</label><input id="pes-split" type="number" step="0.1" value=""></div>`:''}`;
+}
+
+function pesSave(pid,idx){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const s=p.shows[idx]; if(!s) return;
+  s.date=fv('pes-date');
+  s.ticketBase=+document.getElementById('pes-price').value||s.ticketBase;
+  s.capacity=+document.getElementById('pes-cap').value||s.capacity;
+  s.ticketsEst=+document.getElementById('pes-est').value||s.ticketsEst;
+  const ct=fv('pes-ct');
+  s.terms={
+    contractType:ct,
+    guarantee:+(document.getElementById('pes-guar')?.value)||s.terms?.guarantee||0,
+    rental:+(document.getElementById('pes-rental')?.value)||s.terms?.rental||0,
+    doorSplit:+(document.getElementById('pes-split')?.value)||s.terms?.doorSplit||0
+  };
+  persist(); closeModal(); go('proposals',pid);
+}
+
+function proposalRemoveShow(pid,idx){
+  const p=get(DB.proposals,pid); if(!p) return;
+  if(!confirm('Remove this show from the proposal?')) return;
+  p.shows.splice(idx,1);
+  persist(); go('proposals',pid);
+}
+
+function acceptProposal(id){
+  const p=get(DB.proposals,id); if(!p) return;
+  const shows=p.shows||[];
+  if(!shows.length){alert('Add at least one show before accepting.');return;}
+  if(!confirm(`Accept this proposal and create ${p.kind==='tour'?'a tour + ':''}${shows.length} real event${shows.length!==1?'s':''}?`)) return;
+
+  const createdEventIds=[];
+  let tourId=null;
+
+  // For tour type: create a tour record first
+  if(p.kind==='tour'){
+    const dates=shows.map(s=>s.date).filter(Boolean).sort();
+    const tourRec={
+      id:uid('t'), name:p.title,
+      artist:p.artistName||((get(DB.artists,p.artistId)||{}).name||''),
+      start:dates[0]||'', end:dates[dates.length-1]||'',
+      status:'Routing', notes:p.intro||'',
+      proposalId:id
+    };
+    DB.tours.push(tourRec);
+    tourId=tourRec.id;
+    logActivity('created','Tour',tourRec.name+' (from proposal)');
+  }
+
+  // Create one event per show
+  shows.forEach(s=>{
+    const v=get(DB.venues,s.venueId);
+    const eventRec={
+      id:uid('e'),
+      name:v?(esc(v.city||v.name)+' — '+esc(v.name)):'Untitled show',
+      tourId:tourId||'', venueId:s.venueId||'',
+      date:s.date||'', showTime:s.showTime||'', loadIn:s.loadIn||'',
+      status:'Routing',
+      capacityAlloc:s.capacity||0, presales:0, comps:0,
+      mgmtPct:DB.settings.mgmtPct,
+      pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
+        taxRate:+s.taxRate||DB.settings.taxRate,taxOn:s.taxOn||'base'},
+      terms:s.terms||{},
+      showCosts:JSON.parse(JSON.stringify(s.showCosts||{crew:[],equipment:[],fees:[]})),
+      projection:{ticketsEst:+s.ticketsEst||Math.round((+s.capacity||0)*0.6),expenses:[]},
+      settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''},
+      logistics:DEFAULT_LOGISTICS.map((item,i)=>({id:'lg'+(Date.now()+i),label:item.label,confirmed:false,note:'',confirmedAt:null})),
+      talentIds:[],vendorIds:[],crewIds:[],files:[]
+    };
+    DB.events.push(eventRec);
+    createdEventIds.push(eventRec.id);
+    logActivity('created','Event',eventRec.name+' (from proposal)');
+  });
+
+  // Mark proposal accepted
+  p.status='Accepted';
+  p.acceptedAt=new Date().toISOString();
+  p.createdEventIds=createdEventIds;
+  if(tourId) p.createdTourId=tourId;
+
+  persist();
+  // Navigate to the tour or first event
+  if(tourId) go('tours',tourId);
+  else go('events',createdEventIds[0]);
+}
+
+function markProposalReady(id){
+  const p=get(DB.proposals,id); if(!p) return;
+  const wasReady=p.status==='Ready for review';
+  p.status=wasReady?'Draft':'Ready for review';
+  logActivity('edited','Proposal',p.title+' → '+(wasReady?'Draft':'Ready for review'));
+  persist(); go('proposals',id);
+}
+
 function deleteProposal(id){
   const p=get(DB.proposals,id); if(!p) return;
   if(!confirm(`Delete proposal "${p.title}"?`)) return;
@@ -3311,19 +3469,19 @@ function deleteProposal(id){
 function printProposalDoc(id){
   const p=get(DB.proposals,id); if(!p) return;
   const artist=p.artistId?get(DB.artists,p.artistId):null;
-  const evts=(p.eventIds||[]).map(eid=>get(DB.events,eid)).filter(Boolean);
-  let totGross=0,totPayout=0,totComm=0,totArtist=0;
-  evts.forEach(e=>{const f=proposalEventFigures(e);totGross+=f.grossBoxOffice;totPayout+=f.payout;totComm+=f.commission;totArtist+=f.artistNet;});
-  const rows=evts.map(e=>{
-    const v=get(DB.venues,e.venueId);const f=proposalEventFigures(e);
+  const shows=p.shows||[];
+  let totGross=0,totComm=0,totArtist=0;
+  shows.forEach(s=>{const f=proposalShowFigures(s);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;});
+  const rows=shows.map(s=>{
+    const v=get(DB.venues,s.venueId);const f=proposalShowFigures(s);
     return `<tr>
-      <td style="padding:6px 0">${esc(e.name)}</td>
-      <td>${esc(e.date||'TBD')}</td>
-      <td>${v?esc(v.name):'—'}</td>
-      <td style="text-align:right">${f.sold}</td>
+      <td style="padding:6px 0">${v?esc(v.name):'—'}</td>
+      <td>${esc(s.date||'TBD')}</td>
+      <td>${v?esc(v.city||''):'—'}</td>
+      <td style="text-align:right">${money0(s.ticketBase)}</td>
+      <td style="text-align:right">${s.ticketsEst||'—'}</td>
       <td style="text-align:right">${money0(f.grossBoxOffice)}</td>
       <td style="text-align:right">${money0(f.payout)}</td>
-      <td style="text-align:right">${money0(f.commission)}</td>
       <td style="text-align:right;font-weight:600">${money0(f.artistNet)}</td></tr>`;
   }).join('');
   const doc=`
@@ -3334,27 +3492,32 @@ function printProposalDoc(id){
     ${p.intro?`<p style="font-size:13px;line-height:1.6;margin-bottom:16px">${esc(p.intro)}</p>`:''}
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="color:#908e85;text-align:left;border-bottom:1px solid #e4e2da">
-        <th style="padding:6px 0;font-weight:500">Show</th><th style="font-weight:500">Date</th>
-        <th style="font-weight:500">Venue</th><th style="text-align:right;font-weight:500">Est. tickets</th>
-        <th style="text-align:right;font-weight:500">Gross</th><th style="text-align:right;font-weight:500">Venue payout</th>
-        <th style="text-align:right;font-weight:500">Commission</th><th style="text-align:right;font-weight:500">Artist net</th></tr></thead>
+        <th style="padding:6px 0;font-weight:500">Venue</th><th style="font-weight:500">Date</th>
+        <th style="font-weight:500">City</th><th style="text-align:right;font-weight:500">Ticket</th>
+        <th style="text-align:right;font-weight:500">Est. sold</th>
+        <th style="text-align:right;font-weight:500">Gross</th>
+        <th style="text-align:right;font-weight:500">Venue payout</th>
+        <th style="text-align:right;font-weight:500">Artist net</th></tr></thead>
       <tbody>${rows}
         <tr style="border-top:2px solid #1c1c1a;font-weight:600">
-          <td style="padding:8px 0" colspan="4">Tour total (${evts.length} shows)</td>
+          <td colspan="5" style="padding:8px 0">${p.kind==='tour'?'Tour':'Show'} total (${shows.length} show${shows.length!==1?'s':''})</td>
           <td style="text-align:right">${money0(totGross)}</td>
-          <td style="text-align:right">${money0(totPayout)}</td>
-          <td style="text-align:right">${money0(totComm)}</td>
+          <td></td>
           <td style="text-align:right">${money0(totArtist)}</td></tr>
       </tbody>
     </table>
-    <p style="font-size:11px;color:#908e85;margin-top:16px">All figures are projections based on estimated attendance and are subject to confirmation and final settlement. Management commission and any disclosed fees are shown in full. Generated by TourDesk.</p>`;
+    <p style="font-size:11px;color:#908e85;margin-top:16px">All figures are projections based on estimated attendance. Management commission and fees shown in full. Generated by TourDesk.</p>`;
   const w=window.open('','_blank');
   w.document.write('<html><head><title>'+esc(p.title)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1c1c1a}table{width:100%}</style></head><body>'+doc+'</body></html>');
   w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
 }
 
+// Backward compat stub — proposals no longer link to real events
+function proposalEventFigures(e){ return projectionFigures(e, (e.projection?.ticketsEst||Math.round((+e.capacityAlloc||0)*0.6))); }
+
 VIEWS.settings={
   render(c){
+    if(!canDo('admin')){ c.innerHTML=emptyState('⚙','Settings are only available to administrators.'); return; }
     c.innerHTML=`
       <div class="sec" style="max-width:560px">
         <div class="sec-label">Defaults</div>
@@ -3364,6 +3527,17 @@ VIEWS.settings={
         </div>
         <div class="field"><label>Default service fee % (on booked items)</label><input type="number" id="set-svc" value="${DB.settings.serviceFeePct}"></div>
         <button class="btn sm" onclick="saveSettings()">Save defaults</button>
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Google Drive</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+          Paste your Google Drive folder URL below. Files in each event's Files tab will link directly to Drive — no login required.</p>
+        <div class="field"><label>Drive folder URL</label>
+          <input id="set-drive" placeholder="https://drive.google.com/drive/folders/…" value="${esc(DB.settings.driveFolder||'')}">
+          <p class="muted" style="font-size:11px;margin-top:4px">In Google Drive: right-click your TourDesk folder → Share → Copy link</p>
+        </div>
+        <button class="btn sm" onclick="saveDriveFolder()">Save folder link</button>
+        ${DB.settings.driveFolder?`<a href="${esc(DB.settings.driveFolder)}" target="_blank" class="btn sm" style="margin-left:8px">Open Drive ↗</a>`:''}
       </div>
       <div class="sec" style="max-width:560px">
         <div class="sec-label">Supabase (cloud sync)</div>
@@ -3437,14 +3611,11 @@ async function connectSupabase(){
     alert('Connection failed: '+err.message+'\n\nDouble-check your Project URL and API Key at supabase.com');
   }
 }
-function connectGoogle(){
-  DB.settings.apiKey=fv('set-apikey'); DB.settings.clientId=fv('set-clientid');
-  if(DB.settings.apiKey && DB.settings.clientId){
-    openModal('Google setup','<p style="font-size:13px;line-height:1.7;color:var(--txt2)">Credentials saved. The live OAuth handshake and Sheets/Drive/Gmail sync need the Google API libraries loaded and your Cloud project authorized for this file\'s origin. Since you\'re running this as a local file, we\'ll set the authorized origin together. Ask me to "set up the Google connection" and I\'ll walk through it step by step.</p>','<button class="btn primary" onclick="closeModal()">Got it</button>');
-  } else {
-    openModal('Missing credentials','<p style="font-size:13px;color:var(--txt2)">Please paste both your API key and OAuth client ID first.</p>','<button class="btn" onclick="closeModal()">OK</button>');
-  }
-  persist();updateSyncBadge();
+function saveDriveFolder(){
+  DB.settings.driveFolder=fv('set-drive');
+  persist();
+  openModal('Saved','<p style="font-size:13px;color:var(--green)">✓ Drive folder link saved.</p>',
+    `<button class="btn primary" onclick="closeModal()">Done</button>`);
 }
 function exportData(){
   // 1. Download the data JSON
