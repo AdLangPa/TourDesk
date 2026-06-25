@@ -317,26 +317,26 @@ function logout(){
 /* ============================================================
    DATA PERSISTENCE (with Supabase)
    ============================================================ */
+const SUPABASE_URL = 'https://rcxnqabfjcnmttoxhtpb.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjeG5xYWJmamNubXR0b3hodHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjg5NzYsImV4cCI6MjA5NjYwNDk3Nn0.T6vCvuHh-C6i1ctpV7n_fOEaUN-Q8sIdbmtjg4N_wAM';
+
 let SBDB = null; // Supabase client
 let SBSUB = null; // Supabase real-time subscription
 
 function initSupabase() {
-  if (!DB.settings.supabaseConfig) return; // not configured yet
   try {
-    const cfg = DB.settings.supabaseConfig;
-    SBDB = window.supabase.createClient(cfg.projectUrl, cfg.apiKey);
-    // Listen for real-time updates
+    SBDB = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     SBSUB = SBDB
       .channel('tourdesk_changes')
-      .on('postgres_changes', 
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'tourdesk_data' },
         payload => {
           if (payload.new && payload.new.data) {
-            const data = typeof payload.new.data === 'string' 
-              ? JSON.parse(payload.new.data) 
+            const data = typeof payload.new.data === 'string'
+              ? JSON.parse(payload.new.data)
               : payload.new.data;
             Object.assign(DB, data);
-            if (route && route.view) render(); // refresh UI if viewing
+            if (route && route.view) render();
           }
         }
       )
@@ -347,38 +347,27 @@ function initSupabase() {
 
 async function persist() {
   try {
-    // Always save Supabase credentials to localStorage as a bootstrap fallback
-    if (DB.settings.supabaseConfig) {
-      localStorage.setItem('tourdesk_sb_config', JSON.stringify(DB.settings.supabaseConfig));
-    }
     if (SBDB) {
-      // Write to Supabase AND localStorage (localStorage is the cache for fast boot)
       const { error } = await SBDB
         .from('tourdesk_data')
         .upsert({ id: 1, data: DB }, { onConflict: 'id' });
       if (error) console.error('Supabase write failed:', error);
     }
-    // Always write to localStorage as cache/fallback
+    // Always cache locally too
     localStorage.setItem('tourdesk_db', JSON.stringify(DB));
   } catch (e) { console.error('Persist failed:', e); }
 }
 
 async function load() {
   try {
-    // Bootstrap Supabase credentials from localStorage if not in DB defaults
-    if (!DB.settings.supabaseConfig) {
-      const savedCfg = localStorage.getItem('tourdesk_sb_config');
-      if (savedCfg) {
-        try { DB.settings.supabaseConfig = JSON.parse(savedCfg); } catch(e) {}
-      }
+    // Always wait for Supabase library then connect
+    let waited = 0;
+    while (!window.supabase && waited < 5000) {
+      await new Promise(r => setTimeout(r, 100));
+      waited += 100;
     }
-    if (DB.settings.supabaseConfig && !SBDB) {
+    if (window.supabase) {
       initSupabase();
-      // Wait briefly for Supabase client to initialize
-      await new Promise(r => setTimeout(r, 300));
-    }
-    if (SBDB) {
-      // Load from Supabase
       const { data, error } = await SBDB
         .from('tourdesk_data')
         .select('data')
@@ -389,25 +378,23 @@ async function load() {
           ? JSON.parse(data.data)
           : data.data;
         Object.assign(DB, loaded);
-        // Cache locally for fast next boot
         localStorage.setItem('tourdesk_db', JSON.stringify(DB));
+        return;
       } else if (!error) {
-        // No data in Supabase yet; seed and push
-        seed();
+        // Nothing in Supabase yet — push local data up
+        const raw = localStorage.getItem('tourdesk_db');
+        if (raw) { try { Object.assign(DB, JSON.parse(raw)); } catch(e) {} }
         await persist();
-      }
-    } else {
-      // No Supabase; use localStorage cache
-      const raw = localStorage.getItem('tourdesk_db');
-      if (raw) {
-        Object.assign(DB, JSON.parse(raw));
-      } else {
-        seed();
+        return;
       }
     }
+    // Supabase unavailable — fall back to localStorage
+    console.warn('Supabase unavailable, using localStorage');
+    const raw = localStorage.getItem('tourdesk_db');
+    if (raw) { Object.assign(DB, JSON.parse(raw)); }
+    else seed();
   } catch (e) {
     console.error('Load failed:', e);
-    // Fall back to localStorage cache on any error
     const raw = localStorage.getItem('tourdesk_db');
     if (raw) { try { Object.assign(DB, JSON.parse(raw)); } catch(e2) {} }
     else seed();
@@ -3745,21 +3732,9 @@ document.getElementById('nav').addEventListener('click',e=>{
 initAuth();
 if(AUTH_USER) {
   (async()=>{
-    // Show loading state while connecting
     const c=document.getElementById('content');
-    const hasSB=localStorage.getItem('tourdesk_sb_config');
-    if(c && hasSB) c.innerHTML='<div style="padding:40px;text-align:center;color:var(--txt3);font-size:13px">Connecting to Supabase…</div>';
-    // Wait for Supabase library to be available (CDN load race condition)
-    if(hasSB) {
-      let waited=0;
-      while(!window.supabase && waited<5000){
-        await new Promise(r=>setTimeout(r,100));
-        waited+=100;
-      }
-      if(!window.supabase) console.error('Supabase library failed to load from CDN');
-    }
+    if(c) c.innerHTML='<div style="padding:40px;text-align:center;color:var(--txt3);font-size:13px">Connecting…</div>';
     await load();
-    // Restore artist-view mode if it was active
     const savedAV=localStorage.getItem('tourdesk_artistview');
     if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
     applyArtistViewChrome();
