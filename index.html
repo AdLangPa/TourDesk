@@ -2465,6 +2465,8 @@ function reopenEventForm(){
 let _curEventFormId=null;
 let _curProposalLink=null;
 let _curEventRef=null;
+let _curProposalShowPid=null; // proposal id when editing a proposal show
+let _curProposalShowSid=null; // show _sid when editing a proposal show
 function readShowCosts(){
   saveCostState();
   return JSON.parse(JSON.stringify(_efCosts));
@@ -2515,6 +2517,28 @@ function saveEvent(id){
     terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
     showCosts:readShowCosts()
   };
+  // Saving back to a proposal show
+  const psPid=_curProposalShowPid; const psSid=_curProposalShowSid;
+  _curProposalShowPid=null; _curProposalShowSid=null;
+  if(psPid && psSid){
+    const p=get(DB.proposals,psPid);
+    const s=p?(p.shows||[]).find(x=>x._sid===psSid):null;
+    if(s){
+      // Map event form fields back to proposal show structure
+      s.venueId=rec.venueId||s.venueId;
+      s.date=rec.date; s.showTime=rec.showTime; s.loadIn=rec.loadIn;
+      s.capacity=rec.capacityAlloc||s.capacity;
+      s.ticketBase=rec.pricing.base||s.ticketBase;
+      s.taxRate=rec.pricing.taxRate; s.taxOn=rec.pricing.taxOn;
+      s.mgmtPct=rec.mgmtPct;
+      s.terms=rec.terms;
+      s.showCosts=rec.showCosts;
+      s.ticketsEst=rec.presales||s.ticketsEst; // use presales field as est tickets
+      logActivity('edited','Proposal',p.title+' (show: '+(rec.name||'show')+')');
+      persist(); closeModal(); go('proposals',psPid,'show',null,psSid);
+    }
+    return;
+  }
   if(id){ const e=get(DB.events,id); Object.assign(e,rec); logActivity('edited','Event',rec.name); }
   else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
     if(_curProposalLink){ const p=get(DB.proposals,_curProposalLink); if(p){ p.eventIds=p.eventIds||[]; p.eventIds.push(rec.id);} } }
@@ -3632,30 +3656,46 @@ function pavSave(pid){
 function proposalEditShow(pid,sid){
   const p=get(DB.proposals,pid); if(!p) return;
   const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
-  const v=get(DB.venues,s.venueId);
-  openModal('Edit show — '+(v?esc(v.name):''),`
-    <div class="row2">
-      <div class="field"><label>Date</label><input id="pes-date" type="date" value="${s.date||''}"></div>
-      <div class="field"><label>Ticket price ($)</label><input id="pes-price" type="number" step="0.01" value="${s.ticketBase||''}"></div>
-    </div>
-    <div class="row2">
-      <div class="field"><label>Capacity</label><input id="pes-cap" type="number" value="${s.capacity||''}"></div>
-      <div class="field"><label>Est. tickets sold</label><input id="pes-est" type="number" value="${s.ticketsEst||''}"></div>
-    </div>
-    <div class="field"><label>Mgmt commission %</label><input id="pes-mgmt" type="number" value="${s.mgmtPct||DB.settings.mgmtPct}"></div>
-    <div class="field"><label>Contract type</label>
-      <select id="pes-ct" onchange="pesToggle()">
-        ${['guarantee','door','guarantee_plus','rental','rental_greater_of','rental_plus_pct'].map(ct=>`<option value="${ct}" ${s.terms?.contractType===ct?'selected':''}>${ctLabel(ct)}</option>`).join('')}
-      </select></div>
-    <div id="pes-deal-fields"></div>`,
-    `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="pesSave('${pid}','${sid}')">Save show</button>`);
+  // Set globals so saveEvent routes back to the proposal show
+  _curProposalShowPid=pid;
+  _curProposalShowSid=sid;
+  // Build a fake event object that maps proposal show fields to event form fields
+  const prefill={
+    name:(get(DB.venues,s.venueId)?.name||'Show'),
+    venueId:s.venueId||'',
+    tourId:'',
+    date:s.date||'',
+    showTime:s.showTime||'',
+    loadIn:s.loadIn||'',
+    status:'Routing',
+    capacityAlloc:s.capacity||0,
+    presales:s.ticketsEst||0, // repurpose presales as est tickets in proposal context
+    comps:0,
+    mgmtPct:s.mgmtPct||DB.settings.mgmtPct,
+    pricing:{
+      base:s.ticketBase||0,
+      serviceFee:0,feeType:'fixed',ccFee:0,
+      taxRate:s.taxRate||DB.settings.taxRate,
+      taxOn:s.taxOn||'base'
+    },
+    terms:s.terms||{},
+    showCosts:s.showCosts||{crew:[],equipment:[],fees:[]}
+  };
+  eventForm(null, null, prefill);
+  // Override the modal title and save button label
   setTimeout(()=>{
-    pesToggle();
-    if(s.terms?.rental){const el=document.getElementById('pes-rental');if(el)el.value=s.terms.rental;}
-    if(s.terms?.guarantee){const el=document.getElementById('pes-guar');if(el)el.value=s.terms.guarantee;}
-    if(s.terms?.doorSplit){const el=document.getElementById('pes-split');if(el)el.value=s.terms.doorSplit;}
-  },60);
+    const title=document.querySelector('.modal-title');
+    if(title) title.textContent='Edit proposal show — '+(get(DB.venues,s.venueId)?.name||'Show');
+    // Change save button to call saveEvent with no id
+    const saveBtn=document.querySelector('.modal-footer .btn.primary');
+    if(saveBtn){ saveBtn.onclick=()=>saveEvent(null); }
+    // Add a note explaining presales field is est. tickets for proposals
+    const preLabel=document.querySelector('label[for="ef-pre"],#ef-pre')?.closest('.field')?.querySelector('label');
+    if(preLabel) preLabel.textContent='Est. tickets sold (proposal)';
+    // Hide tour assignment — proposals manage their own grouping
+    const tourField=document.getElementById('ef-tour')?.closest('.field');
+    if(tourField) tourField.style.display='none';
+  },80);
 }
 
 function pesToggle(){
