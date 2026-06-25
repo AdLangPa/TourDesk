@@ -693,7 +693,7 @@ function applyArtistViewChrome(){
   nav.querySelectorAll('.nav-item').forEach(n=>{
     const view=n.dataset.view;
     const blockedByAV=inArtistView()&&!avAllowed.includes(view);
-    const blockedByRole=!canDo('view')===false && AUTH_USER?.role==='producer'&&producerBlocked.includes(view);
+    const blockedByRole=AUTH_USER?.role==='producer'&&producerBlocked.includes(view);
     n.style.display=(blockedByAV||blockedByRole)?'none':'';
   });
   // Hide manage/sales section labels selectively is overkill; keep labels
@@ -719,13 +719,19 @@ function applyArtistViewChrome(){
 }
 
 function go(view,id=null,tab=null,_unused=null,ref=null){
-  // In artist view, block disallowed views
+  // Block disallowed views for artist view
   if(inArtistView() && !['dashboard','tours','events','proposals'].includes(view)){
+    view='dashboard'; id=null; tab=null; ref=null;
+  }
+  // Block disallowed views for producer role
+  const producerBlocked=['settings','activity','artists','contacts','venues'];
+  if(AUTH_USER?.role==='producer' && producerBlocked.includes(view)){
     view='dashboard'; id=null; tab=null; ref=null;
   }
   route={view,id,tab,ref};
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
   document.getElementById('page-title').textContent=(inArtistView()?(currentArtist()?.name+' · '):'')+(NAV_TITLES[view]||'TourDesk');
+  applyArtistViewChrome();
   render();
 }
 
@@ -1156,7 +1162,7 @@ function saveTour(id){
 VIEWS.events={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
-    a.innerHTML=`<button class="btn primary" onclick="eventForm()">+ New event</button>`;
+    a.innerHTML=canDo('admin')?`<button class="btn primary" onclick="eventForm()">+ New event</button>`:'';
     let list=[...DB.events].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     if(inArtistView()) list=list.filter(e=>artistEvents(ARTIST_VIEW).some(ae=>ae.id===e.id));
     c.innerHTML=`
