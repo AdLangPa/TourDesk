@@ -3744,13 +3744,28 @@ document.getElementById('nav').addEventListener('click',e=>{
 /* ---------- BOOT ---------- */
 initAuth();
 if(AUTH_USER) {
-  load();
-  // Restore artist-view mode if it was active
-  const savedAV=localStorage.getItem('tourdesk_artistview');
-  if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
-  applyArtistViewChrome();
-  go('dashboard');
-  updateSyncBadge();
+  (async()=>{
+    // Show loading state while connecting
+    const c=document.getElementById('content');
+    const hasSB=localStorage.getItem('tourdesk_sb_config');
+    if(c && hasSB) c.innerHTML='<div style="padding:40px;text-align:center;color:var(--txt3);font-size:13px">Connecting to Supabase…</div>';
+    // Wait for Supabase library to be available (CDN load race condition)
+    if(hasSB) {
+      let waited=0;
+      while(!window.supabase && waited<5000){
+        await new Promise(r=>setTimeout(r,100));
+        waited+=100;
+      }
+      if(!window.supabase) console.error('Supabase library failed to load from CDN');
+    }
+    await load();
+    // Restore artist-view mode if it was active
+    const savedAV=localStorage.getItem('tourdesk_artistview');
+    if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
+    applyArtistViewChrome();
+    go('dashboard');
+    updateSyncBadge();
+  })();
 }
 
 function updateSyncBadge(){
