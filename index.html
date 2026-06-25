@@ -1194,47 +1194,85 @@ function eventLogistics(host,e,v){
   const items=e.logistics||[];
   const pending=items.filter(i=>!i.confirmed).length;
   const total=items.length;
-  host.innerHTML=`
-    <div class="sec">
-      <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Logistics checklist</span>
-        <span style="font-weight:400;font-size:12px;color:${pending===0&&total>0?'var(--green)':'var(--amber)'}">
-          ${total===0?'No items':pending===0?'✓ All confirmed':pending+' of '+total+' pending'}
-        </span>
+  const active=window._lgActive||null; // which item has the textarea open
+
+  const itemRows=items.map(item=>{
+    const isActive=active===item.id && !item.confirmed;
+    if(item.confirmed){
+      return `<li class="lg-item lg-done">
+        <span class="lg-check">✓</span>
+        <div class="lg-body">
+          <span class="lg-label">${esc(item.label)}</span>
+          <span class="lg-ts">${new Date(item.confirmedAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</span>
+          <div class="lg-note">${esc(item.note)}</div>
+        </div>
+      </li>`;
+    }
+    return `<li class="lg-item${isActive?' lg-active':''}">
+      <span class="lg-check-open" onclick="lgToggle('${e.id}','${item.id}')">○</span>
+      <div class="lg-body">
+        <span class="lg-label" onclick="lgToggle('${e.id}','${item.id}')" style="cursor:pointer">${esc(item.label)}</span>
+        <button class="lg-del" onclick="lgDelete('${e.id}','${item.id}')" title="Delete">×</button>
+        ${isActive?`<div class="lg-confirm-area">
+          <textarea id="lg-note-${e.id}-${item.id}"
+            placeholder="Paste confirmation email or note (min. 20 characters)…"
+            oninput="lgEnableBtn('${e.id}','${item.id}')"
+            style="width:100%;min-height:72px;margin-top:8px;font-size:12px;padding:7px 9px;border:1px solid var(--bord2);border-radius:6px;font-family:inherit;resize:vertical;box-sizing:border-box;background:var(--surf);color:var(--txt)"></textarea>
+          <div style="display:flex;gap:8px;margin-top:7px">
+            <button id="lg-btn-${e.id}-${item.id}" class="btn sm primary" style="opacity:.35;pointer-events:none" onclick="lgConfirm('${e.id}','${item.id}')">Mark confirmed</button>
+            <button class="btn ghost sm" onclick="lgToggle('${e.id}','${item.id}')">Cancel</button>
+          </div>
+        </div>`:''}
       </div>
+    </li>`;
+  }).join('');
 
-      ${items.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-        ${items.map(item=>`
-          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${item.confirmed?'var(--green-soft)':'var(--surf2)'};border-radius:var(--rad)">
-            <span style="font-size:16px;margin-top:2px;flex-shrink:0">${item.confirmed?'✅':'⬜'}</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:500;font-size:13px">${esc(item.label)}</div>
-              ${item.confirmed
-                ?`<div style="font-size:12px;color:var(--txt2);margin-top:4px;white-space:pre-wrap;word-break:break-word">${esc(item.note)}</div>
-                   <div style="font-size:11px;color:var(--txt3);margin-top:3px">${new Date(item.confirmedAt).toLocaleString()}</div>`
-                :`<div style="margin-top:8px">
-                    <textarea id="lg-note-${e.id}-${item.id}"
-                      placeholder="Paste confirmation (min. 20 characters)…"
-                      style="width:100%;min-height:56px;font-size:12px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-family:inherit;resize:vertical;box-sizing:border-box"
-                      oninput="lgEnableBtn('${e.id}','${item.id}')"></textarea>
-                    <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
-                      <button id="lg-btn-${e.id}-${item.id}" class="btn sm primary"
-                        style="opacity:.4;pointer-events:none"
-                        onclick="lgConfirm('${e.id}','${item.id}')">Confirm</button>
-                      <button class="btn ghost sm" onclick="lgDelete('${e.id}','${item.id}')">Delete</button>
-                    </div>
-                  </div>`}
-            </div>
-          </div>`).join('')}
-      </div>`:`<p class="muted" style="font-size:13px;margin-bottom:16px">No items yet. Add one below.</p>`}
-
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="lg-new-${e.id}" placeholder="New item (e.g. Hospitality rider sent)"
-          style="flex:1;padding:7px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px;background:var(--surf);color:var(--txt)"
+  host.innerHTML=`
+    <style>
+      .lg-wrap{max-width:520px}
+      .lg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+      .lg-status{font-size:12px;font-weight:500;padding:3px 9px;border-radius:20px;
+        background:${pending===0&&total>0?'var(--green-soft)':'var(--amber-soft)'};
+        color:${pending===0&&total>0?'var(--green)':'var(--amber)'}}
+      .lg-list{list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:2px}
+      .lg-item{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:var(--rad);transition:background .15s}
+      .lg-item:hover{background:var(--surf2)}
+      .lg-done{background:var(--green-soft)!important;opacity:.85}
+      .lg-active{background:var(--surf2)!important}
+      .lg-check{width:18px;height:18px;flex-shrink:0;margin-top:1px;color:var(--green);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+      .lg-check-open{width:18px;height:18px;flex-shrink:0;margin-top:1px;color:var(--txt3);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+      .lg-check-open:hover{color:var(--acc)}
+      .lg-body{flex:1;min-width:0}
+      .lg-label{font-size:13px;font-weight:500;color:var(--txt);display:block;margin-bottom:1px}
+      .lg-done .lg-label{color:var(--txt2);text-decoration:line-through;text-decoration-color:var(--txt3)}
+      .lg-ts{font-size:11px;color:var(--green);font-weight:500}
+      .lg-note{font-size:11px;color:var(--txt3);margin-top:4px;white-space:pre-wrap;word-break:break-word;line-height:1.5;max-height:60px;overflow:hidden}
+      .lg-del{float:right;background:none;border:none;color:var(--txt3);font-size:16px;cursor:pointer;padding:0 2px;line-height:1;opacity:0;transition:opacity .1s}
+      .lg-item:hover .lg-del{opacity:1}
+      .lg-del:hover{color:var(--red)}
+      .lg-add-row{display:flex;gap:8px;align-items:center}
+      .lg-add-row input{flex:1;padding:7px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px;background:var(--surf);color:var(--txt)}
+    </style>
+    <div class="lg-wrap">
+      <div class="lg-header">
+        <div class="sec-label" style="margin:0">Logistics</div>
+        ${total>0?`<span class="lg-status">${pending===0?'All confirmed':pending+' pending'}</span>`:''}
+      </div>
+      ${total?`<ul class="lg-list">${itemRows}</ul>`:`<p class="muted" style="font-size:13px;margin-bottom:16px">No items yet.</p>`}
+      <div class="lg-add-row">
+        <input id="lg-new-${e.id}" placeholder="Add item… (e.g. Hospitality rider sent)"
           onkeydown="if(event.key==='Enter')lgAdd('${e.id}')">
-        <button class="btn sm primary" onclick="lgAdd('${e.id}')">+ Add</button>
+        <button class="btn sm" onclick="lgAdd('${e.id}')">+ Add</button>
       </div>
     </div>`;
+}
+
+function lgToggle(eid, lid){
+  window._lgActive = (window._lgActive===lid) ? null : lid;
+  const e=get(DB.events,eid); if(!e) return;
+  const v=e.venueId?get(DB.venues,e.venueId):null;
+  const host=document.getElementById('ev-tab');
+  if(host) eventLogistics(host,e,v);
 }
 
 function lgEnableBtn(eid, lid){
@@ -1253,15 +1291,23 @@ function lgConfirm(eid, lid){
   const e=get(DB.events,eid); if(!e) return;
   const item=(e.logistics||[]).find(i=>i.id===lid); if(!item) return;
   item.confirmed=true; item.note=note; item.confirmedAt=new Date().toISOString();
+  window._lgActive=null;
   logActivity('edited','Event',e.name+' (logistics: '+item.label+')');
-  persist(); go('events',eid,'logistics');
+  persist();
+  const v=e.venueId?get(DB.venues,e.venueId):null;
+  const host=document.getElementById('ev-tab');
+  if(host) eventLogistics(host,e,v); else go('events',eid,'logistics');
 }
 
 function lgDelete(eid, lid){
   if(!confirm('Delete this logistics item?')) return;
   const e=get(DB.events,eid); if(!e) return;
   e.logistics=(e.logistics||[]).filter(i=>i.id!==lid);
-  persist(); go('events',eid,'logistics');
+  if(window._lgActive===lid) window._lgActive=null;
+  persist();
+  const v=e.venueId?get(DB.venues,e.venueId):null;
+  const host=document.getElementById('ev-tab');
+  if(host) eventLogistics(host,e,v); else go('events',eid,'logistics');
 }
 
 function lgAdd(eid){
@@ -1271,7 +1317,11 @@ function lgAdd(eid){
   const e=get(DB.events,eid); if(!e) return;
   e.logistics=e.logistics||[];
   e.logistics.push({id:'lg'+Date.now(),label,confirmed:false,note:'',confirmedAt:null});
-  persist(); go('events',eid,'logistics');
+  if(inp) inp.value='';
+  persist();
+  const v=e.venueId?get(DB.venues,e.venueId):null;
+  const host=document.getElementById('ev-tab');
+  if(host) eventLogistics(host,e,v); else go('events',eid,'logistics');
 }
 
 // Split events into confirmed/completed vs routing and sum financials
