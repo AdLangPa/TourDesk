@@ -1114,13 +1114,14 @@ VIEWS.events={
         <span class="detail-title">${esc(e.name)}</span>
         <span class="badge ${statusColor(e.status)}">${esc(e.status)}</span></div>
       <div class="tabs">
-        ${[['overview','Overview'],['settlement','Settlement'],['people','People'],['files','Files']].map(([tb,lbl])=>
+        ${[['overview','Overview'],['settlement','Settlement'],['logistics','Logistics'],['people','People'],['files','Files']].map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}')">${lbl}</div>`).join('')}
       </div>
       <div id="ev-tab"></div>`;
     const host=document.getElementById('ev-tab');
     if(tab==='overview') eventOverview(host,e,v,t);
     else if(tab==='settlement') eventSettlement(host,e);
+    else if(tab==='logistics') eventLogistics(host,e,v);
     else if(tab==='people') eventPeople(host,e);
     else if(tab==='files') eventFiles(host,e);
   }
@@ -1170,56 +1171,107 @@ function duplicateEvent(id){
   go('events',copy.id,'overview');
 }
 
-const CHECKLIST_ITEMS={
-  deposit:{label:'Deposit sent',icon:'💳'},
-  insurance:{label:'Insurance sent',icon:'🛡'},
-  techRider:{label:'Tech rider sent',icon:'🎛'}
-};
-function renderEventChecklist(e){
-  const cl=e.checklist||{};
-  const allDone=Object.keys(CHECKLIST_ITEMS).every(k=>cl[k]&&cl[k].confirmed);
-  const items=Object.entries(CHECKLIST_ITEMS).map(([key,item])=>{
-    const done=cl[key]&&cl[key].confirmed;
-    return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:${done?'var(--green-soft)':'var(--surf2)'};border-radius:var(--rad);margin-bottom:6px">
-      <span style="font-size:18px;margin-top:1px">${done?'✅':'⬜'}</span>
-      <div style="flex:1">
-        <div style="font-weight:500;font-size:13px">${item.icon} ${item.label}</div>
-        ${done
-          ?`<div style="font-size:12px;color:var(--txt2);margin-top:4px;white-space:pre-wrap">${esc(cl[key].note)}</div>`
-          :`<div style="margin-top:8px">
-              <textarea id="cl-${e.id}-${key}" placeholder="Paste confirmation email (min. 20 characters)…" style="width:100%;min-height:60px;font-size:12px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-family:inherit;resize:vertical" oninput="checklistEnableBtn('${e.id}','${key}')"></textarea>
-              <button id="cl-btn-${e.id}-${key}" class="btn sm primary" style="margin-top:6px;opacity:.4;pointer-events:none" onclick="confirmChecklist('${e.id}','${key}')">Confirm</button>
-            </div>`}
+/* ============================================================
+   LOGISTICS TAB
+   ============================================================ */
+const DEFAULT_LOGISTICS=[
+  {label:'Deposit sent'},
+  {label:'Insurance sent'},
+  {label:'Tech rider sent'}
+];
+
+function initEventLogistics(e,v){
+  // Only initialize if no logistics yet
+  if(e.logistics && e.logistics.length) return;
+  const isCorporate = v && v.type==='Corporate';
+  e.logistics = isCorporate ? [] : DEFAULT_LOGISTICS.map((item,i)=>({
+    id:'lg'+(Date.now()+i), label:item.label, confirmed:false, note:'', confirmedAt:null
+  }));
+}
+
+function eventLogistics(host,e,v){
+  initEventLogistics(e,v);
+  const items=e.logistics||[];
+  const pending=items.filter(i=>!i.confirmed).length;
+  const total=items.length;
+  host.innerHTML=`
+    <div class="sec">
+      <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Logistics checklist</span>
+        <span style="font-weight:400;font-size:12px;color:${pending===0&&total>0?'var(--green)':'var(--amber)'}">
+          ${total===0?'No items':pending===0?'✓ All confirmed':pending+' of '+total+' pending'}
+        </span>
+      </div>
+
+      ${items.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        ${items.map(item=>`
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${item.confirmed?'var(--green-soft)':'var(--surf2)'};border-radius:var(--rad)">
+            <span style="font-size:16px;margin-top:2px;flex-shrink:0">${item.confirmed?'✅':'⬜'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:500;font-size:13px">${esc(item.label)}</div>
+              ${item.confirmed
+                ?`<div style="font-size:12px;color:var(--txt2);margin-top:4px;white-space:pre-wrap;word-break:break-word">${esc(item.note)}</div>
+                   <div style="font-size:11px;color:var(--txt3);margin-top:3px">${new Date(item.confirmedAt).toLocaleString()}</div>`
+                :`<div style="margin-top:8px">
+                    <textarea id="lg-note-${e.id}-${item.id}"
+                      placeholder="Paste confirmation (min. 20 characters)…"
+                      style="width:100%;min-height:56px;font-size:12px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-family:inherit;resize:vertical;box-sizing:border-box"
+                      oninput="lgEnableBtn('${e.id}','${item.id}')"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+                      <button id="lg-btn-${e.id}-${item.id}" class="btn sm primary"
+                        style="opacity:.4;pointer-events:none"
+                        onclick="lgConfirm('${e.id}','${item.id}')">Confirm</button>
+                      <button class="btn ghost sm" onclick="lgDelete('${e.id}','${item.id}')">Delete</button>
+                    </div>
+                  </div>`}
+            </div>
+          </div>`).join('')}
+      </div>`:`<p class="muted" style="font-size:13px;margin-bottom:16px">No items yet. Add one below.</p>`}
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="lg-new-${e.id}" placeholder="New item (e.g. Hospitality rider sent)"
+          style="flex:1;padding:7px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px;background:var(--surf);color:var(--txt)"
+          onkeydown="if(event.key==='Enter')lgAdd('${e.id}')">
+        <button class="btn sm primary" onclick="lgAdd('${e.id}')">+ Add</button>
       </div>
     </div>`;
-  }).join('');
-  return `<div class="sec">
-    <div class="sec-label" style="display:flex;justify-content:space-between">
-      <span>Show checklist</span>
-      <span style="font-weight:400;font-size:12px;color:${allDone?'var(--green)':'var(--amber)'}">${allDone?'✓ All confirmed':'Pending items'}</span>
-    </div>
-    ${items}
-  </div>`;
 }
-function checklistEnableBtn(eid,key){
-  const ta=document.getElementById('cl-'+eid+'-'+key);
-  const btn=document.getElementById('cl-btn-'+eid+'-'+key);
+
+function lgEnableBtn(eid, lid){
+  const ta=document.getElementById('lg-note-'+eid+'-'+lid);
+  const btn=document.getElementById('lg-btn-'+eid+'-'+lid);
   if(!ta||!btn) return;
   const ok=(ta.value||'').trim().length>=20;
   btn.style.opacity=ok?'1':'0.4';
   btn.style.pointerEvents=ok?'auto':'none';
 }
-function confirmChecklist(eid,key){
-  const ta=document.getElementById('cl-'+eid+'-'+key);
-  if(!ta) return;
-  const note=(ta.value||'').trim();
-  if(note.length<20){ alert('Please paste at least 20 characters of confirmation.'); return; }
+
+function lgConfirm(eid, lid){
+  const ta=document.getElementById('lg-note-'+eid+'-'+lid);
+  const note=(ta?ta.value:'').trim();
+  if(note.length<20){ alert('Please paste at least 20 characters of confirmation text.'); return; }
   const e=get(DB.events,eid); if(!e) return;
-  e.checklist=e.checklist||{};
-  e.checklist[key]={confirmed:true,note,confirmedAt:new Date().toISOString()};
-  logActivity('edited','Event',e.name+' (checklist: '+CHECKLIST_ITEMS[key].label+')');
-  persist();
-  go('events',eid,'overview');
+  const item=(e.logistics||[]).find(i=>i.id===lid); if(!item) return;
+  item.confirmed=true; item.note=note; item.confirmedAt=new Date().toISOString();
+  logActivity('edited','Event',e.name+' (logistics: '+item.label+')');
+  persist(); go('events',eid,'logistics');
+}
+
+function lgDelete(eid, lid){
+  if(!confirm('Delete this logistics item?')) return;
+  const e=get(DB.events,eid); if(!e) return;
+  e.logistics=(e.logistics||[]).filter(i=>i.id!==lid);
+  persist(); go('events',eid,'logistics');
+}
+
+function lgAdd(eid){
+  const inp=document.getElementById('lg-new-'+eid);
+  const label=(inp?inp.value:'').trim();
+  if(!label){ inp&&inp.focus(); return; }
+  const e=get(DB.events,eid); if(!e) return;
+  e.logistics=e.logistics||[];
+  e.logistics.push({id:'lg'+Date.now(),label,confirmed:false,note:'',confirmedAt:null});
+  persist(); go('events',eid,'logistics');
 }
 
 // Split events into confirmed/completed vs routing and sum financials
@@ -1252,7 +1304,6 @@ function eventOverview(host,e,v,t){
   };
 
   host.innerHTML=`
-    ${renderEventChecklist(e)}
     <div class="stats">
       <div class="stat"><div class="stat-val ${sf.artistNet>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
       <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.yourTotal):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'To you (actual)':'To you (projected)'}</div></div>
