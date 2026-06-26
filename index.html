@@ -1138,9 +1138,9 @@ function venueContractImport(){
 
 async function vciHandleFile(file){
   if(!file) return;
-  const geminiKey=localStorage.getItem('tourdesk_gemini_key')||DB.settings.geminiKey||'';
-  if(!geminiKey){
-    document.getElementById('vci-status').innerHTML=`<span style="color:var(--red)">No Gemini API key set. Go to <strong>Settings → AI &amp; integrations</strong> and paste your Google AI key first.</span>`;
+  const anthropicKey=localStorage.getItem('tourdesk_anthropic_key')||'';
+  if(!anthropicKey){
+    document.getElementById('vci-status').innerHTML=`<span style="color:var(--red)">No Anthropic API key set. Go to <strong>Settings → AI — Contract import</strong> and paste your key first.</span>`;
     return;
   }
   const status=document.getElementById('vci-status');
@@ -1157,7 +1157,6 @@ async function vciHandleFile(file){
   if(drop) drop.style.opacity='0.5';
 
   try {
-    // Read file as base64
     const base64 = await new Promise((res,rej)=>{
       const r=new FileReader();
       r.onload=()=>res(r.result.split(',')[1]);
@@ -1165,7 +1164,7 @@ async function vciHandleFile(file){
       r.readAsDataURL(file);
     });
 
-    const mimeType = ext==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const mediaType = ext==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
     const prompt=`You are extracting venue rental agreement data for a tour management app. Analyze this contract and return ONLY a valid JSON object with these fields (use null for anything not found):
 
@@ -1193,41 +1192,36 @@ async function vciHandleFile(file){
   "taxOn": "base|total|null"
 }
 
-For contractType:
-- "rental" = flat fee only
-- "rental_plus_pct" = flat fee PLUS a percentage (both always apply)
-- "rental_greater_of" = greater of flat fee OR percentage
-- "guarantee" = guaranteed payment to artist
-- "door" = percentage of door only
-
+For contractType: "rental"=flat fee only, "rental_plus_pct"=flat+percentage both always apply, "rental_greater_of"=greater of flat OR percentage, "guarantee"=guaranteed payment to artist, "door"=percentage of door only.
 For crew: extract all technical staff with hourly rates. If hours not specified, use 4.
 For fees: include SOCAN, Entandem, box office fees, marketing fees, insurance, any fixed charges.
-For equipment: include any equipment rental costs listed.
-
 Return ONLY the JSON, no explanation, no markdown.`;
 
-    // Use Gemini 1.5 Flash — free tier, excellent at document parsing
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          contents:[{
-            parts:[
-              {inline_data:{mime_type:mimeType, data:base64}},
-              {text:prompt}
-            ]
-          }],
-          generationConfig:{temperature:0, maxOutputTokens:1500}
-        })
-      }
-    );
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1500,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'document', source:{type:'base64', media_type:mediaType, data:base64}},
+            {type:'text', text:prompt}
+          ]
+        }]
+      })
+    });
 
     const data=await response.json();
-    if(data.error){ throw new Error(data.error.message||JSON.stringify(data.error)); }
+    if(data.error){ throw new Error(data.error.message); }
 
-    let text=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+    let text=(data.content||[]).map(b=>b.text||'').join('');
     text=text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
     const extracted=JSON.parse(text);
 
@@ -1240,7 +1234,7 @@ Return ONLY the JSON, no explanation, no markdown.`;
   } catch(e) {
     console.error('Contract extraction error:',e);
     if(drop) drop.style.opacity='1';
-    status.innerHTML=`<span style="color:var(--red)">Extraction failed: ${esc(e.message||'Unknown error')}. Check your Gemini API key in Settings and try again.</span>`;
+    status.innerHTML=`<span style="color:var(--red)">Extraction failed: ${esc(e.message||'Unknown error')}. Check your API key in Settings and try again.</span>`;
   }
 }
 
@@ -4184,18 +4178,18 @@ VIEWS.settings={
         <button class="btn sm" onclick="saveSettings()">Save defaults</button>
       </div>
       <div class="sec" style="max-width:560px">
-        <div class="sec-label">AI — Contract import (Google Gemini)</div>
+        <div class="sec-label">AI — Contract import</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
-          Used for the <strong>Import from contract</strong> feature on the Venues page. Get a free key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a> → Get API key → Create API key. Stored only in this browser, never synced.</p>
-        <div class="field"><label>Gemini API key</label>
-          <input id="set-gemini" type="password" placeholder="Paste your Google AI key here…"
-            value="${localStorage.getItem('tourdesk_gemini_key')?'••••••••••••••••••••':''}"
+          Used for the <strong>Import from contract</strong> feature on the Venues page. Uses your Anthropic API key — get one at <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a>. Costs ~$0.01–0.02 per contract. Stored only in this browser, never synced.</p>
+        <div class="field"><label>Anthropic API key</label>
+          <input id="set-anthropic" type="password" placeholder="sk-ant-…"
+            value="${localStorage.getItem('tourdesk_anthropic_key')?'••••••••••••••••••••':''}"
             onfocus="if(this.value.startsWith('•'))this.value=''"
             style="font-family:ui-monospace,monospace;font-size:12px">
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <button class="btn sm" onclick="saveGeminiKey()">Save key</button>
-          ${localStorage.getItem('tourdesk_gemini_key')?`<span style="font-size:12px;color:var(--green)">✓ Key saved — contract import ready</span>`:`<span style="font-size:12px;color:var(--txt3)">No key saved yet</span>`}
+          <button class="btn sm" onclick="saveAnthropicKey()">Save key</button>
+          ${localStorage.getItem('tourdesk_anthropic_key')?`<span style="font-size:12px;color:var(--green)">✓ Key saved — contract import ready</span>`:`<span style="font-size:12px;color:var(--txt3)">No key saved yet</span>`}
         </div>
       </div>
       <div class="sec" style="max-width:560px">
@@ -4280,13 +4274,13 @@ async function connectSupabase(){
     alert('Connection failed: '+err.message+'\n\nDouble-check your Project URL and API Key at supabase.com');
   }
 }
-function saveGeminiKey(){
-  const key=document.getElementById('set-gemini')?.value?.trim();
-  if(!key||key.startsWith('•')){ alert('Please paste your Gemini API key first.'); return; }
-  // Store only in localStorage — never in DB/Supabase to avoid syncing secrets
-  localStorage.setItem('tourdesk_gemini_key', key);
-  document.getElementById('set-gemini').value='••••••••••••••••••••';
-  openModal('Key saved','<p style="font-size:13px;color:var(--green)">✓ Gemini API key saved to this browser. Contract import on the Venues page is now active.</p>',
+function saveAnthropicKey(){
+  const key=document.getElementById('set-anthropic')?.value?.trim();
+  if(!key||key.startsWith('•')){ alert('Please paste your Anthropic API key first.'); return; }
+  if(!key.startsWith('sk-ant-')){ alert('That doesn\'t look like an Anthropic API key — it should start with sk-ant-'); return; }
+  localStorage.setItem('tourdesk_anthropic_key', key);
+  document.getElementById('set-anthropic').value='••••••••••••••••••••';
+  openModal('Key saved','<p style="font-size:13px;color:var(--green)">✓ Anthropic API key saved. Contract import on the Venues page is now active. ~$0.01–0.02 per contract.</p>',
     `<button class="btn primary" onclick="closeModal()">Done</button>`);
 }
 
