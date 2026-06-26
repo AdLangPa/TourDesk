@@ -154,6 +154,7 @@ a{color:var(--blue);text-decoration:none}
 .banner{background:var(--blue-soft);border:1px solid #cfe3f6;border-radius:var(--rad);padding:11px 14px;font-size:12px;color:var(--blue);margin-bottom:16px;display:flex;gap:9px;align-items:flex-start}
 .pos{color:var(--green)}.neg{color:var(--red)}
 .hidden{display:none!important}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -858,7 +859,8 @@ function emptyState(ico,msg){return `<div class="empty"><div class="empty-ico">$
 VIEWS.venues={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
-    a.innerHTML=canDo('admin')?`<button class="btn primary" onclick="venueForm()">+ Add venue</button>`:'';
+    a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueContractImport()">📄 Import from contract</button>
+      <button class="btn primary" onclick="venueForm()">+ Add venue</button>`:'';
     c.innerHTML=`
       <div class="field" style="max-width:340px;margin-bottom:16px">
         <input id="vn-search" placeholder="Search venues by name, city…" oninput="filterCards('vn')" style="width:100%">
@@ -930,6 +932,26 @@ function feeToggleField(label,id,val,mode){
 function venueForm(id, prefill){
   const v=id?get(DB.venues,id):(prefill||{});
   const ct=v.contractType||'rental';
+  const sc=v.showCosts||{crew:[],equipment:[],fees:[]};
+  const crewRows=(sc.crew||[]).map((l,i)=>`
+    <div class="vf-cost-row" style="display:grid;grid-template-columns:1fr 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="e.g. Stage tech" value="${esc(l.desc||'')}" id="vf-crew-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" placeholder="hrs" value="${l.hours||4}" id="vf-crew-hrs-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <input type="number" placeholder="rate" value="${l.rate||''}" id="vf-crew-rate-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('crew',${i})">×</button>
+    </div>`).join('');
+  const eqRows=(sc.equipment||[]).map((l,i)=>`
+    <div class="vf-cost-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="e.g. Wireless mics" value="${esc(l.desc||'')}" id="vf-eq-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" placeholder="amount" value="${l.amount||''}" id="vf-eq-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('eq',${i})">×</button>
+    </div>`).join('');
+  const feeRows=(sc.fees||[]).map((l,i)=>`
+    <div class="vf-cost-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="e.g. SOCAN" value="${esc(l.desc||'')}" id="vf-fee-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" placeholder="amount" value="${l.amount||''}" id="vf-fee-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('fee',${i})">×</button>
+    </div>`).join('');
   const body=`
     <div class="field"><label>Venue name</label><input id="vf-name" value="${esc(v.name||'')}"></div>
     <div class="row2">
@@ -947,13 +969,13 @@ function venueForm(id, prefill){
     <div class="form-section">Primary contact</div>
     <div class="row2">
       <div class="field"><label>Contact name</label><input id="vf-cname" value="${esc(v.contactName||'')}"></div>
-      <div class="field"><label>Role / title</label><input id="vf-crole" value="${esc(v.contactRole||'')}" placeholder="e.g. Facility Coordinator"></div>
+      <div class="field"><label>Role / title</label><input id="vf-crole" value="${esc(v.contactRole||'')}"></div>
     </div>
     <div class="row2">
       <div class="field"><label>Email</label><input id="vf-cemail" type="email" value="${esc(v.contactEmail||'')}"></div>
       <div class="field"><label>Phone</label><input id="vf-cphone" value="${esc(v.contactPhone||'')}"></div>
     </div>
-    <div class="form-section">Default deal terms <span style="font-weight:400;font-size:11px;color:var(--txt3)">(auto-fills when venue is selected on an event — always overridable)</span></div>
+    <div class="form-section">Default deal terms <span style="font-weight:400;font-size:11px;color:var(--txt3)">(auto-fills on events — always overridable)</span></div>
     <div class="field"><label>Contract type</label>
       <select id="vf-ct" onchange="toggleVenueDealFields()">
         <option value="guarantee" ${ct==='guarantee'?'selected':''}>Guarantee</option>
@@ -975,12 +997,88 @@ function venueForm(id, prefill){
         <div class="field"><label>Split / % of net (%)</label><input id="vf-split" type="number" step="0.1" value="${v.doorSplit||v.rentalPct||''}"></div>
       </div>
     </div>
+    <div class="form-section">Default show costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(auto-fills crew, equipment and fees on events)</span></div>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 70px 80px 28px;gap:6px">
+      <span>Crew</span><span style="text-align:right">Hrs</span><span style="text-align:right">Rate/hr</span><span></span>
+    </div>
+    <div id="vf-crew-rows">${crewRows}</div>
+    <button class="btn ghost sm" onclick="vfAddCostRow('crew')" style="margin-bottom:14px">+ Add crew</button>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 90px 28px;gap:6px">
+      <span>Equipment</span><span style="text-align:right">Amount</span><span></span>
+    </div>
+    <div id="vf-eq-rows">${eqRows}</div>
+    <button class="btn ghost sm" onclick="vfAddCostRow('eq')" style="margin-bottom:14px">+ Add equipment</button>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 90px 28px;gap:6px">
+      <span>Flat fees (SOCAN, box office, etc.)</span><span style="text-align:right">Amount</span><span></span>
+    </div>
+    <div id="vf-fee-rows">${feeRows}</div>
+    <button class="btn ghost sm" onclick="vfAddCostRow('fee')" style="margin-bottom:14px">+ Add flat fee</button>
     <div class="field"><label>Notes</label><textarea id="vf-notes">${esc(v.notes||'')}</textarea></div>
     <div class="field"><label>Tags (comma separated)</label><input id="vf-tags" value="${esc((v.tags||[]).join(', '))}"></div>`;
   openModal(id?'Edit venue':'Add venue', body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveVenue('${id||''}')">Save venue</button>`);
   setTimeout(toggleVenueDealFields, 50);
+}
+
+// Show cost row management in venue form
+let _vfCosts={crew:[],eq:[],fee:[]};
+function vfAddCostRow(type){
+  // Read current rows first
+  _vfCosts[type]=vfReadCostRows(type);
+  _vfCosts[type].push(type==='crew'?{desc:'',hours:4,rate:''}:{desc:'',amount:''});
+  vfRenderCostRows(type);
+}
+function vfRemoveCostRow(type,i){
+  _vfCosts[type]=vfReadCostRows(type);
+  _vfCosts[type].splice(i,1);
+  vfRenderCostRows(type);
+}
+function vfReadCostRows(type){
+  if(type==='crew'){
+    return [...document.querySelectorAll('#vf-crew-rows .vf-cost-row')].map((_,i)=>({
+      desc:document.getElementById('vf-crew-desc-'+i)?.value||'',
+      hours:+document.getElementById('vf-crew-hrs-'+i)?.value||4,
+      rate:+document.getElementById('vf-crew-rate-'+i)?.value||0
+    }));
+  } else {
+    const prefix=type==='eq'?'vf-eq':'vf-fee';
+    const host=type==='eq'?'#vf-eq-rows':'#vf-fee-rows';
+    return [...document.querySelectorAll(host+' .vf-cost-row')].map((_,i)=>({
+      desc:document.getElementById(prefix+'-desc-'+i)?.value||'',
+      amount:+document.getElementById(prefix+'-amt-'+i)?.value||0
+    }));
+  }
+}
+function vfRenderCostRows(type){
+  if(type==='crew'){
+    const host=document.getElementById('vf-crew-rows'); if(!host) return;
+    host.innerHTML=_vfCosts.crew.map((l,i)=>`
+      <div class="vf-cost-row" style="display:grid;grid-template-columns:1fr 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
+        <input placeholder="e.g. Stage tech" value="${esc(l.desc||'')}" id="vf-crew-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <input type="number" placeholder="hrs" value="${l.hours||4}" id="vf-crew-hrs-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <input type="number" placeholder="rate" value="${l.rate||''}" id="vf-crew-rate-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('crew',${i})">×</button>
+      </div>`).join('');
+  } else {
+    const prefix=type==='eq'?'vf-eq':'vf-fee';
+    const hostId=type==='eq'?'vf-eq-rows':'vf-fee-rows';
+    const host=document.getElementById(hostId); if(!host) return;
+    const items=_vfCosts[type]||[];
+    host.innerHTML=items.map((l,i)=>`
+      <div class="vf-cost-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+        <input placeholder="${type==='eq'?'e.g. Wireless mics':'e.g. SOCAN'}" value="${esc(l.desc||'')}" id="${prefix}-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <input type="number" placeholder="amount" value="${l.amount||''}" id="${prefix}-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('${type}',${i})">×</button>
+      </div>`).join('');
+  }
+}
+
+function readVenueShowCosts(){
+  const crew=vfReadCostRows('crew').filter(l=>l.desc||l.rate);
+  const equipment=vfReadCostRows('eq').filter(l=>l.desc||l.amount);
+  const fees=vfReadCostRows('fee').filter(l=>l.desc||l.amount);
+  return {crew,equipment,fees};
 }
 
 function toggleVenueDealFields(){
@@ -1009,37 +1107,186 @@ function saveVenue(id){
     rental:fvn('vf-rental'),
     doorSplit:fvn('vf-split'),
     rentalPct:fvn('vf-split'),
+    showCosts:readVenueShowCosts()
   };
   if(id){ Object.assign(get(DB.venues,id),rec); logActivity('edited','Venue',rec.name); }
   else { rec.id=uid('v'); DB.venues.push(rec); logActivity('created','Venue',rec.name); }
   persist();closeModal();render();
 }
 
-/* ---- Paste contract data → review in venue form ---- */
-function pasteContract(){
-  const body=`<p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
-    Paste contract data below as a JSON block. Ask Claude to "extract this contract" and paste the result here — it fills the form for your review before saving. Nothing saves automatically.</p>
-    <div class="field"><textarea id="paste-json" style="min-height:160px;font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder='{"name":"Capitol Theatre","city":"Moncton",...}'></textarea></div>
-    <p class="muted" style="font-size:11px">Tip: any field can also be filled or corrected by hand after import.</p>`;
-  openModal('Paste contract data', body,
-    `<button class="btn" onclick="venueForm()">Back</button>
-     <button class="btn primary" onclick="applyPastedContract()">Fill form</button>`);
+/* ============================================================
+   VENUE CONTRACT IMPORT — file upload → AI extraction → review
+   ============================================================ */
+function venueContractImport(){
+  openModal('Import from contract',`
+    <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:16px">
+      Upload a rental agreement (PDF or Word) and the AI will extract venue details, contact info, deal terms, crew costs, and flat fees for your review. Nothing saves until you confirm.</p>
+    <div id="vci-drop" onclick="document.getElementById('vci-file').click()"
+      style="border:2px dashed var(--bord2);border-radius:var(--rad-lg);padding:32px;text-align:center;cursor:pointer;transition:background .15s"
+      ondragover="event.preventDefault();this.style.background='var(--surf2)'"
+      ondragleave="this.style.background=''"
+      ondrop="event.preventDefault();this.style.background='';vciHandleFile(event.dataTransfer.files[0])">
+      <div style="font-size:28px;margin-bottom:8px">📄</div>
+      <div style="font-weight:500;font-size:14px">Drop contract here or click to browse</div>
+      <div style="font-size:12px;color:var(--txt3);margin-top:4px">PDF or Word (.docx)</div>
+      <input type="file" id="vci-file" accept=".pdf,.docx,.doc" style="display:none"
+        onchange="vciHandleFile(this.files[0])">
+    </div>
+    <div id="vci-status" style="margin-top:14px;font-size:13px;color:var(--txt2)"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>`);
 }
+
+async function vciHandleFile(file){
+  if(!file) return;
+  const status=document.getElementById('vci-status');
+  const drop=document.getElementById('vci-drop');
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['pdf','docx','doc'].includes(ext)){
+    status.innerHTML='<span style="color:var(--red)">Please upload a PDF or Word document.</span>';
+    return;
+  }
+  status.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+    <div style="width:16px;height:16px;border:2px solid var(--acc);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+    <span>Reading ${esc(file.name)}…</span>
+  </div>`;
+  if(drop) drop.style.opacity='0.5';
+
+  try {
+    // Read file as base64
+    const base64 = await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);
+      r.onerror=rej;
+      r.readAsDataURL(file);
+    });
+
+    const mediaType = ext==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    const prompt=`You are extracting venue rental agreement data for a tour management app. Analyze this contract and return ONLY a valid JSON object with these fields (use null for anything not found):
+
+{
+  "name": "venue name",
+  "hall": "specific hall or room name if different from venue name",
+  "type": "Theatre|Arena|Club|Festival|Bar|Corporate|Other",
+  "city": "city",
+  "province": "province or state abbreviation",
+  "address": "full street address",
+  "capacity": number or null,
+  "contactName": "booking contact full name",
+  "contactRole": "their title/role",
+  "contactEmail": "email",
+  "contactPhone": "phone",
+  "contractType": "rental|rental_plus_pct|rental_greater_of|guarantee|door|guarantee_plus",
+  "rental": flat rental fee as number or null,
+  "guarantee": guarantee amount as number or null,
+  "doorSplit": percentage number (e.g. 15 for 15%) or null,
+  "crew": [{"desc": "role name", "hours": default hours (use 4 if minimum not specified), "rate": hourly rate as number}],
+  "equipment": [{"desc": "item name", "amount": cost as number}],
+  "fees": [{"desc": "fee name", "amount": fee amount as number}],
+  "notes": "deposit amounts, insurance requirements, payment terms, anything else important",
+  "taxRate": tax percentage as number or null,
+  "taxOn": "base|total|null"
+}
+
+For contractType:
+- "rental" = flat fee only
+- "rental_plus_pct" = flat fee PLUS a percentage (both always apply)
+- "rental_greater_of" = greater of flat fee OR percentage
+- "guarantee" = guaranteed payment to artist
+- "door" = percentage of door only
+
+For crew: extract all technical staff with hourly rates. If hours not specified, use 4.
+For fees: include SOCAN, Entandem, box office fees, marketing fees, insurance, any fixed charges.
+For equipment: include any equipment rental costs listed.
+
+Return ONLY the JSON, no explanation, no markdown.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1500,
+        messages:[{
+          role:'user',
+          content:[
+            {type: ext==='pdf'?'document':'document',
+             source:{type:'base64', media_type:mediaType, data:base64}},
+            {type:'text', text:prompt}
+          ]
+        }]
+      })
+    });
+
+    const data=await response.json();
+    if(data.error){ throw new Error(data.error.message); }
+
+    let text=(data.content||[]).map(b=>b.text||'').join('');
+    // Strip any markdown fences
+    text=text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const extracted=JSON.parse(text);
+
+    status.innerHTML=`<div style="color:var(--green);font-weight:500;margin-bottom:8px">✓ Extraction complete — review the form below and correct anything before saving.</div>`;
+    if(drop) drop.style.display='none';
+
+    // Close this modal and open venue form pre-filled
+    closeModal();
+    venueFormFromExtracted(extracted, file.name);
+
+  } catch(e) {
+    console.error('Contract extraction error:',e);
+    if(drop) drop.style.opacity='1';
+    status.innerHTML=`<span style="color:var(--red)">Extraction failed: ${esc(e.message||'Unknown error')}. Try copying the text from the document and using the manual form instead.</span>`;
+  }
+}
+
+function venueFormFromExtracted(d, filename){
+  // Map extracted data to venue form prefill structure
+  const prefill={
+    name:d.name||'',
+    hall:d.hall||'',
+    type:d.type||'Theatre',
+    city:d.city||'',
+    province:d.province||'',
+    address:d.address||'',
+    capacity:d.capacity||'',
+    contactName:d.contactName||'',
+    contactRole:d.contactRole||'',
+    contactEmail:d.contactEmail||'',
+    contactPhone:d.contactPhone||'',
+    contractType:d.contractType||'rental',
+    rental:d.rental||'',
+    guarantee:d.guarantee||'',
+    doorSplit:d.doorSplit||'',
+    rentalPct:d.doorSplit||'',
+    notes:d.notes||'',
+    tags:[],
+    showCosts:{
+      crew:(d.crew||[]).map(l=>({desc:l.desc||'',hours:l.hours||4,rate:l.rate||0})),
+      equipment:(d.equipment||[]).map(l=>({desc:l.desc||'',amount:l.amount||0})),
+      fees:(d.fees||[]).map(l=>({desc:l.desc||'',amount:l.amount||0}))
+    }
+  };
+  // Open the full venue form pre-filled, with a banner noting the source
+  venueForm(null, prefill);
+  // Add a banner at top of modal
+  setTimeout(()=>{
+    const body=document.querySelector('.modal-body');
+    if(body){
+      const banner=document.createElement('div');
+      banner.style.cssText='background:var(--blue-soft);border-radius:var(--rad);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--txt2)';
+      banner.innerHTML=`📄 Extracted from <strong>${esc(filename)}</strong> — review all fields carefully before saving. Correct anything the AI got wrong.`;
+      body.insertBefore(banner,body.firstChild);
+    }
+  },50);
+}
+
+/* ---- Legacy paste contract (kept for compatibility) ---- */
 function applyPastedContract(){
   let d;
   try { d=JSON.parse(fv('paste-json')); }
-  catch(e){ alert('That doesn\'t look like valid data. Paste the JSON block exactly as provided.'); return; }
-  const t=d.terms||{};
-  venueForm(null, {
-    name:d.name||'',hall:d.hall||'',type:d.type||'Theatre',city:d.city||'',province:d.province||'',
-    capacity:d.capacity||'',address:d.address||'',
-    notes:d.notes||'',tags:d.tags||[],
-    terms:{contractType:t.contractType||'rental',doorSplit:t.doorSplit||'',guarantee:t.guarantee||'',
-      rental:t.rental||'',rentalMode:t.rentalMode||'fixed',
-      boxOffice:t.boxOffice||'',boxOfficeMode:t.boxOfficeMode||'fixed',
-      crew:t.crew||'',crewMode:t.crewMode||'fixed',merchPct:t.merchPct||'',
-      taxRate:t.taxRate!=null?t.taxRate:null,taxOn:t.taxOn||null,ticketNotes:t.ticketNotes||''}
-  });
+  catch(e){ alert('That doesn\'t look like valid data.'); return; }
+  venueFormFromExtracted(d,'pasted data');
 }
 
 /* ============================================================
@@ -2347,6 +2594,24 @@ function prefillVenueTerms(){
       if(v.guarantee) { const el=document.getElementById('ef-guar'); if(el) el.value=v.guarantee; }
       if(v.doorSplit) { const el=document.getElementById('ef-split'); if(el) el.value=v.doorSplit; }
     }, 80);
+  }
+  // Pre-fill show costs from venue defaults if venue has them and event form is empty
+  if(v.showCosts){
+    const sc=v.showCosts;
+    if((sc.crew||[]).length||(sc.equipment||[]).length||(sc.fees||[]).length){
+      // Only prefill if current costs are empty
+      const hasExisting=(_efCosts.crew||[]).some(l=>l.desc||l.rate)||
+        (_efCosts.equipment||[]).some(l=>l.desc||l.amount)||
+        (_efCosts.fees||[]).some(l=>l.desc||l.amount);
+      if(!hasExisting){
+        _efCosts={
+          crew:JSON.parse(JSON.stringify(sc.crew||[])),
+          equipment:JSON.parse(JSON.stringify(sc.equipment||[])),
+          fees:JSON.parse(JSON.stringify(sc.fees||[]))
+        };
+        reopenEventForm();
+      }
+    }
   }
 }
 /* ---- Paste show data → fill event form ---- */
