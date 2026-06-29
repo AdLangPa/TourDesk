@@ -1120,20 +1120,122 @@ function saveVenue(id){
 function venueContractImport(){
   openModal('Import from contract',`
     <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:16px">
-      Upload a rental agreement (PDF or Word) and the AI will extract venue details, contact info, deal terms, crew costs, and flat fees for your review. Nothing saves until you confirm.</p>
-    <div id="vci-drop" onclick="document.getElementById('vci-file').click()"
-      style="border:2px dashed var(--bord2);border-radius:var(--rad-lg);padding:32px;text-align:center;cursor:pointer;transition:background .15s"
-      ondragover="event.preventDefault();this.style.background='var(--surf2)'"
-      ondragleave="this.style.background=''"
-      ondrop="event.preventDefault();this.style.background='';vciHandleFile(event.dataTransfer.files[0])">
-      <div style="font-size:28px;margin-bottom:8px">📄</div>
-      <div style="font-weight:500;font-size:14px">Drop contract here or click to browse</div>
-      <div style="font-size:12px;color:var(--txt3);margin-top:4px">PDF or Word (.docx)</div>
-      <input type="file" id="vci-file" accept=".pdf,.docx,.doc" style="display:none"
-        onchange="vciHandleFile(this.files[0])">
+      Upload a PDF/Word contract, or paste text directly from a website, email, or document. The AI extracts venue details, deal terms, crew costs and fees for your review.</p>
+
+    <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--bord);padding-bottom:14px">
+      <button id="vci-tab-file" class="btn sm primary" onclick="vciSwitchTab('file')">📄 Upload file</button>
+      <button id="vci-tab-text" class="btn sm" onclick="vciSwitchTab('text')">📋 Paste text</button>
     </div>
+
+    <div id="vci-panel-file">
+      <div id="vci-drop" onclick="document.getElementById('vci-file').click()"
+        style="border:2px dashed var(--bord2);border-radius:var(--rad-lg);padding:32px;text-align:center;cursor:pointer;transition:background .15s"
+        ondragover="event.preventDefault();this.style.background='var(--surf2)'"
+        ondragleave="this.style.background=''"
+        ondrop="event.preventDefault();this.style.background='';vciHandleFile(event.dataTransfer.files[0])">
+        <div style="font-size:28px;margin-bottom:8px">📄</div>
+        <div style="font-weight:500;font-size:14px">Drop contract here or click to browse</div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:4px">PDF or Word (.docx)</div>
+        <input type="file" id="vci-file" accept=".pdf,.docx,.doc" style="display:none"
+          onchange="vciHandleFile(this.files[0])">
+      </div>
+    </div>
+
+    <div id="vci-panel-text" style="display:none">
+      <div class="field">
+        <label>Paste rental info</label>
+        <textarea id="vci-text" style="min-height:200px;font-size:12px;font-family:inherit;line-height:1.5"
+          placeholder="Paste anything — website text, email quote, rental terms, contract copy-paste. The AI will extract what it can."></textarea>
+      </div>
+      <button class="btn primary sm" onclick="vciHandleText()">Extract from text</button>
+    </div>
+
     <div id="vci-status" style="margin-top:14px;font-size:13px;color:var(--txt2)"></div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>`);
+}
+
+function vciSwitchTab(tab){
+  document.getElementById('vci-panel-file').style.display=tab==='file'?'':'none';
+  document.getElementById('vci-panel-text').style.display=tab==='text'?'':'none';
+  document.getElementById('vci-tab-file').className='btn sm '+(tab==='file'?'primary':'');
+  document.getElementById('vci-tab-text').className='btn sm '+(tab==='text'?'primary':'');
+}
+
+async function vciHandleText(){
+  const text=document.getElementById('vci-text')?.value?.trim();
+  if(!text){ alert('Please paste some text first.'); return; }
+  const anthropicKey=localStorage.getItem('tourdesk_anthropic_key')||'';
+  if(!anthropicKey){
+    document.getElementById('vci-status').innerHTML=`<span style="color:var(--red)">No Anthropic API key set. Go to <strong>Settings → AI — Contract import</strong> first.</span>`;
+    return;
+  }
+  const status=document.getElementById('vci-status');
+  status.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+    <div style="width:16px;height:16px;border:2px solid var(--acc);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+    <span>Extracting venue info…</span>
+  </div>`;
+  try {
+    const prompt=`You are extracting venue rental agreement data for a tour management app. Analyze this text and return ONLY a valid JSON object with these fields (use null for anything not found):
+
+{
+  "name": "venue name",
+  "hall": "specific hall or room name if different from venue name",
+  "type": "Theatre|Arena|Club|Festival|Bar|Corporate|Other",
+  "city": "city",
+  "province": "province or state abbreviation",
+  "address": "full street address",
+  "capacity": number or null,
+  "contactName": "booking contact full name",
+  "contactRole": "their title/role",
+  "contactEmail": "email",
+  "contactPhone": "phone",
+  "contractType": "rental|rental_plus_pct|rental_greater_of|guarantee|door|guarantee_plus",
+  "rental": flat rental fee as number or null,
+  "guarantee": guarantee amount as number or null,
+  "doorSplit": percentage number (e.g. 15 for 15%) or null,
+  "crew": [{"desc": "role name", "hours": default hours (use 4 if minimum not specified), "rate": hourly rate as number}],
+  "equipment": [{"desc": "item name", "amount": cost as number}],
+  "fees": [{"desc": "fee name", "amount": fee amount as number}],
+  "notes": "deposit amounts, insurance requirements, payment terms, anything else important",
+  "taxRate": tax percentage as number or null,
+  "taxOn": "base|total|null"
+}
+
+For contractType: "rental"=flat fee only, "rental_plus_pct"=flat+percentage both always apply, "rental_greater_of"=greater of flat OR percentage, "guarantee"=guaranteed payment to artist, "door"=percentage of door only.
+For crew: extract all technical staff with hourly rates. Default 4 hours if not specified.
+For fees: include SOCAN, Entandem, box office fees, marketing fees, any fixed charges.
+Return ONLY the JSON, no explanation, no markdown.
+
+Text to analyze:
+${text}`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1500,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+
+    const data=await response.json();
+    if(data.error){ throw new Error(data.error.message); }
+    let result=(data.content||[]).map(b=>b.text||'').join('');
+    result=result.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const extracted=JSON.parse(result);
+    status.innerHTML=`<div style="color:var(--green);font-weight:500">✓ Done — reviewing form now.</div>`;
+    closeModal();
+    venueFormFromExtracted(extracted, 'pasted text');
+  } catch(e){
+    console.error(e);
+    status.innerHTML=`<span style="color:var(--red)">Extraction failed: ${esc(e.message||'Unknown error')}</span>`;
+  }
 }
 
 async function vciHandleFile(file){
