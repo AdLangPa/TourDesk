@@ -1219,7 +1219,7 @@ ${text}`;
       },
       body: JSON.stringify({
         model:'claude-haiku-4-5-20251001',
-        max_tokens:2500,
+        max_tokens:4000,
         messages:[{role:'user',content:prompt}]
       })
     });
@@ -1227,8 +1227,7 @@ ${text}`;
     const data=await response.json();
     if(data.error){ throw new Error(data.error.message); }
     let result=(data.content||[]).map(b=>b.text||'').join('');
-    result=result.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    const extracted=JSON.parse(result);
+    const extracted=repairJSON(result);
     status.innerHTML=`<div style="color:var(--green);font-weight:500">✓ Done — reviewing form now.</div>`;
     closeModal();
     venueFormFromExtracted(extracted, 'pasted text');
@@ -1309,7 +1308,7 @@ Return ONLY the JSON, no explanation, no markdown.`;
       },
       body: JSON.stringify({
         model:'claude-haiku-4-5-20251001',
-        max_tokens:2500,
+        max_tokens:4000,
         messages:[{
           role:'user',
           content:[
@@ -1324,8 +1323,7 @@ Return ONLY the JSON, no explanation, no markdown.`;
     if(data.error){ throw new Error(data.error.message); }
 
     let text=(data.content||[]).map(b=>b.text||'').join('');
-    text=text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    const extracted=JSON.parse(text);
+    const extracted=repairJSON(text);
 
     status.innerHTML=`<div style="color:var(--green);font-weight:500;margin-bottom:8px">✓ Extraction complete — review the form carefully before saving.</div>`;
     if(drop) drop.style.display='none';
@@ -1381,7 +1379,40 @@ function venueFormFromExtracted(d, filename){
   },50);
 }
 
-/* ---- Legacy paste contract (kept for compatibility) ---- */
+// Repair truncated or malformed JSON from AI responses
+function repairJSON(str){
+  str=str.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+  // If it parses cleanly, great
+  try{ return JSON.parse(str); }catch(e){}
+  // Try to close any open strings, arrays, and objects
+  let result=str;
+  // Remove trailing comma before closing
+  result=result.replace(/,\s*$/,'');
+  // Count open brackets/braces and close them
+  let opens=0, openSquare=0;
+  let inStr=false, escape=false;
+  for(let i=0;i<result.length;i++){
+    const c=result[i];
+    if(escape){escape=false;continue;}
+    if(c==='\\'&&inStr){escape=true;continue;}
+    if(c==='"'&&!escape){inStr=!inStr;continue;}
+    if(inStr) continue;
+    if(c==='{') opens++;
+    else if(c==='}') opens--;
+    else if(c==='[') openSquare++;
+    else if(c===']') openSquare--;
+  }
+  // If we're inside a string, close it
+  if(inStr) result+='"';
+  // Close any open arrays/objects
+  result=result.replace(/,\s*$/,''); // remove trailing comma again after string close
+  for(let i=0;i<openSquare;i++) result+=']';
+  for(let i=0;i<opens;i++) result+='}';
+  try{ return JSON.parse(result); }catch(e){
+    // Last resort: extract what we can with a regex
+    throw new Error('Could not parse AI response as JSON. The contract may be too complex — try pasting just the key terms (rental fee, contact, address) instead of the full document.');
+  }
+}
 function applyPastedContract(){
   let d;
   try { d=JSON.parse(fv('paste-json')); }
