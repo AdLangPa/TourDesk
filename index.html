@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TourDesk — Event & Tour Manager</title>
+<title>TourDesk — Event &amp; Tour Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
@@ -177,23 +176,73 @@ a{color:var(--blue);text-decoration:none}
       <div class="nav-item" data-view="proposals"><span class="nav-ico">◈</span>Proposals</div>
       <div class="nav-section">System</div>
       <div class="nav-item" data-view="activity"><span class="nav-ico">⟲</span>Activity</div>
-      <div class="nav-item" data-view="settings"><span class="nav-ico">⚙</span>Settings</div>
+      <div class="nav-item active" data-view="settings"><span class="nav-ico">⚙</span>Settings</div>
     </nav>
     <div class="sync-status">
-      <span class="dot off" id="sync-dot"></span>
-      <span id="sync-text">Local only</span>
+      <span class="dot ok" id="sync-dot"></span>
+      <span id="sync-text">Syncing to Supabase</span>
     </div>
   </aside>
   <main class="main">
     <div class="topbar">
-      <div class="topbar-title" id="page-title">Dashboard</div>
+      <div class="topbar-title" id="page-title">Settings</div>
       <div style="display:flex;align-items:center;gap:12px">
-        <div id="user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2)"></div>
+        <div id="artist-view-bar" style="display: flex; align-items: center; gap: 8px;"></div><div id="user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2)"><span>Adam Langer</span></div>
         <div class="topbar-actions" id="page-actions"></div>
         <button class="btn sm" onclick="logout()" style="margin-left:8px">Logout</button>
       </div>
     </div>
-    <div class="content" id="content"></div>
+    <div class="content" id="content">
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Defaults</div>
+        <div class="row2">
+          <div class="field"><label>Management commission %</label><input type="number" id="set-mgmt" value="15"></div>
+          <div class="field"><label>Default tax rate %</label><input type="number" id="set-tax" value="13"></div>
+        </div>
+        <div class="field"><label>Default service fee % (on booked items)</label><input type="number" id="set-svc" value="5"></div>
+        <button class="btn sm" onclick="saveSettings()">Save defaults</button>
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">AI — Contract import</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+          Used for the <strong>Import from contract</strong> feature on the Venues page. Uses your Anthropic API key — get one at <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a>. Costs ~$0.01–0.02 per contract. Stored only in this browser, never synced.</p>
+        <div class="field"><label>Anthropic API key</label>
+          <input id="set-anthropic" type="password" placeholder="sk-ant-…" value="••••••••••••••••••••" onfocus="if(this.value.startsWith('•'))this.value=''" style="font-family:ui-monospace,monospace;font-size:12px">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn sm" onclick="saveAnthropicKey()">Save key</button>
+          <span style="font-size:12px;color:var(--green)">✓ Key saved — contract import ready</span>
+        </div>
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Google Drive</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+          Paste your Google Drive folder URL below. Files in each event's Files tab will link directly to Drive — no login required.</p>
+        <div class="field"><label>Drive folder URL</label>
+          <input id="set-drive" placeholder="https://drive.google.com/drive/folders/…" value="">
+          <p class="muted" style="font-size:11px;margin-top:4px">In Google Drive: right-click your TourDesk folder → Share → Copy link</p>
+        </div>
+        <button class="btn sm" onclick="saveDriveFolder()">Save folder link</button>
+        
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Supabase (cloud sync)</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
+          Connect to Supabase for real-time sync across all your devices. Free account at <a href="https://supabase.com" target="_blank">supabase.com</a>.</p>
+        <div class="field"><label>Project URL</label><input id="set-sb-url" placeholder="https://yourproject.supabase.co" value=""></div>
+        <div class="field"><label>API Key (anon/public)</label><input id="set-sb-key" placeholder="Paste your anon key" value=""></div>
+        <button class="btn sm" onclick="connectSupabase()">Connect Supabase</button>
+        <p class="muted" style="font-size:12px;margin-top:8px">Status: <span class="pos">Connected &amp; syncing</span></p>
+      </div>
+      <div class="sec" style="max-width:560px">
+        <div class="sec-label">Data</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" onclick="exportData()">Export backup (data + app)</button>
+          <button class="btn sm" onclick="document.getElementById('import-file').click()">Import backup</button>
+          <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this.files[0])">
+          <button class="btn sm danger" onclick="resetData()">Reset to sample data</button>
+        </div>
+      </div></div>
   </main>
 </div>
 <div id="modal-root"></div>
@@ -600,13 +649,14 @@ function projectionBreakeven(ev){
 }
 
 function eventHasActuals(e){
-  const s=e.settlement; if(!s) return false;
-  return (+s.ticketsSold>0) || s.settled || (s.expenses&&s.expenses.length>0);
+  const sv=e.settlementV2; if(!sv) return false;
+  return (+sv.venuePayout>0) || sv.settled;
 }
 function eventBest(e){
   if(eventHasActuals(e)){
-    const f=settlementFigures(e);
-    return {gross:f.grossBoxOffice,payout:f.payout,commission:f.commission,yourTotal:f.yourTotal,artistNet:f.artistNet,actual:true};
+    const f=settlementV2Figures(e);
+    const commission=f.payout*(f.mgmtPct/100);
+    return {gross:f.payout,payout:f.payout,commission,yourTotal:commission,artistNet:f.artistNet,actual:true};
   }
   const f=projectionFigures(e);
   return {gross:f.grossBoxOffice,payout:f.payout,commission:f.commission,yourTotal:f.yourTotal,artistNet:f.artistNet,actual:false};
@@ -853,7 +903,7 @@ function tableEvents(list){
     ${list.map(e=>{
       const v=get(DB.venues,e.venueId), f=eventBest(e);
       const cap=+e.capacityAlloc||1;
-      const sold=f.actual?(+e.settlement.ticketsSold||0):(e.projection?+e.projection.ticketsEst||0:0);
+      const sold=f.actual?(e.projection?+e.projection.ticketsEst||0:0):(e.projection?+e.projection.ticketsEst||0:0);
       return `<tr onclick="go('events','${e.id}')">
         <td style="font-weight:500">${esc(e.name)}</td><td>${esc(e.date)}</td>
         <td>${v?esc(v.name):'—'}</td>
@@ -1517,8 +1567,8 @@ function proposalShowFromVenue(venueId, ticketBase){
   };
   const showCosts=prev?JSON.parse(JSON.stringify(prev.showCosts||{crew:[],equipment:[],fees:[]}))
     :{crew:[],equipment:[],fees:[]};
-  // Pull settlement expenses from previous event as starting point (producer-type only)
-  const prevExpenses=prev?(prev.settlement?.expenses||[]).filter(x=>x.payer==='producer').map(x=>({...x})):[];
+  // Pull projection expenses from previous event as starting point (producer-type only)
+  const prevExpenses=prev?(prev.projection?.expenses||[]).filter(x=>x.payer==='producer').map(x=>({...x})):[];
   const taxRate=prev?.pricing?.taxRate??DB.settings.taxRate;
   const taxOn=prev?.pricing?.taxOn||'base';
   const capacity=+v.capacity||0;
@@ -1611,13 +1661,14 @@ VIEWS.events={
         <span class="detail-title">${esc(e.name)}</span>
         <span class="badge ${statusColor(e.status)}">${esc(e.status)}</span></div>
       <div class="tabs">
-        ${[['overview','Overview'],['settlement','Settlement'],['logistics','Logistics'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
+        ${[['overview','Overview'],['projections','Projections'],['settlement','Settlement'],['logistics','Logistics'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}',null,'${refProp||''}')">${lbl}</div>`).join('')}
       </div>
       <div id="ev-tab"></div>`;
     const host=document.getElementById('ev-tab');
     if(tab==='overview') eventOverview(host,e,v,t);
-    else if(tab==='settlement') eventSettlement(host,e);
+    else if(tab==='projections') eventProjections(host,e);
+    else if(tab==='settlement') eventSettlementV2(host,e);
     else if(tab==='logistics') eventLogistics(host,e,v);
     else if(tab==='people') eventPeople(host,e);
     else if(tab==='files') eventFiles(host,e);
@@ -1659,10 +1710,8 @@ function duplicateEvent(id){
   copy.name=(e.name||'Event')+' (copy)';
   copy.date=''; // reset date
   copy.presales=0;
-  // reset settlement actuals but keep cost structure
-  copy.settlement={ticketsSold:0,grossOverride:'',expenses:(e.settlement&&e.settlement.expenses||[]).filter(x=>x.payer!=='venue'?false:false),settled:false,notes:''};
-  // keep showCosts, terms, pricing, projection expenses
-  copy.settlement.expenses=[];
+  // reset settlement actuals but keep cost structure and projection
+  copy.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''};
   DB.events.push(copy);
   logActivity('created','Event',copy.name+' (duplicated)');
   persist();
@@ -1832,10 +1881,10 @@ function splitTotals(events){
 
 function eventOverview(host,e,v,t){
   e.projection = e.projection || {ticketsEst: defaultEstimate(e), expenses:[]};
-  e.settlement = e.settlement || {ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''};
+  e.settlementV2 = e.settlementV2 || {venuePayout:'', depositCredits:[], expenses:[], settled:false, notes:''};
   const pf=projectionFigures(e);
-  const sf=settlementFigures(e);
-  const hasActuals = (+e.settlement.ticketsSold>0) || e.settlement.settled || (e.settlement.expenses&&e.settlement.expenses.length>0);
+  const sf=settlementV2Figures(e);
+  const hasActuals = (+e.settlementV2.venuePayout>0) || e.settlementV2.settled;
   const pb=priceBreakdown(e.pricing);
 
   const cmpRow=(label,proj,act,opts={})=>{
@@ -1853,14 +1902,14 @@ function eventOverview(host,e,v,t){
 
   host.innerHTML=`
     <div class="stats">
-      <div class="stat"><div class="stat-val ${sf.artistNet>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
-      <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.yourTotal):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'To you (actual)':'To you (projected)'}</div></div>
-      <div class="stat"><div class="stat-val">${hasActuals?sf.soldActual:pf.sold}</div><div class="stat-lbl">${hasActuals?'Tickets sold':'Tickets (est.)'} / ${e.capacityAlloc}</div></div>
-      <div class="stat"><div class="stat-val">${money0(hasActuals?sf.payout:pf.payout)}</div><div class="stat-lbl">Venue payout (pot)</div></div>
+      <div class="stat"><div class="stat-val ${(hasActuals?sf.artistNet:pf.artistNet)>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
+      <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.commission):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'Your commission (actual)':'To you (projected)'}</div></div>
+      <div class="stat"><div class="stat-val">${hasActuals?'—':pf.sold}</div><div class="stat-lbl">${hasActuals?'Settled':'Tickets (est.)'} / ${e.capacityAlloc}</div></div>
+      <div class="stat"><div class="stat-val">${money0(hasActuals?sf.payout:pf.payout)}</div><div class="stat-lbl">Venue payout</div></div>
     </div>
 
     <div class="sec"><div class="sec-label">Projected vs actual</div>
-      ${!hasActuals?'<p class="muted" style="font-size:12px;margin:-4px 0 12px">No actuals yet — showing projection. Enter real numbers in the Settlement tab and they\'ll appear here side by side.</p>':''}
+      ${!hasActuals?'<p class="muted" style="font-size:12px;margin:-4px 0 12px">No actuals yet — showing projection. Enter the real venue payout in the Settlement tab and it\'ll appear here.</p>':''}
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;font-size:10px">
           <th style="text-align:left;padding-bottom:6px">Line</th>
@@ -1868,15 +1917,9 @@ function eventOverview(host,e,v,t){
           <th style="text-align:right;padding:0 12px 6px">Actual</th>
           <th style="text-align:right;padding-bottom:6px">Δ</th></tr></thead>
         <tbody>
-          ${cmpRow('Tickets sold', pf.sold, sf.soldActual, {diff:false, count:true})}
-          ${cmpRow('Gross box office', pf.grossBoxOffice, sf.grossBoxOffice)}
-          ${cmpRow('Venue deductions', 0, sf.venueDeductions)}
-          ${cmpRow('Venue payout (pot)', pf.payout, sf.payout, {b:1})}
+          ${cmpRow('Venue payout', pf.payout, sf.payout, {b:1})}
           ${cmpRow('Mgmt commission', pf.commission, sf.commission)}
-          ${cmpRow('Producer expenses + markup', pf.producerTotal, sf.producerTotal)}
-          ${cmpRow('To you (total)', pf.yourTotal, sf.yourTotal, {b:1})}
           ${cmpRow('Artist gross', pf.artistGross, sf.artistGross, {b:1})}
-          ${cmpRow('Artist expenses (direct)', pf.artistTracked, sf.artistTracked)}
           ${cmpRow('Artist net', pf.artistNet, sf.artistNet, {b:1})}
         </tbody>
       </table>
@@ -1891,7 +1934,7 @@ function eventOverview(host,e,v,t){
         <div class="info"><label>Ticket (base)</label><span>${money(pb.base)}</span></div>
         <div class="info"><label>Patron pays</label><span>${money(pb.total)}</span></div>
         <div class="info"><label>Capacity</label><span>${e.capacityAlloc}</span></div>
-        <div class="info"><label>Status</label><span>${esc(e.status)}${e.settlement.settled?' · Settled':''}</span></div>
+        <div class="info"><label>Status</label><span>${esc(e.status)}${e.settlementV2.settled?' · Settled':''}</span></div>
       </div>
     </div>
     <div class="sec"><div class="sec-label">Deal terms — negotiated for this show</div>
@@ -2161,44 +2204,19 @@ function printProposal(){
 }
 
 /* ---- Settlement tab: real figures + scenario slider ---- */
-function eventSettlement(host,e){
-  e.settlement = e.settlement || {ticketsSold:0, grossOverride:'', expenses:[], settled:false, notes:''};
-  const s=e.settlement;
-  const f=settlementFigures(e);
-  const pb=priceBreakdown(e.pricing);
+function eventProjections(host,e){
+  e.projection = e.projection || {ticketsEst:0, expenses:[]};
   const cap=+e.capacityAlloc||1;
-  const defaultSlider=+s.ticketsSold||Math.round(cap*0.6);
+  const defaultSlider=+e.projection.ticketsEst||Math.round(cap*0.6);
   host.innerHTML=`
-    ${f.settled?'<div class="banner">● Settled</div>':''}
+    <p class="muted" style="font-size:12px;margin-bottom:18px">Estimate your numbers before the show using your deal terms and show costs. This does not affect the actual Settlement tab — that's for entering the real venue payout after the show.</p>
 
-    <div class="sec-label">Ticket sales</div>
-    <div class="row3" style="margin-bottom:6px">
-      <div class="field"><label>Tickets sold (actual)</label><input type="number" id="st-sold" value="${s.ticketsSold||0}" oninput="updateSettlement('${e.id}')"></div>
-      <div class="field"><label>Gross box office override ($)</label><input type="number" id="st-gross" value="${s.grossOverride||''}" placeholder="auto: ${money0(pb.total*(s.ticketsSold||0))}" oninput="updateSettlement('${e.id}')"></div>
-      <div class="field"><label>Capacity</label><input type="number" value="${e.capacityAlloc||0}" disabled style="background:var(--surf2)"></div>
-    </div>
-    <p class="muted" style="font-size:12px;margin-bottom:18px">Leave override blank to auto-calculate from tickets × ${money(pb.total)} (base ${money(pb.base)} + fees/tax).</p>
+    <div class="sec-label">Expenses (projected)</div>
+    <div id="pr-expenses"></div>
+    <button class="btn sm" style="margin-top:8px" onclick="addProjExpense('${e.id}')">+ Add expense</button>
 
-    <div class="sec-label">Expenses</div>
-    <div id="st-expenses"></div>
-    <button class="btn sm" style="margin-top:8px" onclick="addSettlementExpense('${e.id}')">+ Add expense</button>
-
-    <div class="sec-label" style="margin-top:24px">Waterfall</div>
-    <div id="st-waterfall"></div>
-
-    <div class="sec-label" style="margin-top:22px">Summary</div>
-    <div id="st-summary"></div>
-
-    <div style="margin-top:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn primary sm" onclick="saveSettlement('${e.id}')">Save</button>
-      <button class="btn sm" onclick="toggleSettled('${e.id}')">${f.settled?'Reopen':'Mark as settled'}</button>
-      <button class="btn sm" onclick="printSettlement('${e.id}')">Print statement</button>
-      <button class="btn sm" onclick="openProposalFromSettlement('${e.id}')">Artist proposal</button>
-    </div>
-
-    <div class="divider" style="margin-top:28px"></div>
-    <div class="sec-label" style="margin-top:18px">Scenarios — using these costs &amp; deal terms</div>
-    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance. All expenses and deal terms above are used in the calculation.</p>
+    <div class="sec-label" style="margin-top:24px">Scenarios — using deal terms &amp; show costs</div>
+    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance level.</p>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
       <input type="range" id="sc-slider" min="0" max="${cap}" value="${defaultSlider}"
         oninput="document.getElementById('sc-num').value=this.value;renderScenario('${e.id}')"
@@ -2209,11 +2227,62 @@ function eventSettlement(host,e){
       <span class="muted" style="font-size:12px" id="sc-pct"></span>
     </div>
     <div id="sc-waterfall"></div>
-    <div style="overflow-x:auto;margin-top:18px"><div id="sc-table"></div></div>`;
+    <div style="overflow-x:auto;margin-top:18px"><div id="sc-table"></div></div>
+    <div style="margin-top:18px"><button class="btn primary sm" onclick="saveProjection('${e.id}')">Save estimate</button></div>`;
 
-  renderSettlementExpenses(e);
-  renderSettlementWaterfall(e);
+  renderProjExpenses(e);
   renderScenario(e.id);
+}
+
+function renderProjExpenses(e){
+  const host=document.getElementById('pr-expenses'); if(!host) return;
+  const exps=e.projection.expenses||[];
+  if(!exps.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses yet.</p>'; return; }
+  host.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
+    </div>
+    ${exps.map((x,i)=>{
+      const isProd=x.payer==='producer';
+      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
+      const billsOut=isProd?(+x.amount||0)+markup:0;
+      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Marketing" oninput="setProjExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <input type="number" value="${x.amount||0}" oninput="setProjExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <select onchange="setProjExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (you front)</option>
+          <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
+        </select>
+        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setProjExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
+        <span style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
+        <button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp('${e.id}',${i})">×</button>
+      </div>`;
+    }).join('')}`;
+}
+function addProjExpense(id){
+  const e=get(DB.events,id);
+  e.projection.expenses=e.projection.expenses||[];
+  e.projection.expenses.push({desc:'',amount:0,payer:'producer',markupPct:0});
+  renderProjExpenses(e); renderScenario(id);
+}
+function setProjExp(id,i,field,val){
+  const e=get(DB.events,id);
+  e.projection.expenses[i][field]=(field==='desc'||field==='payer')?val:(+val||0);
+  if(field==='payer') renderProjExpenses(e);
+  renderScenario(id);
+}
+function removeProjExp(id,i){
+  const e=get(DB.events,id);
+  e.projection.expenses.splice(i,1);
+  renderProjExpenses(e); renderScenario(id);
+}
+function saveProjection(id){
+  const e=get(DB.events,id);
+  e.projection.ticketsEst=+document.getElementById('sc-num')?.value||0;
+  logActivity('edited','Event',e.name+' (projection saved)');
+  persist();
+  const btn=document.querySelector('#ev-tab .btn.primary.sm');
+  if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=o,1500);}
 }
 
 function renderScenario(id){
@@ -2223,20 +2292,12 @@ function renderScenario(id){
   const pct=document.getElementById('sc-pct');
   if(pct) pct.textContent=Math.round(n/cap*100)+'% of capacity';
 
-  // Build a model that uses settlement expenses mapped to projection types
-  const settlExps=e.settlement?.expenses||[];
-  const projExps=settlExps.filter(x=>x.payer!=='venue').map(x=>({
-    desc:x.desc, amount:x.amount,
-    payer:x.payer==='producer'?'producer':'artist',
-    markupPct:x.markupPct||0
-  }));
+  const projExps=e.projection?.expenses||[];
   const model={...e, projection:{ticketsEst:n, expenses:projExps}};
   const f=projectionFigures(model,n);
 
-  // Waterfall
   renderProjWaterfall(document.getElementById('sc-waterfall'),f,projExps);
 
-  // Scenarios table at 10% increments
   const pcts=[10,25,40,50,60,70,80,90,100];
   const be=projectionBreakeven(model);
   const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
@@ -2263,187 +2324,194 @@ function renderScenario(id){
 
 function openProposalFromSettlement(id){
   const e=get(DB.events,id);
-  // Seed calcModel from settlement expenses so proposal uses same costs
-  const settlExps=e.settlement?.expenses||[];
-  _calcState[id]={expenses:settlExps.filter(x=>x.payer!=='venue').map(x=>({
-    desc:x.desc, amount:x.amount,
-    payer:x.payer==='producer'?'producer':'artist',
-    markupPct:x.markupPct||0
-  }))};
-  const sliderVal=+document.getElementById('sc-num')?.value||(e.settlement?.ticketsSold||defaultEstimate(e));
-  // Temporarily set tickets est to slider value for proposal
+  const projExps=e.projection?.expenses||[];
+  _calcState[id]={expenses:projExps.map(x=>({desc:x.desc,amount:x.amount,payer:x.payer,markupPct:x.markupPct||0}))};
+  const sliderVal=+document.getElementById('sc-num')?.value||defaultEstimate(e);
   if(!e.projection) e.projection={ticketsEst:sliderVal,expenses:[]};
   e.projection.ticketsEst=sliderVal;
-  e.projection.expenses=_calcState[id].expenses;
   openProposal(id);
 }
 
 const EXPENSE_PAYERS=[['venue','Venue (off box office)'],['producer','Producer (you front)'],['artist','Artist (direct)']];
 
-function renderSettlementExpenses(e){
-  const s=e.settlement; const host=document.getElementById('st-expenses');
-  if(!host) return;
-  if(!s.expenses.length){ host.innerHTML='<p class="muted" style="font-size:13px">No expenses logged. Add marketing, insurance, travel, etc.</p>'; return; }
+/* ============================================================
+   SETTLEMENT TAB V2 — direct entry of actual venue payout
+   No deal-term calculation. You type in what the venue actually
+   paid you (from their statement), then commission and artist
+   net flow from that number directly.
+   ============================================================ */
+function eventSettlementV2(host,e){
+  e.settlementV2 = e.settlementV2 || {venuePayout:'', depositCredits:[], expenses:[], settled:false, notes:''};
+  const sv=e.settlementV2;
   host.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
-      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
+    ${sv.settled?'<div class="banner">● Settled</div>':''}
+    <p class="muted" style="font-size:12px;margin-bottom:18px">Enter the actual amount the venue paid you from their settlement statement. Commission and artist net are calculated directly from this number — no deal-term math involved.</p>
+
+    <div class="sec-label">Venue payout</div>
+    <div class="row2" style="margin-bottom:6px">
+      <div class="field"><label>Venue payout — actual amount received ($)</label>
+        <input type="number" id="sv-payout" value="${sv.venuePayout||''}" placeholder="e.g. 21640.14" oninput="updateSettlementV2('${e.id}')"></div>
+      <div class="field"><label>Mgmt commission %</label>
+        <input type="number" id="sv-mgmt" value="${e.mgmtPct||DB.settings.mgmtPct}" oninput="updateSettlementV2('${e.id}')"></div>
     </div>
-    ${s.expenses.map((x,i)=>{
-      const isProd=x.payer==='producer';
-      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
-      const billsOut=isProd?(+x.amount||0)+markup:0;
-      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
-        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Marketing package" oninput="setSettlementExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <input type="number" value="${x.amount||0}" oninput="setSettlementExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-        <select onchange="setSettlementExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-          ${EXPENSE_PAYERS.map(([v,l])=>`<option value="${v}" ${x.payer===v?'selected':''}>${l}</option>`).join('')}
-        </select>
-        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setSettlementExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
-        <span style="text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
-        <button class="btn ghost sm" style="padding:3px 6px" onclick="removeSettlementExp('${e.id}',${i})">×</button>
-      </div>`;
-    }).join('')}`;
-}
 
-function addSettlementExpense(id){
-  const e=get(DB.events,id);
-  e.settlement.expenses.push({desc:'',amount:0,payer:'venue',markupPct:0});
-  renderSettlementExpenses(e); renderSettlementWaterfall(e);
-}
-function setSettlementExp(id,i,field,val){
-  const e=get(DB.events,id);
-  e.settlement.expenses[i][field] = (field==='desc'||field==='payer') ? val : (+val||0);
-  if(field==='payer') renderSettlementExpenses(e); // re-render to enable/disable markup
-  renderSettlementWaterfall(e);
-}
-function removeSettlementExp(id,i){
-  const e=get(DB.events,id);
-  e.settlement.expenses.splice(i,1);
-  renderSettlementExpenses(e); renderSettlementWaterfall(e);
-}
-function updateSettlement(id){
-  const e=get(DB.events,id);
-  e.settlement.ticketsSold=fvn('st-sold');
-  e.settlement.grossOverride=fv('st-gross');
-  renderSettlementWaterfall(e);
-  // refresh the auto placeholder on gross field
-  const pb=priceBreakdown(e.pricing);
-  const g=document.getElementById('st-gross');
-  if(g) g.placeholder='auto: '+money0(pb.total*(e.settlement.ticketsSold||0));
-}
+    <div class="sec-label" style="margin-top:20px">Deposits paid directly by artist <span style="font-weight:400;font-size:11px;color:var(--txt3)">(reimbursed back to artist in this settlement)</span></div>
+    <div id="sv-deposits"></div>
+    <button class="btn sm" style="margin-top:8px" onclick="addDepositCredit('${e.id}')">+ Add deposit</button>
 
-function renderSettlementWaterfall(e){
-  const f=settlementFigures(e);
-  const wf=document.getElementById('st-waterfall');
-  const sm=document.getElementById('st-summary');
-  if(!wf) return;
-  const max=Math.max(f.grossBoxOffice,f.baseRevenue,f.payout,1);
+    <div class="sec-label" style="margin-top:20px">Artist's own expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(flights, hotel, openers — paid directly by artist)</span></div>
+    <div id="sv-expenses"></div>
+    <button class="btn sm" style="margin-top:8px" onclick="addSettlementV2Expense('${e.id}')">+ Add expense</button>
 
-  // Build named deduction rows from show costs
-  const sc=e.showCosts||{};
-  const showCostRows=[
-    ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>
-      ({label:'Less: '+(l.desc||'crew'),val:-((+l.hours||0)*(+l.rate||0)),c:'var(--red)'})),
-    ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>
-      ({label:'Less: '+(l.desc||'equipment'),val:-(+l.amount||0),c:'var(--red)'})),
-    ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>
-      ({label:'Less: '+(l.desc||'fee'),val:-(+l.amount||0),c:'var(--red)'})),
-  ];
-  // Settlement tab venue expenses (added on the fly)
-  const settlVenueRows=(e.settlement.expenses||[]).filter(x=>x.payer==='venue'&&+x.amount>0).map(x=>
-    ({label:'Less: '+(x.desc||'venue expense'),val:-(+x.amount||0),c:'var(--red)'}));
+    <div class="sec-label" style="margin-top:24px">Summary</div>
+    <div id="sv-waterfall"></div>
 
-  const ct=e.terms.contractType;
-  const artistExpRows=(e.settlement.expenses||[]).filter(x=>x.payer==='artist').map(x=>(
-    {label:'Less: '+(x.desc||'artist expense'),val:-(+x.amount||0),c:'#c98a3f'}
-  ));
-
-  // Two display modes:
-  // Override mode: Gross → all venue expenses → Venue payout
-  // Standard mode: Gross → tax → net ticket revenue → deal terms → show costs → venue expenses → payout
-  const rows = f.useOverride ? [
-    {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)',b:1},
-    ...f.venueExpenseLines.map(l=>({
-      label:'Less: '+esc(l.desc),
-      val:-l.amount,
-      c:l.amount<0?'var(--green)':'var(--red)'
-    })),
-    null,
-    {label:'Venue payout',val:f.payout,c:'var(--green)',b:1},
-    {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
-    ...(f.producerCost>0?[{label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'}]:[]),
-    ...(f.producerMarkup>0?[{label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'}]:[]),
-    null,
-    {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
-    ...artistExpRows,
-    ...(artistExpRows.length?[null,{label:'Artist net',val:f.artistNet,c:f.artistNet>=0?'var(--green)':'var(--red)',b:1}]:[])
-  ] : [
-    {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
-    ...(f.taxTotal>0?[{label:'Less: tax (held by venue)',val:-f.taxTotal,c:'var(--red)'}]:[]),
-    {label:'Net ticket revenue',val:f.baseRevenue,c:'#85b7eb',b:1},
-    ...(f.dealRentalFlat>0?[{label:'Less: rental flat fee',val:-f.dealRentalFlat,c:'var(--red)'}]:[]),
-    ...(f.dealRentalPct>0?[{label:'Less: box office % ('+(+e.terms.doorSplit||0)+'%)',val:-f.dealRentalPct,c:'var(--red)'}]:[]),
-    ...f.showCostLines.map(l=>({label:'Less: '+esc(l.desc),val:-l.amount,c:'var(--red)'})),
-    ...f.venueExpenseLines.map(l=>({label:'Less: '+esc(l.desc),val:-l.amount,c:'var(--red)'})),
-    null,
-    {label:'Venue payout',val:f.payout,c:'var(--green)',b:1},
-    {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
-    ...(f.producerCost>0?[{label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'}]:[]),
-    ...(f.producerMarkup>0?[{label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'}]:[]),
-    null,
-    {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
-    ...artistExpRows,
-    ...(artistExpRows.length?[null,{label:'Artist net',val:f.artistNet,c:f.artistNet>=0?'var(--green)':'var(--red)',b:1}]:[])
-  ];
-  wf.innerHTML=rows.map(r=>{
-    if(!r) return `<div style="height:1px;background:var(--bord);margin:7px 0 7px 175px"></div>`;
-    const w=Math.min(100,Math.abs(r.val)/max*100);
-    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:3px">
-      <div style="width:175px;font-size:12px;text-align:right;color:${r.b?'var(--txt)':'var(--txt2)'};${r.b?'font-weight:600':''}">${r.label}</div>
-      <div style="flex:1;height:24px;background:var(--surf2);border-radius:6px;overflow:hidden">
-        <div style="height:100%;width:${w}%;background:${r.c};border-radius:6px;transition:width .2s"></div></div>
-      <div style="width:88px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;${r.b?'font-weight:600':''};color:${r.val<0?'var(--red)':r.b?'var(--txt)':'var(--txt2)'}">${r.val<0?'−':''}${money0(Math.abs(r.val))}</div>
+    <div style="margin-top:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary sm" onclick="saveSettlementV2('${e.id}')">Save</button>
+      <button class="btn sm" onclick="toggleSettledV2('${e.id}')">${sv.settled?'Reopen':'Mark as settled'}</button>
+      <button class="btn sm" onclick="printSettlementV2('${e.id}')">Print statement</button>
     </div>`;
-  }).join('');
 
-  if(sm){
-    sm.innerHTML=`
-      <div class="stats" style="margin-bottom:0">
-        <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Pot to split</div></div>
-        <div class="stat"><div class="stat-val pos">${money0(f.yourTotal)}</div><div class="stat-lbl">Your total (you keep)</div></div>
-        <div class="stat"><div class="stat-val">${money0(f.artistGross)}</div><div class="stat-lbl">Artist gross</div></div>
-        <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net (after their costs)</div></div>
-      </div>
-      ${f.artistTracked>0?`<p class="muted" style="font-size:12px;margin-top:12px">Artist's direct expenses of ${money0(f.artistTracked)} are paid by the artist and reduce artist net (gross ${money0(f.artistGross)} − ${money0(f.artistTracked)} = ${money0(f.artistNet)}).</p>`:''}`;
-  }
+  renderDepositCredits(e);
+  renderSettlementV2Expenses(e);
+  renderSettlementV2Waterfall(e);
 }
 
-function saveSettlement(id){
+function settlementV2Figures(ev){
+  const sv=ev.settlementV2||{};
+  const payout=+sv.venuePayout||0;
+  const domMgmt=document.getElementById('sv-mgmt');
+  const mgmtPct=(domMgmt&&domMgmt.value ? +domMgmt.value : (+ev.mgmtPct||DB.settings.mgmtPct))/100;
+  const commission=payout*mgmtPct;
+  const artistGross=payout-commission;
+  const deposits=sv.depositCredits||[];
+  const depositTotal=deposits.reduce((t,d)=>t+(+d.amount||0),0);
+  const exps=sv.expenses||[];
+  const expenseTotal=exps.reduce((t,x)=>t+(+x.amount||0),0);
+  const artistNet=artistGross+depositTotal-expenseTotal;
+  return {payout,mgmtPct:mgmtPct*100,commission,artistGross,deposits,depositTotal,exps,expenseTotal,artistNet,settled:!!sv.settled};
+}
+
+function renderDepositCredits(e){
+  const host=document.getElementById('sv-deposits'); if(!host) return;
+  const deposits=e.settlementV2.depositCredits||[];
+  if(!deposits.length){ host.innerHTML='<p class="muted" style="font-size:13px">No deposits to credit back.</p>'; return; }
+  host.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 110px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Amount</span><span></span>
+    </div>
+    ${deposits.map((d,i)=>`<div style="display:grid;grid-template-columns:1fr 110px 28px;gap:8px;align-items:center;margin-bottom:6px">
+      <input type="text" value="${esc(d.desc||'')}" placeholder="e.g. Venue deposit" oninput="setDepositCredit('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" value="${d.amount||0}" oninput="setDepositCredit('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:3px 6px" onclick="removeDepositCredit('${e.id}',${i})">×</button>
+    </div>`).join('')}`;
+}
+function addDepositCredit(id){
   const e=get(DB.events,id);
-  e.settlement.ticketsSold=fvn('st-sold');
-  e.settlement.grossOverride=fv('st-gross');
+  e.settlementV2.depositCredits=e.settlementV2.depositCredits||[];
+  e.settlementV2.depositCredits.push({desc:'Venue deposit',amount:0});
+  renderDepositCredits(e); renderSettlementV2Waterfall(e);
+}
+function setDepositCredit(id,i,field,val){
+  const e=get(DB.events,id);
+  e.settlementV2.depositCredits[i][field]=field==='desc'?val:(+val||0);
+  renderSettlementV2Waterfall(e);
+}
+function removeDepositCredit(id,i){
+  const e=get(DB.events,id);
+  e.settlementV2.depositCredits.splice(i,1);
+  renderDepositCredits(e); renderSettlementV2Waterfall(e);
+}
+
+function renderSettlementV2Expenses(e){
+  const host=document.getElementById('sv-expenses'); if(!host) return;
+  const exps=e.settlementV2.expenses||[];
+  if(!exps.length){ host.innerHTML='<p class="muted" style="font-size:13px">No artist expenses logged.</p>'; return; }
+  host.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 110px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Amount</span><span></span>
+    </div>
+    ${exps.map((x,i)=>`<div style="display:grid;grid-template-columns:1fr 110px 28px;gap:8px;align-items:center;margin-bottom:6px">
+      <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Flights" oninput="setSettlementV2Exp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" value="${x.amount||0}" oninput="setSettlementV2Exp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:3px 6px" onclick="removeSettlementV2Exp('${e.id}',${i})">×</button>
+    </div>`).join('')}`;
+}
+function addSettlementV2Expense(id){
+  const e=get(DB.events,id);
+  e.settlementV2.expenses=e.settlementV2.expenses||[];
+  e.settlementV2.expenses.push({desc:'',amount:0});
+  renderSettlementV2Expenses(e); renderSettlementV2Waterfall(e);
+}
+function setSettlementV2Exp(id,i,field,val){
+  const e=get(DB.events,id);
+  e.settlementV2.expenses[i][field]=field==='desc'?val:(+val||0);
+  renderSettlementV2Waterfall(e);
+}
+function removeSettlementV2Exp(id,i){
+  const e=get(DB.events,id);
+  e.settlementV2.expenses.splice(i,1);
+  renderSettlementV2Expenses(e); renderSettlementV2Waterfall(e);
+}
+
+function updateSettlementV2(id){
+  const e=get(DB.events,id);
+  e.settlementV2.venuePayout=fv('sv-payout');
+  renderSettlementV2Waterfall(e);
+}
+
+function renderSettlementV2Waterfall(e){
+  const f=settlementV2Figures(e);
+  const wf=document.getElementById('sv-waterfall'); if(!wf) return;
+  const max=Math.max(f.payout,f.artistGross,Math.abs(f.artistNet),1);
+  const bar=(label,val,color,bold)=>{
+    const w=Math.max(2,Math.min(100,Math.round(Math.abs(val)/max*100)));
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0${bold?';font-weight:600;color:var(--txt)':''}">${label}</div>
+      <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
+      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':val>0&&color==='var(--green)'?'var(--green)':'var(--txt)'}">${val<0?'−':val>0&&label.includes('deposit')?'+':''}${money0(Math.abs(val))}</div>
+    </div>`;
+  };
+  const rows=[
+    bar('Venue payout',f.payout,'var(--green)',true),
+    bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
+    '<div style="height:8px"></div>',
+    bar('Artist gross',f.artistGross,'#97c459',true),
+    ...f.deposits.filter(d=>+d.amount>0).map(d=>bar('Plus: '+(d.desc||'Deposit reimbursed'),+d.amount,'var(--green)',false)),
+    ...f.exps.filter(x=>+x.amount>0).map(x=>bar('Less: '+(x.desc||'Expense'),-(+x.amount),'#c98a3f',false)),
+    '<div style="height:8px"></div>',
+    bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
+  ].join('');
+  wf.innerHTML=`<div style="max-width:620px">${rows}</div>
+    <div class="stats" style="margin-top:18px">
+      <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Venue payout</div></div>
+      <div class="stat"><div class="stat-val pos">${money0(f.commission)}</div><div class="stat-lbl">Your commission</div></div>
+      <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net</div></div>
+    </div>`;
+}
+
+function saveSettlementV2(id){
+  const e=get(DB.events,id);
+  e.settlementV2.venuePayout=fv('sv-payout');
+  e.mgmtPct=fvn('sv-mgmt');
+  logActivity('edited','Event',e.name+' (settlement saved)');
   persist();
   openModal('Saved','<p style="font-size:13px;color:var(--green)">✓ Settlement saved.</p>','<button class="btn primary" onclick="closeModal()">Done</button>');
 }
-function toggleSettled(id){
+function toggleSettledV2(id){
   const e=get(DB.events,id);
-  e.settlement.ticketsSold=fvn('st-sold');
-  e.settlement.grossOverride=fv('st-gross');
-  e.settlement.settled=!e.settlement.settled;
+  e.settlementV2.venuePayout=fv('sv-payout');
+  e.mgmtPct=fvn('sv-mgmt');
+  e.settlementV2.settled=!e.settlementV2.settled;
   persist();
   go('events',id,'settlement');
 }
 
-function printSettlement(id){
+function printSettlementV2(id){
   const e=get(DB.events,id);
-  e.settlement.ticketsSold=fvn('st-sold'); e.settlement.grossOverride=fv('st-gross');
-  const f=settlementFigures(e);
+  const f=settlementV2Figures(e);
   const v=get(DB.venues,e.venueId), t=get(DB.tours,e.tourId);
-  const s=e.settlement;
-  const prodExps=s.expenses.filter(x=>x.payer==='producer');
-  const venueExps=s.expenses.filter(x=>x.payer==='venue');
-  const artistExps=s.expenses.filter(x=>x.payer==='artist');
-  const row=(l,val,opts={})=>`<tr><td style="padding:5px 0;${opts.b?'font-weight:600':''}">${l}</td><td style="text-align:right;${opts.b?'font-weight:600':''};${opts.neg?'color:#a32d2d':''}">${opts.neg?'−':''}${money0(Math.abs(val))}</td></tr>`;
+  const row=(l,val,opts={})=>`<tr><td style="padding:5px 0;${opts.b?'font-weight:600':''}">${l}</td><td style="text-align:right;${opts.b?'font-weight:600':''};${opts.neg?'color:#a32d2d':opts.pos?'color:#3b6d11':''}">${opts.neg?'−':opts.pos?'+':''}${money0(Math.abs(val))}</td></tr>`;
   const doc=`
     <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
       <div style="font-size:18px;font-weight:600">Settlement Statement</div>
@@ -2451,34 +2519,23 @@ function printSettlement(id){
       ${f.settled?'<div style="font-size:12px;color:#3b6d11;margin-top:4px">● Settled</div>':''}
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      ${row('Tickets sold', f.soldActual)}
-      ${row('Gross box office', f.grossBoxOffice)}
-      ${f.taxTotal>0?row('Less: tax (held by venue)', -f.taxTotal, {neg:1}):''}
-      ${row('Net ticket revenue', f.baseRevenue, {b:1})}
-      ${f.dealRentalFlat>0?row('Less: rental flat fee', -f.dealRentalFlat, {neg:1}):''}
-      ${f.dealRentalPct>0?row('Less: box office '+e.terms.doorSplit+'% of net', -f.dealRentalPct, {neg:1}):''}
-      ${(f.showCostLines||[]).length?`<tr><td colspan="2" style="padding-top:8px;font-weight:600;font-size:12px">Show costs</td></tr>`:''}
-      ${(f.showCostLines||[]).map(l=>row('&nbsp;&nbsp;'+esc(l.desc), -l.amount, {neg:1})).join('')}
-      ${(f.venueExpenseLines||[]).length?`<tr><td colspan="2" style="padding-top:6px;font-weight:600;font-size:12px">Additional venue expenses</td></tr>`:''}
-      ${(f.venueExpenseLines||[]).map(l=>row('&nbsp;&nbsp;'+esc(l.desc), -l.amount, {neg:1})).join('')}
-      <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
       ${row('Venue payout', f.payout, {b:1})}
       ${row('Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
-      ${prodExps.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Producer-covered expenses</td></tr>`:''}
-      ${prodExps.map(x=>{const m=(+x.amount||0)*((+x.markupPct||0)/100);return row('&nbsp;&nbsp;'+esc(x.desc||'Expense')+(x.markupPct?` (incl. ${x.markupPct}% markup)`:''), -((+x.amount||0)+m), {neg:1});}).join('')}
-      <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding-top:8px"></td></tr>
+      <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
       ${row('Artist gross', f.artistGross, {b:1})}
-      ${artistExps.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Artist's own expenses (paid directly)</td></tr>`:''}
-      ${artistExps.map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Expense'), -(+x.amount||0), {neg:1})).join('')}
-      ${artistExps.length?row('Artist net', f.artistNet, {b:1}):''}
-      <tr><td colspan="2" style="padding-top:6px"></td></tr>
-      ${row('Your total (commission + producer)', f.yourTotal, {b:1})}
+      ${f.deposits.filter(d=>+d.amount>0).length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Deposits reimbursed to artist</td></tr>`:''}
+      ${f.deposits.filter(d=>+d.amount>0).map(d=>row('&nbsp;&nbsp;'+esc(d.desc||'Deposit'), +d.amount, {pos:1})).join('')}
+      ${f.exps.filter(x=>+x.amount>0).length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Artist's own expenses</td></tr>`:''}
+      ${f.exps.filter(x=>+x.amount>0).map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Expense'), -(+x.amount), {neg:1})).join('')}
+      <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding-top:8px"></td></tr>
+      ${row('Artist net', f.artistNet, {b:1})}
     </table>
     <p style="font-size:11px;color:#908e85;margin-top:16px">Generated by TourDesk · ${new Date().toLocaleDateString()}</p>`;
   const w=window.open('','_blank');
   w.document.write('<html><head><title>Settlement — '+esc(e.name)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#1c1c1a}table{width:100%}</style></head><body>'+doc+'</body></html>');
   w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
 }
+
 
 function eventPeople(host,e){
   const grp=(ids,label,role)=>{
@@ -2575,7 +2632,7 @@ function deleteFile(eid,idx){
 function eventVenueHistory(host,e,v){
   if(!v){ host.innerHTML='<p class="muted" style="padding:16px;font-size:13px">No venue linked to this event.</p>'; return; }
   // All past events at this venue (excluding this event itself)
-  const past=DB.events.filter(ev=>ev.venueId===v.id && ev.id!==e.id && (ev.settlement?.ticketsSold>0 || ev.status==='Completed'));
+  const past=DB.events.filter(ev=>ev.venueId===v.id && ev.id!==e.id && ((+ev.settlementV2?.venuePayout>0) || ev.status==='Completed'));
   const routing=DB.events.filter(ev=>ev.venueId===v.id && ev.id!==e.id && !past.includes(ev));
   const thisF=projectionFigures(e);
   const thisPricing=e.pricing||{};
@@ -2591,7 +2648,7 @@ function eventVenueHistory(host,e,v){
 
   const row=(ev,isThis)=>{
     const f=isThis?thisF:eventBest(ev);
-    const sold=isThis?f.sold:(+ev.settlement?.ticketsSold||+ev.projection?.ticketsEst||0);
+    const sold=isThis?f.sold:(+ev.projection?.ticketsEst||0);
     const cap=+ev.capacityAlloc||1;
     const pct=Math.round(sold/cap*100);
     const base=+ev.pricing?.base||0;
@@ -2984,7 +3041,7 @@ function saveEvent(id){
     return;
   }
   if(id){ const e=get(DB.events,id); Object.assign(e,rec); logActivity('edited','Event',rec.name); }
-  else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlement={ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
+  else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
     if(_curProposalLink){ const p=get(DB.proposals,_curProposalLink); if(p){ p.eventIds=p.eventIds||[]; p.eventIds.push(rec.id);} } }
   const linkedProp=_curProposalLink; _curProposalLink=null;
   const ref=_curEventRef; _curEventRef=null;
@@ -4328,7 +4385,7 @@ function acceptProposal(id){
       showCosts:JSON.parse(JSON.stringify(s.showCosts||{crew:[],equipment:[],fees:[]})),
       projection:{ticketsEst:+s.ticketsEst||Math.round((+s.capacity||0)*0.6),
         expenses:(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>({...x}))},
-      settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false,notes:''},
+      settlementV2:{venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''},
       logistics:DEFAULT_LOGISTICS.map((item,i)=>({id:'lg'+(Date.now()+i),label:item.label,confirmed:false,note:'',confirmedAt:null})),
       talentIds:[],vendorIds:[],crewIds:[],files:[]
     };
@@ -4595,5 +4652,6 @@ function updateSyncBadge(){
   else { dot.className='dot off'; txt.textContent='Local only'; }
 }
 </script>
-</body>
-</html>
+
+
+</body></html>
