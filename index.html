@@ -2355,7 +2355,8 @@ function eventSettlementV2(host,e){
         <input type="number" id="sv-mgmt" value="${e.mgmtPct||DB.settings.mgmtPct}" oninput="updateSettlementV2('${e.id}')"></div>
     </div>
 
-    <div class="sec-label" style="margin-top:20px">Deposits paid directly by artist <span style="font-weight:400;font-size:11px;color:var(--txt3)">(reimbursed back to artist in this settlement)</span></div>
+    <div class="sec-label" style="margin-top:20px">Deposits NOT already netted by the venue <span style="font-weight:400;font-size:11px;color:var(--txt3)">(deducted before commission, then reimbursed to whoever fronted it)</span></div>
+    <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:8px">Check the venue's statement first. If their invoice already shows the deposit credited against what they owe you, leave this empty — it's already inside the venue payout above. Only add a deposit here if you or the artist paid it and it was NOT reflected in the venue's payout.</p>
     <div id="sv-deposits"></div>
     <button class="btn sm" style="margin-top:8px" onclick="addDepositCredit('${e.id}')">+ Add deposit</button>
 
@@ -2382,39 +2383,60 @@ function settlementV2Figures(ev){
   const payout=+sv.venuePayout||0;
   const domMgmt=document.getElementById('sv-mgmt');
   const mgmtPct=(domMgmt&&domMgmt.value ? +domMgmt.value : (+ev.mgmtPct||DB.settings.mgmtPct))/100;
-  const commission=payout*mgmtPct;
-  const artistGross=payout-commission;
+
+  // Deposits NOT already netted by the venue (i.e. not baked into venuePayout above)
+  // come off the top BEFORE commission, since they're not real "show revenue" to split.
   const deposits=sv.depositCredits||[];
   const depositTotal=deposits.reduce((t,d)=>t+(+d.amount||0),0);
+  const commissionablePot=Math.max(0, payout-depositTotal);
+
+  const commission=commissionablePot*mgmtPct;
+  let artistGross=commissionablePot-commission;
+
+  // Reimburse whoever fronted each deposit
+  let toArtist=0, toProducer=0;
+  deposits.forEach(d=>{
+    if(d.frontedBy==='producer') toProducer+=(+d.amount||0);
+    else toArtist+=(+d.amount||0); // default: artist
+  });
+  artistGross+=toArtist; // artist gets their float back, not commissioned
+
   const exps=sv.expenses||[];
   const expenseTotal=exps.reduce((t,x)=>t+(+x.amount||0),0);
-  const artistNet=artistGross+depositTotal-expenseTotal;
-  return {payout,mgmtPct:mgmtPct*100,commission,artistGross,deposits,depositTotal,exps,expenseTotal,artistNet,settled:!!sv.settled};
+  const artistNet=artistGross-expenseTotal;
+
+  return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,artistGross,
+    deposits,depositTotal,toArtist,toProducer,
+    exps,expenseTotal,artistNet,settled:!!sv.settled};
 }
 
 function renderDepositCredits(e){
   const host=document.getElementById('sv-deposits'); if(!host) return;
   const deposits=e.settlementV2.depositCredits||[];
-  if(!deposits.length){ host.innerHTML='<p class="muted" style="font-size:13px">No deposits to credit back.</p>'; return; }
+  if(!deposits.length){ host.innerHTML='<p class="muted" style="font-size:13px">No deposits to factor in.</p>'; return; }
   host.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 110px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
-      <span>Description</span><span style="text-align:right">Amount</span><span></span>
+    <div style="display:grid;grid-template-columns:1fr 96px 130px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Amount</span><span>Fronted by</span><span></span>
     </div>
-    ${deposits.map((d,i)=>`<div style="display:grid;grid-template-columns:1fr 110px 28px;gap:8px;align-items:center;margin-bottom:6px">
+    ${deposits.map((d,i)=>`<div style="display:grid;grid-template-columns:1fr 96px 130px 28px;gap:8px;align-items:center;margin-bottom:6px">
       <input type="text" value="${esc(d.desc||'')}" placeholder="e.g. Venue deposit" oninput="setDepositCredit('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
       <input type="number" value="${d.amount||0}" oninput="setDepositCredit('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select onchange="setDepositCredit('${e.id}',${i},'frontedBy',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <option value="artist" ${(!d.frontedBy||d.frontedBy==='artist')?'selected':''}>Artist</option>
+        <option value="producer" ${d.frontedBy==='producer'?'selected':''}>You (producer)</option>
+      </select>
       <button class="btn ghost sm" style="padding:3px 6px" onclick="removeDepositCredit('${e.id}',${i})">×</button>
     </div>`).join('')}`;
 }
 function addDepositCredit(id){
   const e=get(DB.events,id);
   e.settlementV2.depositCredits=e.settlementV2.depositCredits||[];
-  e.settlementV2.depositCredits.push({desc:'Venue deposit',amount:0});
+  e.settlementV2.depositCredits.push({desc:'Venue deposit',amount:0,frontedBy:'artist'});
   renderDepositCredits(e); renderSettlementV2Waterfall(e);
 }
 function setDepositCredit(id,i,field,val){
   const e=get(DB.events,id);
-  e.settlementV2.depositCredits[i][field]=field==='desc'?val:(+val||0);
+  e.settlementV2.depositCredits[i][field]=(field==='desc'||field==='frontedBy')?val:(+val||0);
   renderSettlementV2Waterfall(e);
 }
 function removeDepositCredit(id,i){
@@ -2469,23 +2491,31 @@ function renderSettlementV2Waterfall(e){
     return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0${bold?';font-weight:600;color:var(--txt)':''}">${label}</div>
       <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
-      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':val>0&&color==='var(--green)'?'var(--green)':'var(--txt)'}">${val<0?'−':val>0&&label.includes('deposit')?'+':''}${money0(Math.abs(val))}</div>
+      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':val>0&&color==='var(--green)'?'var(--green)':'var(--txt)'}">${val<0?'−':val>0&&(label.includes('reimburse')||label.includes('Plus'))?'+':''}${money0(Math.abs(val))}</div>
     </div>`;
   };
+  const depositLines=f.deposits.filter(d=>+d.amount>0).map(d=>bar('Less: '+(d.desc||'Deposit')+' (off the top)',-(+d.amount),'var(--red)',false));
+  const reimburseLines=[
+    ...(f.toArtist>0?[bar('Plus: deposit reimbursed to artist',+f.toArtist,'var(--green)',false)]:[]),
+    ...(f.toProducer>0?[bar('Reimbursed to you (producer) — not commissioned',+f.toProducer,'var(--blue)',false)]:[]),
+  ];
   const rows=[
     bar('Venue payout',f.payout,'var(--green)',true),
+    ...depositLines,
+    ...(f.depositTotal>0?[bar('Commissionable pot',f.commissionablePot,'#6fa8dc',true)]:[]),
     bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
     '<div style="height:8px"></div>',
-    bar('Artist gross',f.artistGross,'#97c459',true),
-    ...f.deposits.filter(d=>+d.amount>0).map(d=>bar('Plus: '+(d.desc||'Deposit reimbursed'),+d.amount,'var(--green)',false)),
+    bar('Artist gross',f.artistGross-f.toArtist,'#97c459',true),
+    ...reimburseLines,
     ...f.exps.filter(x=>+x.amount>0).map(x=>bar('Less: '+(x.desc||'Expense'),-(+x.amount),'#c98a3f',false)),
     '<div style="height:8px"></div>',
     bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
   ].join('');
   wf.innerHTML=`<div style="max-width:620px">${rows}</div>
+    ${f.toProducer>0?`<div style="margin-top:10px;padding:8px 12px;background:var(--blue-soft);border-radius:var(--rad);font-size:12px;color:var(--blue)">You're owed an additional ${money0(f.toProducer)} reimbursement (deposit you fronted), on top of your ${money0(f.commission)} commission.</div>`:''}
     <div class="stats" style="margin-top:18px">
       <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Venue payout</div></div>
-      <div class="stat"><div class="stat-val pos">${money0(f.commission)}</div><div class="stat-lbl">Your commission</div></div>
+      <div class="stat"><div class="stat-val pos">${money0(f.commission+f.toProducer)}</div><div class="stat-lbl">Your total (commission${f.toProducer>0?' + reimbursement':''})</div></div>
       <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net</div></div>
     </div>`;
 }
@@ -2520,15 +2550,19 @@ function printSettlementV2(id){
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       ${row('Venue payout', f.payout, {b:1})}
+      ${f.deposits.filter(d=>+d.amount>0).length?`<tr><td colspan="2" style="padding-top:8px;font-weight:600;font-size:12px">Less: deposits (off the top, before commission)</td></tr>`:''}
+      ${f.deposits.filter(d=>+d.amount>0).map(d=>row('&nbsp;&nbsp;'+esc(d.desc||'Deposit'), -(+d.amount), {neg:1})).join('')}
+      ${f.depositTotal>0?row('Commissionable pot', f.commissionablePot, {b:1}):''}
       ${row('Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
       <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
-      ${row('Artist gross', f.artistGross, {b:1})}
-      ${f.deposits.filter(d=>+d.amount>0).length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Deposits reimbursed to artist</td></tr>`:''}
-      ${f.deposits.filter(d=>+d.amount>0).map(d=>row('&nbsp;&nbsp;'+esc(d.desc||'Deposit'), +d.amount, {pos:1})).join('')}
+      ${row('Artist gross', f.artistGross-f.toArtist, {b:1})}
+      ${f.toArtist>0?row('&nbsp;&nbsp;Deposit reimbursed to artist', +f.toArtist, {pos:1}):''}
+      ${f.toProducer>0?row('&nbsp;&nbsp;Deposit reimbursed to producer (not shown in artist net)', 0, {})  :''}
       ${f.exps.filter(x=>+x.amount>0).length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Artist's own expenses</td></tr>`:''}
       ${f.exps.filter(x=>+x.amount>0).map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Expense'), -(+x.amount), {neg:1})).join('')}
       <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding-top:8px"></td></tr>
       ${row('Artist net', f.artistNet, {b:1})}
+      ${f.toProducer>0?`<tr><td colspan="2" style="padding-top:10px;font-size:12px;color:#185fa5">Note: you are separately owed ${money0(f.toProducer)} for the deposit you fronted, on top of your ${money0(f.commission)} commission.</td></tr>`:''}
     </table>
     <p style="font-size:11px;color:#908e85;margin-top:16px">Generated by TourDesk · ${new Date().toLocaleDateString()}</p>`;
   const w=window.open('','_blank');
