@@ -622,18 +622,26 @@ function settlementFigures(ev){
   let dealRentalFlat=0, dealRentalPct=0;
   if(ct==='rental_plus_pct'){
     dealRentalFlat=rentalFlat;
-    dealRentalPct=baseRevenue*rentalPct;
+    dealRentalPct=baseRevenue*rentalPct; // % on base ticket revenue (before show costs)
   } else if(ct==='rental_greater_of'){
     const flat=rentalFlat, pctAmt=baseRevenue*rentalPct;
     if(pctAmt>=flat){ dealRentalPct=pctAmt; }
     else { dealRentalFlat=flat; }
   }
-  // Plain 'rental' — the flat fee is implicit in venuePayout(), no separate display row needed
   const dealVenueTotal = dealRentalFlat + dealRentalPct;
 
+  // netBoxOffice = base revenue minus show costs and venue expenses (not the rental deal terms)
   const netBoxOffice = Math.max(0, baseRevenue - venueDeductions);
-  // For rental types the deal is applied to net, payout = what's left after venue takes their share
-  const payout = venuePayout(netBoxOffice, ev.terms);
+  // For rental_plus_pct and rental_greater_of: payout = netBoxOffice minus the deal deductions
+  // The deal % is on baseRevenue (what the venue actually takes from the ticket pool)
+  let payout;
+  if(ct==='rental_plus_pct'){
+    payout = Math.max(0, netBoxOffice - dealRentalFlat - dealRentalPct);
+  } else if(ct==='rental_greater_of'){
+    payout = Math.max(0, netBoxOffice - dealVenueTotal);
+  } else {
+    payout = venuePayout(netBoxOffice, ev.terms);
+  }
   const mgmtPct=(+ev.mgmtPct||0)/100;
   const commission = payout*mgmtPct;
   const producerTotal = producerCost + producerMarkup;
