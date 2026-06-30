@@ -2335,10 +2335,10 @@ function renderSettlementWaterfall(e){
     {label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'},
     ...showCostRows,
     ...settlVenueRows,
-    ...(f.dealRentalFlat>0&&ct!=='rental'?[{label:'Less: rental flat fee',val:-f.dealRentalFlat,c:'var(--red)'}]:[]),
-    ...(f.dealRentalPct>0?[{label:'Less: box office % ('+(+e.terms.doorSplit||0)+'%)',val:-f.dealRentalPct,c:'var(--red)'}]:[]),
     null,
     {label:'Net box office',val:f.netBoxOffice,c:'#6fa8dc',b:1},
+    ...(f.dealRentalFlat>0&&ct!=='rental'?[{label:'Less: rental flat fee',val:-f.dealRentalFlat,c:'var(--red)'}]:[]),
+    ...(f.dealRentalPct>0?[{label:'Less: box office % ('+(+e.terms.doorSplit||0)+'%)',val:-f.dealRentalPct,c:'var(--red)'}]:[]),
     {label:'Venue payout ('+ctLabel(e.terms.contractType)+')',val:f.payout,c:'var(--green)',b:1},
     {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
     {label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'},
@@ -2418,9 +2418,9 @@ function printSettlement(id){
       })()}
       ${venueExps.length?`<tr><td colspan="2" style="padding-top:6px;font-weight:600;font-size:12px">Additional venue expenses</td></tr>`:''}
       ${venueExps.map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Venue expense'), -(+x.amount||0), {neg:1})).join('')}
+      ${row('Net box office', f.netBoxOffice, {b:1})}
       ${f.dealRentalFlat>0&&e.terms.contractType!=='rental'?row('&nbsp;&nbsp;Rental flat fee', -f.dealRentalFlat, {neg:1}):''}
       ${f.dealRentalPct>0?row('&nbsp;&nbsp;Box office '+e.terms.doorSplit+'% of net', -f.dealRentalPct, {neg:1}):''}
-      ${row('Net box office', f.netBoxOffice, {b:1})}
       <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
       ${row('Venue payout ('+ctLabel(e.terms.contractType)+')', f.payout, {b:1})}
       ${row('Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
