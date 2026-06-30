@@ -471,16 +471,67 @@ function priceBreakdown(pricing){
   return {base,fee,tax,cc,total:sub+cc};
 }
 
+/* ---------- CORE FINANCIAL MODEL ----------
+   All venues operate on net settlement:
+   Venue collects ticket revenue + tax, deducts all costs, remits net to you.
+   
+   Waterfall order:
+   Gross box office (tickets x all-in price)
+   Less: Tax (held by venue)
+   = Net ticket revenue (base)
+   Less: Rental flat fee
+   Less: Box office % (of net ticket revenue)
+   Less: Crew costs
+   Less: Equipment
+   Less: Flat fees (SOCAN, Entandem, marketing, etc.)
+   Less: Settlement venue expenses
+   = Venue payout to you
+   Less: Mgmt commission
+   Less: Producer expenses + markup
+   = Artist gross
+   Less: Artist direct expenses
+   = Artist net
+*/
+
+// Legacy function kept for any remaining callers
 function venuePayout(gross, terms){
   const ct=terms.contractType;
   const g=+terms.guarantee||0, s=(+terms.doorSplit||0)/100, r=+terms.rental||0;
   if(ct==='guarantee') return g;
-  if(ct==='door') return gross*s;
-  if(ct==='guarantee_plus') return Math.max(g, gross*s);
+  if(ct==='door') return gross*(1-s);
+  if(ct==='guarantee_plus') return Math.max(g, gross*(1-s));
   if(ct==='rental') return Math.max(0, gross-r);
-  if(ct==='rental_greater_of') return Math.max(0, gross-Math.max(r, gross*s)); // greater of flat OR %
-  if(ct==='rental_plus_pct') return Math.max(0, gross-r-(gross*s)); // flat fee + % of net, both deducted
+  if(ct==='rental_greater_of') return Math.max(0, gross-Math.max(r, gross*s));
+  if(ct==='rental_plus_pct') return Math.max(0, gross-r-(gross*s));
   return 0;
+}
+
+function calcPayout(baseRevenue, terms, showCostTotal, venueExpenseTotal){
+  const ct=terms?.contractType||'rental';
+  const g=+terms?.guarantee||0;
+  const s=(+terms?.doorSplit||0)/100;
+  const r=+terms?.rental||0;
+  const costs=showCostTotal+venueExpenseTotal;
+  if(ct==='guarantee') return Math.max(0, g - costs);
+  if(ct==='door') return Math.max(0, baseRevenue*(1-s) - costs);
+  if(ct==='guarantee_plus') return Math.max(0, Math.max(g, baseRevenue*s) - costs);
+  if(ct==='rental') return Math.max(0, baseRevenue - r - costs);
+  if(ct==='rental_greater_of') return Math.max(0, baseRevenue - Math.max(r, baseRevenue*s) - costs);
+  if(ct==='rental_plus_pct') return Math.max(0, baseRevenue - r - (baseRevenue*s) - costs);
+  return Math.max(0, baseRevenue - costs);
+}
+
+function getDealLines(baseRevenue, terms){
+  const ct=terms?.contractType||'rental';
+  const r=+terms?.rental||0;
+  const s=(+terms?.doorSplit||0)/100;
+  let flat=0, pct=0;
+  if(ct==='rental'||ct==='rental_plus_pct') flat=r;
+  if(ct==='rental_plus_pct') pct=baseRevenue*s;
+  if(ct==='rental_greater_of'){ const pa=baseRevenue*s; if(pa>=r) pct=pa; else flat=r; }
+  if(ct==='door') pct=baseRevenue*s;
+  if(ct==='guarantee_plus') pct=baseRevenue*s;
+  return {dealRentalFlat:flat, dealRentalPct:pct, dealVenueTotal:flat+pct};
 }
 
 function eventFinancials(ev, ticketsSold){
@@ -488,32 +539,20 @@ function eventFinancials(ev, ticketsSold){
   const pb = priceBreakdown(ev.pricing);
   const baseRevenue = pb.base * sold;
   const grossBoxOffice = pb.total * sold;
-  const fixed = showCostsTotal(ev.showCosts||ev.fixedCosts||{});
-  const payout = venuePayout(baseRevenue, ev.terms);
+  const sc=ev.showCosts||{};
+  let showCostTotal=0;
+  (sc.crew||[]).forEach(l=>showCostTotal+=(+l.hours||0)*(+l.rate||0));
+  (sc.equipment||[]).forEach(l=>showCostTotal+=(+l.amount||0));
+  (sc.fees||[]).forEach(l=>showCostTotal+=(+l.amount||0));
+  const payout = calcPayout(baseRevenue, ev.terms, showCostTotal, 0);
   const mgmtPct=(+ev.mgmtPct||0)/100;
   const mgmt = payout*mgmtPct;
   const artistGross = payout - mgmt;
-  const items = ev.bookedItems||[];
-  let bookedCost=0, serviceFeeIncome=0;
-  items.forEach(it=>{
-    const cost=+it.cost||0;
-    const fee=cost*((+it.feePct||0)/100);
-    bookedCost+=cost; serviceFeeIncome+=fee;
-  });
-  const artistDeductions = bookedCost + serviceFeeIncome;
-  const artistNet = artistGross - artistDeductions;
   const cap=+ev.capacityAlloc||1;
-  return {sold,pb,baseRevenue,grossBoxOffice,fixed,payout,mgmt,artistGross,
-    bookedCost,serviceFeeIncome,artistDeductions,artistNet,cap,
+  return {sold,pb,baseRevenue,grossBoxOffice,payout,mgmt,artistGross,artistNet:artistGross,cap,
     pctSold:Math.round(sold/cap*100)};
 }
 
-/* ---------- PROJECTION ENGINE (estimates) ----------
-   Mirrors the settlement waterfall but uses projected ticket
-   count and projected expenses. Payer types: 'producer'
-   (with markup, flows to you) and 'artist' (tracked only).
-   No 'venue' type on projections.
-*/
 function projectionFigures(ev, ticketsOverride){
   const p = ev.projection || {};
   const exps = p.expenses || [];
@@ -521,34 +560,45 @@ function projectionFigures(ev, ticketsOverride){
   const sold = ticketsOverride!=null ? ticketsOverride : (+p.ticketsEst||0);
   const grossBoxOffice = pb.total * sold;
   const baseRevenue = pb.base * sold;
-  // Projections don't include venue deductions (those appear at settlement)
-  const netBoxOffice = baseRevenue;
-  const payout = venuePayout(netBoxOffice, ev.terms);
-  const mgmtPct=(+ev.mgmtPct||0)/100;
-  const commission = payout*mgmtPct;
+  const taxTotal = pb.tax * sold;
+  const sc=ev.showCosts||{};
+  const showCostLines=[
+    ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>({desc:l.desc,amount:(+l.hours||0)*(+l.rate||0)})),
+    ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>({desc:l.desc,amount:+l.amount})),
+    ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>({desc:l.desc,amount:+l.amount})),
+  ];
+  let showCostTotal=0; showCostLines.forEach(l=>showCostTotal+=l.amount);
   let producerCost=0, producerMarkup=0, artistTracked=0;
   exps.forEach(x=>{
     const amt=+x.amount||0;
     if(x.payer==='producer'){ producerCost+=amt; producerMarkup+=amt*((+x.markupPct||0)/100); }
-    else if(x.payer==='artist'){ artistTracked+=amt; }
+    else if(x.payer==='artist') artistTracked+=amt;
   });
+  const {dealRentalFlat,dealRentalPct,dealVenueTotal}=getDealLines(baseRevenue,ev.terms);
+  const payout=calcPayout(baseRevenue, ev.terms, showCostTotal, 0);
+  const mgmtPct=(+ev.mgmtPct||0)/100;
+  const commission=payout*mgmtPct;
   const producerTotal=producerCost+producerMarkup;
   const yourTotal=commission+producerTotal;
-  const artistGross=payout-commission-producerTotal;       // before artist's own costs
-  const artistNet=artistGross-artistTracked;               // after artist's direct expenses
+  const artistGross=payout-commission-producerTotal;
+  const artistNet=artistGross-artistTracked;
   const cap=+ev.capacityAlloc||1;
-  return {sold,grossBoxOffice,baseRevenue,netBoxOffice,payout,commission,
-    mgmtPct:(+ev.mgmtPct||0),producerCost,producerMarkup,producerTotal,
-    artistTracked,artistGross,yourTotal,artistNet,cap,pctSold:Math.round(sold/cap*100)};
+  return {sold,grossBoxOffice,baseRevenue,taxTotal,
+    dealRentalFlat,dealRentalPct,dealVenueTotal,
+    showCostTotal,showCostLines,
+    payout,commission,mgmtPct:(+ev.mgmtPct||0),
+    producerCost,producerMarkup,producerTotal,
+    artistTracked,artistGross,yourTotal,artistNet,
+    cap,pctSold:Math.round(sold/cap*100),
+    netBoxOffice:baseRevenue, venueDeductions:showCostTotal+dealVenueTotal};
 }
+
 function projectionBreakeven(ev){
   const cap=+ev.capacityAlloc||1;
   for(let i=0;i<=cap;i++){ if(projectionFigures(ev,i).artistNet>=0) return i; }
   return null;
 }
 
-/* Pick the most meaningful figures for an event: actuals if settlement
-   has begun, otherwise the projection. Used in rollups (dashboard, tours). */
 function eventHasActuals(e){
   const s=e.settlement; if(!s) return false;
   return (+s.ticketsSold>0) || s.settled || (s.expenses&&s.expenses.length>0);
@@ -556,106 +606,71 @@ function eventHasActuals(e){
 function eventBest(e){
   if(eventHasActuals(e)){
     const f=settlementFigures(e);
-    return {gross:f.grossBoxOffice, payout:f.payout, commission:f.commission, yourTotal:f.yourTotal, artistNet:f.artistNet, actual:true};
+    return {gross:f.grossBoxOffice,payout:f.payout,commission:f.commission,yourTotal:f.yourTotal,artistNet:f.artistNet,actual:true};
   }
   const f=projectionFigures(e);
-  return {gross:f.grossBoxOffice, payout:f.payout, commission:f.commission, yourTotal:f.yourTotal, artistNet:f.artistNet, actual:false};
+  return {gross:f.grossBoxOffice,payout:f.payout,commission:f.commission,yourTotal:f.yourTotal,artistNet:f.artistNet,actual:false};
 }
-
 function breakeven(ev){
   const cap=+ev.capacityAlloc||1;
   for(let i=0;i<=cap;i++){ if(eventFinancials(ev,i).artistNet>=0) return i; }
   return null;
 }
 
-/* ---------- SETTLEMENT ENGINE (real figures) ----------
-   Expense types:
-     'artist'   — artist pays directly; tracked only, no money-flow impact
-     'producer' — you front it; optional markup; both flow into YOUR payout
-     'venue'    — deducted off gross box office at settlement (before the deal)
-   Waterfall:
-     gross → less venue deductions → net box office
-     → apply deal → venue payout (the pot to split)
-     → less mgmt commission, less producer expenses+markups → artist net
-     → your total = commission + producer expenses + markups
-*/
+/* ---------- SETTLEMENT ENGINE ---------- */
 function settlementFigures(ev){
   const s = ev.settlement || {};
   const exps = s.expenses || [];
-  // Actual ticket revenue: prefer manually entered gross if provided,
-  // else compute from actual tickets sold × ticket price breakdown.
   const pb = priceBreakdown(ev.pricing);
   const soldActual = +s.ticketsSold || 0;
   const grossManual = (s.grossOverride!=null && s.grossOverride!=='') ? +s.grossOverride : null;
   const grossBoxOffice = grossManual!=null ? grossManual : pb.total * soldActual;
   const baseRevenue = grossManual!=null
-    ? (pb.total>0 ? grossManual*(pb.base/pb.total) : grossManual) // back out base proportionally
+    ? (pb.total>0 ? grossManual*(pb.base/pb.total) : grossManual)
     : pb.base * soldActual;
+  const taxTotal = grossBoxOffice - baseRevenue;
 
-  let venueDeductions=0, artistTracked=0, producerCost=0, producerMarkup=0;
+  // Deal deduction lines
+  const {dealRentalFlat,dealRentalPct,dealVenueTotal}=getDealLines(baseRevenue, ev.terms||{});
 
-  // Show costs from event form (crew, equipment, flat fees) are venue deductions
-  const sc = ev.showCosts||{};
-  const showCostLines = [
-    ...(sc.crew||[]).map(l=>({desc:l.desc, amount:(+l.hours||0)*(+l.rate||0)})),
-    ...(sc.equipment||[]).map(l=>({desc:l.desc, amount:+l.amount||0})),
-    ...(sc.fees||[]).map(l=>({desc:l.desc, amount:+l.amount||0}))
+  // Show costs
+  const sc=ev.showCosts||{};
+  const showCostLines=[
+    ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>({desc:l.desc,amount:(+l.hours||0)*(+l.rate||0)})),
+    ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>({desc:l.desc,amount:+l.amount})),
+    ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>({desc:l.desc,amount:+l.amount})),
   ];
-  showCostLines.forEach(l=>{ venueDeductions+=(+l.amount||0); });
+  let showCostTotal=0; showCostLines.forEach(l=>showCostTotal+=l.amount);
 
-  // Settlement expenses (entered on the settlement tab)
+  // Settlement expenses
+  let venueExpenseTotal=0, artistTracked=0, producerCost=0, producerMarkup=0;
+  const venueExpenseLines=[];
   exps.forEach(x=>{
     const amt=+x.amount||0;
-    if(x.payer==='venue') venueDeductions+=amt;
+    if(x.payer==='venue'){ venueExpenseTotal+=amt; venueExpenseLines.push({desc:x.desc,amount:amt}); }
     else if(x.payer==='artist') artistTracked+=amt;
-    else if(x.payer==='producer'){
-      producerCost+=amt;
-      producerMarkup+=amt*((+x.markupPct||0)/100);
-    }
+    else if(x.payer==='producer'){ producerCost+=amt; producerMarkup+=amt*((+x.markupPct||0)/100); }
   });
 
-  // For deal types where the venue takes a calculated amount off the top,
-  // surface those as explicit named deduction lines in the waterfall.
-  const ct=ev.terms.contractType;
-  const rentalFlat=+ev.terms.rental||0;
-  const rentalPct=(+ev.terms.doorSplit||0)/100;
-  let dealRentalFlat=0, dealRentalPct=0;
-  if(ct==='rental_plus_pct'){
-    dealRentalFlat=rentalFlat;
-    dealRentalPct=baseRevenue*rentalPct; // % on base ticket revenue (before show costs)
-  } else if(ct==='rental_greater_of'){
-    const flat=rentalFlat, pctAmt=baseRevenue*rentalPct;
-    if(pctAmt>=flat){ dealRentalPct=pctAmt; }
-    else { dealRentalFlat=flat; }
-  }
-  const dealVenueTotal = dealRentalFlat + dealRentalPct;
-
-  // netBoxOffice = base revenue minus show costs and venue expenses (not the rental deal terms)
-  const netBoxOffice = Math.max(0, baseRevenue - venueDeductions);
-  // For rental_plus_pct and rental_greater_of: payout = netBoxOffice minus the deal deductions
-  // The deal % is on baseRevenue (what the venue actually takes from the ticket pool)
-  let payout;
-  if(ct==='rental_plus_pct'){
-    payout = Math.max(0, netBoxOffice - dealRentalFlat - dealRentalPct);
-  } else if(ct==='rental_greater_of'){
-    payout = Math.max(0, netBoxOffice - dealVenueTotal);
-  } else {
-    payout = venuePayout(netBoxOffice, ev.terms);
-  }
+  const payout=calcPayout(baseRevenue, ev.terms||{}, showCostTotal, venueExpenseTotal);
   const mgmtPct=(+ev.mgmtPct||0)/100;
-  const commission = payout*mgmtPct;
-  const producerTotal = producerCost + producerMarkup;
-  const yourTotal = commission + producerTotal;
-  const artistGross = payout - commission - producerTotal;
-  const artistNet = artistGross - artistTracked;
+  const commission=payout*mgmtPct;
+  const producerTotal=producerCost+producerMarkup;
+  const yourTotal=commission+producerTotal;
+  const artistGross=payout-commission-producerTotal;
+  const artistNet=artistGross-artistTracked;
+  const venueDeductions=showCostTotal+venueExpenseTotal+dealVenueTotal;
 
   return {
-    soldActual, grossBoxOffice, baseRevenue, venueDeductions, netBoxOffice,
+    soldActual, grossBoxOffice, baseRevenue, taxTotal,
     dealRentalFlat, dealRentalPct, dealVenueTotal,
+    showCostLines, showCostTotal,
+    venueExpenseLines, venueExpenseTotal,
+    venueDeductions, netBoxOffice:baseRevenue,
     payout, commission, mgmtPct:(+ev.mgmtPct||0),
     producerCost, producerMarkup, producerTotal,
     artistTracked, artistGross, yourTotal, artistNet,
-    settled: !!s.settled
+    settled:!!s.settled
   };
 }
 
@@ -2332,17 +2347,17 @@ function renderSettlementWaterfall(e){
   ));
   const rows=[
     {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
-    {label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'},
-    ...showCostRows,
-    ...settlVenueRows,
-    null,
-    {label:'Net box office',val:f.netBoxOffice,c:'#6fa8dc',b:1},
-    ...(f.dealRentalFlat>0&&ct!=='rental'?[{label:'Less: rental flat fee',val:-f.dealRentalFlat,c:'var(--red)'}]:[]),
+    ...(f.taxTotal>0?[{label:'Less: tax (held by venue)',val:-f.taxTotal,c:'var(--red)'}]:[]),
+    {label:'Net ticket revenue',val:f.baseRevenue,c:'#85b7eb',b:1},
+    ...(f.dealRentalFlat>0?[{label:'Less: rental flat fee',val:-f.dealRentalFlat,c:'var(--red)'}]:[]),
     ...(f.dealRentalPct>0?[{label:'Less: box office % ('+(+e.terms.doorSplit||0)+'%)',val:-f.dealRentalPct,c:'var(--red)'}]:[]),
-    {label:'Venue payout ('+ctLabel(e.terms.contractType)+')',val:f.payout,c:'var(--green)',b:1},
+    ...f.showCostLines.map(l=>({label:'Less: '+esc(l.desc),val:-l.amount,c:'var(--red)'})),
+    ...f.venueExpenseLines.map(l=>({label:'Less: '+esc(l.desc),val:-l.amount,c:'var(--red)'})),
+    null,
+    {label:'Venue payout',val:f.payout,c:'var(--green)',b:1},
     {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
-    {label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'},
-    {label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'},
+    ...(f.producerCost>0?[{label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'}]:[]),
+    ...(f.producerMarkup>0?[{label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'}]:[]),
     null,
     {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
     ...artistExpRows,
@@ -2406,23 +2421,16 @@ function printSettlement(id){
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       ${row('Tickets sold', f.soldActual)}
       ${row('Gross box office', f.grossBoxOffice)}
-      ${row('Base ticket revenue', f.baseRevenue)}
-      ${(()=>{
-        const sc2=e.showCosts||{};
-        const lines=[
-          ...(sc2.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>row('&nbsp;&nbsp;'+(l.desc||'Crew'), -((+l.hours||0)*(+l.rate||0)), {neg:1})),
-          ...(sc2.equipment||[]).filter(l=>+l.amount>0).map(l=>row('&nbsp;&nbsp;'+(l.desc||'Equipment'), -(+l.amount||0), {neg:1})),
-          ...(sc2.fees||[]).filter(l=>+l.amount>0).map(l=>row('&nbsp;&nbsp;'+(l.desc||'Fee'), -(+l.amount||0), {neg:1})),
-        ];
-        return lines.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Show costs</td></tr>`+lines.join(''):'';
-      })()}
-      ${venueExps.length?`<tr><td colspan="2" style="padding-top:6px;font-weight:600;font-size:12px">Additional venue expenses</td></tr>`:''}
-      ${venueExps.map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Venue expense'), -(+x.amount||0), {neg:1})).join('')}
-      ${row('Net box office', f.netBoxOffice, {b:1})}
-      ${f.dealRentalFlat>0&&e.terms.contractType!=='rental'?row('&nbsp;&nbsp;Rental flat fee', -f.dealRentalFlat, {neg:1}):''}
-      ${f.dealRentalPct>0?row('&nbsp;&nbsp;Box office '+e.terms.doorSplit+'% of net', -f.dealRentalPct, {neg:1}):''}
+      ${f.taxTotal>0?row('Less: tax (held by venue)', -f.taxTotal, {neg:1}):''}
+      ${row('Net ticket revenue', f.baseRevenue, {b:1})}
+      ${f.dealRentalFlat>0?row('Less: rental flat fee', -f.dealRentalFlat, {neg:1}):''}
+      ${f.dealRentalPct>0?row('Less: box office '+e.terms.doorSplit+'% of net', -f.dealRentalPct, {neg:1}):''}
+      ${(f.showCostLines||[]).length?`<tr><td colspan="2" style="padding-top:8px;font-weight:600;font-size:12px">Show costs</td></tr>`:''}
+      ${(f.showCostLines||[]).map(l=>row('&nbsp;&nbsp;'+esc(l.desc), -l.amount, {neg:1})).join('')}
+      ${(f.venueExpenseLines||[]).length?`<tr><td colspan="2" style="padding-top:6px;font-weight:600;font-size:12px">Additional venue expenses</td></tr>`:''}
+      ${(f.venueExpenseLines||[]).map(l=>row('&nbsp;&nbsp;'+esc(l.desc), -l.amount, {neg:1})).join('')}
       <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
-      ${row('Venue payout ('+ctLabel(e.terms.contractType)+')', f.payout, {b:1})}
+      ${row('Venue payout', f.payout, {b:1})}
       ${row('Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
       ${prodExps.length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Producer-covered expenses</td></tr>`:''}
       ${prodExps.map(x=>{const m=(+x.amount||0)*((+x.markupPct||0)/100);return row('&nbsp;&nbsp;'+esc(x.desc||'Expense')+(x.markupPct?` (incl. ${x.markupPct}% markup)`:''), -((+x.amount||0)+m), {neg:1});}).join('')}
