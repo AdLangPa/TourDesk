@@ -625,10 +625,14 @@ function settlementFigures(ev){
   const soldActual = +s.ticketsSold || 0;
   const grossManual = (s.grossOverride!=null && s.grossOverride!=='') ? +s.grossOverride : null;
   const grossBoxOffice = grossManual!=null ? grossManual : pb.total * soldActual;
+
+  // When gross override is used: venue holds the full gross and remits net after charges.
+  // Use gross directly as the base for payout — all venue costs come off the top.
+  // When calculated from tickets: back out tax to get base revenue.
   const baseRevenue = grossManual!=null
-    ? (pb.total>0 ? grossManual*(pb.base/pb.total) : grossManual)
+    ? grossManual
     : pb.base * soldActual;
-  const taxTotal = grossBoxOffice - baseRevenue;
+  const taxTotal = grossManual!=null ? 0 : pb.tax * soldActual;
 
   // Deal deduction lines
   const {dealRentalFlat,dealRentalPct,dealVenueTotal}=getDealLines(baseRevenue, ev.terms||{});
