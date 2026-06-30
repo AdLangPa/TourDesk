@@ -625,28 +625,28 @@ function settlementFigures(ev){
   const soldActual = +s.ticketsSold || 0;
   const grossManual = (s.grossOverride!=null && s.grossOverride!=='') ? +s.grossOverride : null;
   const grossBoxOffice = grossManual!=null ? grossManual : pb.total * soldActual;
+  const useOverride = grossManual!=null;
 
-  // When gross override is used: venue holds the full gross and remits net after charges.
-  // Use gross directly as the base for payout — all venue costs come off the top.
-  // When calculated from tickets: back out tax to get base revenue.
-  const baseRevenue = grossManual!=null
-    ? grossManual
-    : pb.base * soldActual;
-  const taxTotal = grossManual!=null ? 0 : pb.tax * soldActual;
+  // With gross override: venue holds the full amount, all costs in settlement expenses.
+  // Without override: calculate from tickets, apply deal terms and show costs.
+  const baseRevenue = useOverride ? grossManual : pb.base * soldActual;
+  const taxTotal = useOverride ? 0 : pb.tax * soldActual;
 
-  // Deal deduction lines
-  const {dealRentalFlat,dealRentalPct,dealVenueTotal}=getDealLines(baseRevenue, ev.terms||{});
+  // Deal terms only apply when NOT using gross override
+  const {dealRentalFlat,dealRentalPct,dealVenueTotal} = useOverride
+    ? {dealRentalFlat:0, dealRentalPct:0, dealVenueTotal:0}
+    : getDealLines(baseRevenue, ev.terms||{});
 
-  // Show costs
-  const sc=ev.showCosts||{};
-  const showCostLines=[
+  // Show costs from event form only when NOT using gross override
+  const sc = ev.showCosts||{};
+  const showCostLines = useOverride ? [] : [
     ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>({desc:l.desc,amount:(+l.hours||0)*(+l.rate||0)})),
     ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>({desc:l.desc,amount:+l.amount})),
     ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>({desc:l.desc,amount:+l.amount})),
   ];
   let showCostTotal=0; showCostLines.forEach(l=>showCostTotal+=l.amount);
 
-  // Settlement expenses
+  // Settlement expenses always apply
   let venueExpenseTotal=0, artistTracked=0, producerCost=0, producerMarkup=0;
   const venueExpenseLines=[];
   exps.forEach(x=>{
@@ -656,7 +656,15 @@ function settlementFigures(ev){
     else if(x.payer==='producer'){ producerCost+=amt; producerMarkup+=amt*((+x.markupPct||0)/100); }
   });
 
-  const payout=calcPayout(baseRevenue, ev.terms||{}, showCostTotal, venueExpenseTotal);
+  // Payout calculation
+  let payout;
+  if(useOverride){
+    // Gross override: payout = gross minus all settlement venue expenses
+    payout = Math.max(0, grossManual - venueExpenseTotal);
+  } else {
+    payout = calcPayout(baseRevenue, ev.terms||{}, showCostTotal, venueExpenseTotal);
+  }
+
   const mgmtPct=(+ev.mgmtPct||0)/100;
   const commission=payout*mgmtPct;
   const producerTotal=producerCost+producerMarkup;
@@ -666,7 +674,7 @@ function settlementFigures(ev){
   const venueDeductions=showCostTotal+venueExpenseTotal+dealVenueTotal;
 
   return {
-    soldActual, grossBoxOffice, baseRevenue, taxTotal,
+    soldActual, grossBoxOffice, baseRevenue, taxTotal, useOverride,
     dealRentalFlat, dealRentalPct, dealVenueTotal,
     showCostLines, showCostTotal,
     venueExpenseLines, venueExpenseTotal,
@@ -2349,7 +2357,27 @@ function renderSettlementWaterfall(e){
   const artistExpRows=(e.settlement.expenses||[]).filter(x=>x.payer==='artist').map(x=>(
     {label:'Less: '+(x.desc||'artist expense'),val:-(+x.amount||0),c:'#c98a3f'}
   ));
-  const rows=[
+
+  // Two display modes:
+  // Override mode: Gross → all venue expenses → Venue payout
+  // Standard mode: Gross → tax → net ticket revenue → deal terms → show costs → venue expenses → payout
+  const rows = f.useOverride ? [
+    {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)',b:1},
+    ...f.venueExpenseLines.map(l=>({
+      label:'Less: '+esc(l.desc),
+      val:-l.amount,
+      c:l.amount<0?'var(--green)':'var(--red)'
+    })),
+    null,
+    {label:'Venue payout',val:f.payout,c:'var(--green)',b:1},
+    {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
+    ...(f.producerCost>0?[{label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'}]:[]),
+    ...(f.producerMarkup>0?[{label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'}]:[]),
+    null,
+    {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
+    ...artistExpRows,
+    ...(artistExpRows.length?[null,{label:'Artist net',val:f.artistNet,c:f.artistNet>=0?'var(--green)':'var(--red)',b:1}]:[])
+  ] : [
     {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
     ...(f.taxTotal>0?[{label:'Less: tax (held by venue)',val:-f.taxTotal,c:'var(--red)'}]:[]),
     {label:'Net ticket revenue',val:f.baseRevenue,c:'#85b7eb',b:1},
