@@ -515,9 +515,12 @@ function priceBreakdown(pricing){
   if(pricing.taxOn==='base') taxBase=base;
   else if(pricing.taxOn==='base_fee') taxBase=base+fee;
   const tax=taxBase*taxRate;
+  // Per-ticket fees (pass-through to venue — customer pays, not part of your base revenue)
+  const ptFees=(pricing.perTicketFees||[]).reduce((t,f)=>t+(+f.amount||0),0);
   const sub=base+fee+tax;
   const cc=sub*((+pricing.ccFee||0)/100);
-  return {base,fee,tax,cc,total:sub+cc};
+  const total=sub+cc+ptFees;
+  return {base,fee,tax,cc,ptFees,ptFeeLines:pricing.perTicketFees||[],total,allInPrice:total};
 }
 
 /* ---------- CORE FINANCIAL MODEL ----------
@@ -1018,6 +1021,7 @@ function venueForm(id, prefill){
   const v=id?get(DB.venues,id):(prefill||{});
   const ct=v.contractType||'rental';
   const sc=v.showCosts||{crew:[],equipment:[],fees:[]};
+  const ptf=v.perTicketFees||[];
   const crewRows=(sc.crew||[]).map((l,i)=>`
     <div class="vf-cost-row" style="display:grid;grid-template-columns:1fr 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
       <input placeholder="e.g. Stage tech" value="${esc(l.desc||'')}" id="vf-crew-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
@@ -1036,6 +1040,12 @@ function venueForm(id, prefill){
       <input placeholder="e.g. SOCAN" value="${esc(l.desc||'')}" id="vf-fee-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
       <input type="number" placeholder="amount" value="${l.amount||''}" id="vf-fee-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
       <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('fee',${i})">×</button>
+    </div>`).join('');
+  const ptfRows=ptf.map((l,i)=>`
+    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="vf-ptf-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemovePtfRow(${i})">×</button>
     </div>`).join('');
   const body=`
     <div class="field"><label>Venue name</label><input id="vf-name" value="${esc(v.name||'')}"></div>
@@ -1098,6 +1108,13 @@ function venueForm(id, prefill){
     </div>
     <div id="vf-fee-rows">${feeRows}</div>
     <button class="btn ghost sm" onclick="vfAddCostRow('fee')" style="margin-bottom:14px">+ Add flat fee</button>
+    <div class="form-section">Per-ticket fees (passed to customer) <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to patron's all-in price — flows straight to venue, not your revenue)</span></div>
+    <p class="muted" style="font-size:11px;margin:-6px 0 8px">e.g. box office surcharge, CIF levy, printing fee. These inflate the ticket price the patron sees but don't affect your payout.</p>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 90px 28px;gap:6px">
+      <span>Fee name</span><span style="text-align:right">$/ticket</span><span></span>
+    </div>
+    <div id="vf-ptf-rows">${ptfRows}</div>
+    <button class="btn ghost sm" onclick="vfAddPtfRow()" style="margin-bottom:14px">+ Add per-ticket fee</button>
     <div class="field"><label>Notes</label><textarea id="vf-notes">${esc(v.notes||'')}</textarea></div>
     <div class="field"><label>Tags (comma separated)</label><input id="vf-tags" value="${esc((v.tags||[]).join(', '))}"></div>`;
   openModal(id?'Edit venue':'Add venue', body,
@@ -1106,8 +1123,36 @@ function venueForm(id, prefill){
   setTimeout(toggleVenueDealFields, 50);
 }
 
-// Show cost row management in venue form
-let _vfCosts={crew:[],eq:[],fee:[]};
+// Per-ticket fee row management (venue form)
+let _vfPtf=[];
+function vfAddPtfRow(){
+  _vfPtf=vfReadPtfRows();
+  _vfPtf.push({desc:'',amount:''});
+  vfRenderPtfRows();
+}
+function vfRemovePtfRow(i){
+  _vfPtf=vfReadPtfRows();
+  _vfPtf.splice(i,1);
+  vfRenderPtfRows();
+}
+function vfReadPtfRows(){
+  return [...document.querySelectorAll('#vf-ptf-rows .vf-ptf-row')].map((_,i)=>({
+    desc:document.getElementById('vf-ptf-desc-'+i)?.value||'',
+    amount:+document.getElementById('vf-ptf-amt-'+i)?.value||0
+  }));
+}
+function vfRenderPtfRows(){
+  const host=document.getElementById('vf-ptf-rows'); if(!host) return;
+  host.innerHTML=_vfPtf.map((l,i)=>`
+    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="vf-ptf-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemovePtfRow(${i})">×</button>
+    </div>`).join('');
+}
+function readVenuePerTicketFees(){
+  return vfReadPtfRows().filter(l=>l.desc||l.amount>0);
+}
 function vfAddCostRow(type){
   // Read current rows first
   _vfCosts[type]=vfReadCostRows(type);
@@ -1192,7 +1237,8 @@ function saveVenue(id){
     rental:fvn('vf-rental'),
     doorSplit:fvn('vf-split'),
     rentalPct:fvn('vf-split'),
-    showCosts:readVenueShowCosts()
+    showCosts:readVenueShowCosts(),
+    perTicketFees:readVenuePerTicketFees()
   };
   if(id){ Object.assign(get(DB.venues,id),rec); logActivity('edited','Venue',rec.name); }
   else { rec.id=uid('v'); DB.venues.push(rec); logActivity('created','Venue',rec.name); }
@@ -2787,6 +2833,19 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
         <option value="base_fee" ${p.taxOn==='base_fee'?'selected':''}>Base + fee</option>
         <option value="none" ${p.taxOn==='none'?'selected':''}>Tax exempt</option></select></div>
     </div>
+    <div class="form-section">Per-ticket fees (passed to customer) <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to all-in price — flows straight to venue, not your revenue)</span></div>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 90px 28px;gap:8px">
+      <span>Fee name</span><span style="text-align:right">$/ticket</span><span></span>
+    </div>
+    <div id="ef-ptf-rows">
+      ${(p.perTicketFees||[]).map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
+        <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="ef-ptf-desc-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <button class="btn ghost sm" onclick="efRemovePtfRow(${i})" style="padding:5px 7px">×</button>
+      </div>`).join('')}
+    </div>
+    <button class="btn sm" onclick="efAddPtfRow()" style="margin-bottom:6px">+ Add per-ticket fee</button>
+    <p class="muted" style="font-size:11px;margin-bottom:14px">These inflate the patron's all-in price but don't affect your payout or commission.</p>
 
     <div class="form-section">Deal terms — negotiated for this show</div>
     <div class="field"><label>Contract type</label>
@@ -2865,7 +2924,17 @@ function prefillVenueTerms(){
       if(v.doorSplit) { const el=document.getElementById('ef-split'); if(el) el.value=v.doorSplit; }
     }, 80);
   }
-  // Pre-fill show costs from venue defaults if venue has them and event form is empty
+  // Pre-fill per-ticket fees from venue defaults into event pricing
+  if(v.perTicketFees && v.perTicketFees.length){
+    // Store on the pricing object for use in projections
+    const efPtf=v.perTicketFees;
+    // Re-render per-ticket fees section in event form if it exists
+    const ptfHost=document.getElementById('ef-ptf-rows');
+    if(ptfHost){
+      _efPtf=JSON.parse(JSON.stringify(efPtf));
+      efRenderPtfRows();
+    }
+  }
   if(v.showCosts){
     const sc=v.showCosts;
     if((sc.crew||[]).length||(sc.equipment||[]).length||(sc.fees||[]).length){
@@ -2947,6 +3016,32 @@ function applyPastedShow(){
 
 /* ---- Show cost line helpers (crew / equipment / fees) ---- */
 let _efCosts={crew:[],equipment:[],fees:[]};
+let _efPtf=[];
+
+function efAddPtfRow(){
+  _efPtf=efReadPtfRows();
+  _efPtf.push({desc:'',amount:''});
+  efRenderPtfRows();
+}
+function efRemovePtfRow(i){
+  _efPtf=efReadPtfRows();
+  _efPtf.splice(i,1);
+  efRenderPtfRows();
+}
+function efReadPtfRows(){
+  return [...document.querySelectorAll('#ef-ptf-rows .ef-ptf-row')].map((_,i)=>({
+    desc:document.getElementById('ef-ptf-desc-'+i)?.value||'',
+    amount:+document.getElementById('ef-ptf-amt-'+i)?.value||0
+  }));
+}
+function efRenderPtfRows(){
+  const host=document.getElementById('ef-ptf-rows'); if(!host) return;
+  host.innerHTML=_efPtf.map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
+    <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="ef-ptf-desc-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+    <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+    <button class="btn ghost sm" onclick="efRemovePtfRow(${i})" style="padding:5px 7px">×</button>
+  </div>`).join('');
+}
 function initCostState(e){
   const sc=e.showCosts||{crew:[],equipment:[],fees:[]};
   _efCosts={
@@ -3048,7 +3143,8 @@ function saveEvent(id){
     capacityAlloc:fvn('ef-cap'),presales:fvn('ef-pre'),comps:fvn('ef-comps'),
     mgmtPct:fvn('ef-mgmt'),
     pricing:{base:fvn('ef-base'),serviceFee:fvn('ef-fee'),feeType:fv('ef-feetype'),
-      ccFee:fvn('ef-cc'),taxRate:fvn('ef-tax'),taxOn:fv('ef-taxon')},
+      ccFee:fvn('ef-cc'),taxRate:fvn('ef-tax'),taxOn:fv('ef-taxon'),
+      perTicketFees:efReadPtfRows().filter(l=>l.desc||l.amount>0)},
     terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
     showCosts:readShowCosts()
   };
