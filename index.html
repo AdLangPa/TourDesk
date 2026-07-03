@@ -1686,7 +1686,7 @@ function mostRecentEventAtVenue(venueId){
 }
 
 // Build a show data object from a venue for a proposal
-function proposalShowFromVenue(venueId, ticketBase){
+function proposalShowFromVenue(venueId, ticketBase, proposal){
   const v=get(DB.venues,venueId); if(!v) return null;
   const prev=mostRecentEventAtVenue(venueId);
   const terms=prev?{...prev.terms}:{
@@ -1696,19 +1696,35 @@ function proposalShowFromVenue(venueId, ticketBase){
   };
   const showCosts=prev?JSON.parse(JSON.stringify(prev.showCosts||{crew:[],equipment:[],fees:[]}))
     :{crew:[],equipment:[],fees:[]};
-  // Pull projection expenses from previous event as starting point (producer-type only)
   const prevExpenses=prev?(prev.projection?.expenses||[]).filter(x=>x.payer==='producer').map(x=>({...x})):[];
-  const taxRate=prev?.pricing?.taxRate??DB.settings.taxRate;
-  const taxOn=prev?.pricing?.taxOn||'base';
+  const taxRate=prev?.pricing?.taxRate??proposal?.tourTaxRate??DB.settings.taxRate;
+  const taxOn=prev?.pricing?.taxOn||proposal?.tourTaxOn||'base';
   const capacity=+v.capacity||0;
   const base=ticketBase||+prev?.pricing?.base||0;
+
+  // Apply tour-level tiers if proposal has them
+  const tiers=proposal?.tourTiers?.length ? applyTourTiers(proposal.tourTiers,capacity) : [];
+
+  // Auto-add VIP merch expense if tour has merch cost set
+  const expenses=[...prevExpenses];
+  if(proposal?.vipMerchCost>0){
+    const vipTier=tiers.find(t=>t.fixed);
+    const vipCount=vipTier?.count||20;
+    expenses.push({
+      desc:proposal.vipMerchDesc||'VIP merch bundle',
+      amount:proposal.vipMerchCost*vipCount,
+      payer:'artist',markupPct:0,_tourMerch:true
+    });
+  }
+
   return {
     _sid:'s'+Date.now()+Math.random().toString(36).slice(2),
     venueId, date:'', showTime:'', loadIn:'',
-    ticketBase:base, capacity, taxRate, taxOn,
-    terms, showCosts,
-    expenses: prevExpenses,
-    ticketsEst:Math.round(capacity*0.6),
+    ticketBase:tiers.length?(tiers.find(t=>!t.fixed)?.base||base):base,
+    tiers,
+    capacity, taxRate, taxOn,
+    terms, showCosts, expenses,
+    ticketsEst:tiers.length?tiers.reduce((s,t)=>s+t.count,0):Math.round(capacity*0.6),
     _fromPrev:prev?prev.name:null
   };
 }
@@ -1716,20 +1732,24 @@ function proposalShowFromVenue(venueId, ticketBase){
 // Compute projected financials for a proposal show
 function proposalShowFigures(s, ticketsOverride, tourCostPerShow){
   const tickets = ticketsOverride!==undefined ? ticketsOverride : (+s.ticketsEst||0);
-  // Build expenses: show-level expenses + pro-rated tour costs
   const baseExps=(s.expenses||[]).map(x=>({...x,payer:x.payer||'producer'}));
   const tourExps=tourCostPerShow>0?[{desc:'Tour costs (pro-rated)',amount:tourCostPerShow,payer:'artist',markupPct:0}]:[];
+  // Use per-show tiers if set, otherwise single price
+  const pricingTiers=(s.tiers||[]).filter(t=>t.base>0);
   const fakeEvent={
     capacityAlloc:s.capacity||0,
     mgmtPct:+s.mgmtPct||DB.settings.mgmtPct,
-    pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
-      taxRate:+s.taxRate||0,taxOn:s.taxOn||'base'},
+    pricing:{
+      base:+s.ticketBase||0, serviceFee:0, feeType:'fixed', ccFee:0,
+      taxRate:+s.taxRate||0, taxOn:s.taxOn||'base', perTicketFees:[],
+      tiers:pricingTiers.length>0?pricingTiers:[]
+    },
     terms:s.terms||{},
     showCosts:s.showCosts||{crew:[],equipment:[],fees:[]},
     projection:{ticketsEst:tickets, expenses:[...baseExps,...tourExps]},
     settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false}
   };
-  return projectionFigures(fakeEvent, tickets);
+  return projectionFigures(fakeEvent, pricingTiers.length>0?null:tickets);
 }
 
 function tourFormEdit(id){
@@ -3965,6 +3985,8 @@ VIEWS.proposals={
           <div class="info"><label>Type</label><span>${p.kind==='tour'?'Full tour':'Single show'}</span></div>
           <div class="info"><label>Base ticket</label><span>${p.basePrice?money0(p.basePrice):'—'}</span></div>
           ${isAccepted&&p.acceptedAt?`<div class="info"><label>Accepted</label><span>${p.acceptedAt.slice(0,10)}</span></div>`:''}
+          ${p.tourTiers?.length?`<div class="info"><label>Ticket tiers</label><span>${p.tourTiers.map(t=>`${esc(t.name)} ${t.base?money0(t.base):'TBD'}`).join(' · ')}</span></div>`:''}
+          ${p.vipMerchCost?`<div class="info"><label>VIP merch/pkg</label><span>${money0(p.vipMerchCost)}</span></div>`:''}
         </div>
         ${p.intro?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(p.intro)}</p>`:''}
       </div>
@@ -4081,7 +4103,11 @@ function propShowOverview(host,p,s,f,v,sliderVal){
         <div class="info"><label>Venue</label><span>${v?esc(v.name):'—'}</span></div>
         <div class="info"><label>Date</label><span>${esc(s.date||'TBD')}</span></div>
         <div class="info"><label>Capacity</label><span>${s.capacity||'—'}</span></div>
-        <div class="info"><label>Ticket price</label><span>${money0(s.ticketBase)}</span></div>
+        <div class="info"><label>Ticket price</label><span>${
+          (s.tiers&&s.tiers.length>0)
+            ? s.tiers.map(t=>`${esc(t.name)} ${money0(t.base)} (${t.count})`).join(' · ')
+            : money0(s.ticketBase)
+        }</span></div>
         <div class="info"><label>Contract</label><span>${ctLabel(ct)}</span></div>
         <div class="info"><label>Tax</label><span>${s.taxRate||0}% on ${s.taxOn||'base'}</span></div>
       </div>
@@ -4594,10 +4620,27 @@ function saveProposalNew(){
 
 function proposalEditMeta(id){
   const p=get(DB.proposals,id); if(!p) return;
+  const isTour=p.kind==='tour'||fv('pf-kind')==='tour';
+  const tiers=p.tourTiers||[
+    {name:'General',base:p.basePrice||0,splitPct:55},
+    {name:'Premium',base:0,splitPct:45},
+    {name:'VIP',base:0,count:20,fixed:true}
+  ];
+  const tierRows=tiers.map((t,i)=>`
+    <div class="tier-row" style="display:grid;grid-template-columns:1fr 80px ${t.fixed?'80px':'80px'} 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="Tier name" value="${esc(t.name||'')}" id="pt-name-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" step="0.01" placeholder="Base $" value="${t.base||''}" id="pt-base-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      ${t.fixed
+        ? `<input type="number" placeholder="Count" value="${t.count||20}" id="pt-count-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">`
+        : `<div style="display:flex;align-items:center;gap:4px"><input type="number" placeholder="%" value="${t.splitPct||''}" id="pt-split-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;width:100%"><span style="font-size:11px;color:var(--txt3)">%</span></div>`}
+      <div style="font-size:11px;color:var(--txt3);text-align:center">${t.fixed?'fixed':'of rem. cap'}</div>
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="ptRemoveTier(${i})">×</button>
+    </div>`).join('');
+
   openModal('Edit proposal',`
     <div class="field"><label>Proposal title</label><input id="pf-title" value="${esc(p.title||'')}"></div>
     <div class="row2">
-      <div class="field"><label>Type</label><select id="pf-kind">
+      <div class="field"><label>Type</label><select id="pf-kind" onchange="ptToggleTourFields()">
         <option value="single" ${p.kind==='single'?'selected':''}>Single show</option>
         <option value="tour" ${p.kind==='tour'?'selected':''}>Full tour</option>
       </select></div>
@@ -4606,23 +4649,156 @@ function proposalEditMeta(id){
         ${DB.artists.map(ar=>`<option value="${ar.id}" ${p.artistId===ar.id?'selected':''}>${esc(ar.name)}</option>`).join('')}
       </select></div>
     </div>
-    <div class="field"><label>Base ticket price ($)</label>
-      <input id="pf-base" type="number" step="0.01" value="${p.basePrice||''}"></div>
     <div class="field"><label>Intro / pitch note</label>
-      <textarea id="pf-intro">${esc(p.intro||'')}</textarea></div>`,
+      <textarea id="pf-intro">${esc(p.intro||'')}</textarea></div>
+
+    <div id="pf-tour-fields" style="display:${p.kind==='tour'?'block':'none'}">
+      <div class="form-section">Ticket tiers — tour defaults</div>
+      <p class="muted" style="font-size:11px;margin:-4px 0 10px">Set once for the whole tour. Each show inherits these — VIP is a fixed seat count per show, others split the remaining capacity by the % you set. Changing these here re-pushes to all shows.</p>
+      <div style="display:grid;grid-template-columns:1fr 80px 80px 80px 28px;gap:6px;margin-bottom:4px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">
+        <span>Tier name</span><span style="text-align:right">Base $</span><span style="text-align:right">Alloc</span><span></span><span></span>
+      </div>
+      <div id="pt-tier-rows">${tierRows}</div>
+      <div style="display:flex;gap:8px;margin-top:6px;margin-bottom:14px">
+        <button class="btn ghost sm" onclick="ptAddTier(false)">+ Add % tier</button>
+        <button class="btn ghost sm" onclick="ptAddTier(true)">+ Add fixed-count tier</button>
+      </div>
+
+      <div class="form-section">VIP merch cost (artist expense)</div>
+      <p class="muted" style="font-size:11px;margin:-4px 0 10px">Cost per VIP package (e.g. merch bundle value). Multiplied by VIP count → auto-added as an artist expense per show. Changing here re-pushes to all shows.</p>
+      <div class="row2">
+        <div class="field"><label>Merch cost per VIP package ($)</label>
+          <input type="number" step="0.01" id="pf-vip-merch" value="${p.vipMerchCost||''}" placeholder="e.g. 60.00"></div>
+        <div class="field"><label>Description</label>
+          <input id="pf-vip-merch-desc" value="${esc(p.vipMerchDesc||'VIP merch bundle')}" placeholder="VIP merch bundle"></div>
+      </div>
+
+      <div class="form-section">Tax rate (all tiers)</div>
+      <div class="row2">
+        <div class="field"><label>Tax rate %</label>
+          <input type="number" step="0.5" id="pf-taxrate" value="${p.tourTaxRate!=null?p.tourTaxRate:13}"></div>
+        <div class="field"><label>Tax applies to</label>
+          <select id="pf-taxon">
+            <option value="base" ${(!p.tourTaxOn||p.tourTaxOn==='base')?'selected':''}>Base only</option>
+            <option value="none" ${p.tourTaxOn==='none'?'selected':''}>Tax exempt</option>
+          </select></div>
+      </div>
+    </div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="saveProposalMeta('${id}')">Save</button>`);
+     <button class="btn primary" onclick="saveProposalMeta('${id}')">Save &amp; push to shows</button>`);
+  setTimeout(ptToggleTourFields,50);
+}
+
+function ptToggleTourFields(){
+  const kind=document.getElementById('pf-kind')?.value;
+  const host=document.getElementById('pf-tour-fields');
+  if(host) host.style.display=kind==='tour'?'block':'none';
+}
+
+function ptReadTiers(){
+  return [...document.querySelectorAll('#pt-tier-rows .tier-row')].map((_,i)=>{
+    const name=document.getElementById('pt-name-'+i)?.value||'';
+    const base=+document.getElementById('pt-base-'+i)?.value||0;
+    const countEl=document.getElementById('pt-count-'+i);
+    const splitEl=document.getElementById('pt-split-'+i);
+    const fixed=!!countEl;
+    return fixed
+      ? {name,base,count:+countEl.value||20,fixed:true}
+      : {name,base,splitPct:+splitEl.value||0,fixed:false};
+  });
+}
+
+function ptAddTier(fixed){
+  const rows=ptReadTiers();
+  rows.push(fixed?{name:'VIP',base:0,count:20,fixed:true}:{name:'',base:0,splitPct:0,fixed:false});
+  ptRenderTiers(rows);
+}
+function ptRemoveTier(i){
+  const rows=ptReadTiers();
+  rows.splice(i,1);
+  ptRenderTiers(rows);
+}
+function ptRenderTiers(tiers){
+  const host=document.getElementById('pt-tier-rows'); if(!host) return;
+  host.innerHTML=tiers.map((t,i)=>`
+    <div class="tier-row" style="display:grid;grid-template-columns:1fr 80px 80px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="Tier name" value="${esc(t.name||'')}" id="pt-name-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" step="0.01" placeholder="$" value="${t.base||''}" id="pt-base-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      ${t.fixed
+        ? `<input type="number" placeholder="Count" value="${t.count||20}" id="pt-count-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">`
+        : `<div style="display:flex;align-items:center;gap:4px"><input type="number" placeholder="%" value="${t.splitPct||''}" id="pt-split-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;width:100%"><span style="font-size:11px;color:var(--txt3)">%</span></div>`}
+      <div style="font-size:11px;color:var(--txt3);text-align:center">${t.fixed?'fixed':'of rem. cap'}</div>
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="ptRemoveTier(${i})">×</button>
+    </div>`).join('');
+}
+
+// Compute tiers for a specific show given tour-level tier config and venue capacity
+function applyTourTiers(tourTiers,capacity){
+  if(!tourTiers||!tourTiers.length) return [];
+  const fixedTotal=tourTiers.filter(t=>t.fixed).reduce((s,t)=>s+(+t.count||0),0);
+  const remaining=Math.max(0,(+capacity||0)-fixedTotal);
+  return tourTiers.map(t=>{
+    const count=t.fixed?(+t.count||20):Math.round(remaining*(+t.splitPct||0)/100);
+    return {name:t.name,base:+t.base||0,count,fixed:t.fixed,splitPct:t.splitPct};
+  });
 }
 
 function saveProposalMeta(id){
   const p=get(DB.proposals,id); if(!p) return;
   const artistId=fv('pf-artist');
+  const newKind=fv('pf-kind');
+  const newTiers=newKind==='tour'?ptReadTiers():(p.tourTiers||[]);
+  const newMerchCost=+document.getElementById('pf-vip-merch')?.value||0;
+  const newMerchDesc=fv('pf-vip-merch-desc')||'VIP merch bundle';
+  const newTaxRate=+document.getElementById('pf-taxrate')?.value??p.tourTaxRate??13;
+  const newTaxOn=fv('pf-taxon')||'base';
+
+  // Track what changed at tour level to push only those fields
+  const changed={
+    tiers: JSON.stringify(newTiers)!==JSON.stringify(p.tourTiers||[]),
+    merch: newMerchCost!==(p.vipMerchCost||0) || newMerchDesc!==(p.vipMerchDesc||'VIP merch bundle'),
+    tax: newTaxRate!==(p.tourTaxRate??13) || newTaxOn!==(p.tourTaxOn||'base')
+  };
+
   Object.assign(p,{
-    title:fv('pf-title'), kind:fv('pf-kind'), artistId,
+    title:fv('pf-title'), kind:newKind, artistId,
     artistName:artistId?(get(DB.artists,artistId)||{}).name:'',
-    basePrice:+document.getElementById('pf-base').value||p.basePrice||0,
-    intro:fv('pf-intro')
+    intro:fv('pf-intro'),
+    tourTiers:newTiers,
+    vipMerchCost:newMerchCost,
+    vipMerchDesc:newMerchDesc,
+    tourTaxRate:newTaxRate,
+    tourTaxOn:newTaxOn
   });
+
+  // Push changed fields to all shows
+  if(newKind==='tour'){
+    (p.shows||[]).forEach(s=>{
+      const cap=+s.capacity||0;
+      if(changed.tiers){
+        s.tiers=applyTourTiers(newTiers,cap);
+      }
+      if(changed.merch){
+        // Update or add VIP merch expense
+        s.expenses=s.expenses||[];
+        const vipCount=(s.tiers||[]).find(t=>t.fixed)?.count||0;
+        const idx=s.expenses.findIndex(x=>x._tourMerch);
+        const merchAmt=newMerchCost*vipCount;
+        if(newMerchCost>0 && vipCount>0){
+          const entry={desc:newMerchDesc,amount:merchAmt,payer:'artist',markupPct:0,_tourMerch:true};
+          if(idx>=0) s.expenses[idx]=entry;
+          else s.expenses.push(entry);
+        } else if(idx>=0){
+          s.expenses.splice(idx,1);
+        }
+      }
+      if(changed.tax){
+        s.taxRate=newTaxRate;
+        s.taxOn=newTaxOn;
+      }
+    });
+  }
+
   logActivity('edited','Proposal',p.title);
   persist(); closeModal(); go('proposals',id);
 }
@@ -4671,15 +4847,28 @@ function pavSave(pid){
   const vid=fv('pav-venue'); if(!vid){alert('Please select a venue.');return;}
   const p=get(DB.proposals,pid); if(!p) return;
   const base=+(document.getElementById('pav-price')?.value)||p.basePrice||0;
-  const s=proposalShowFromVenue(vid, base);
+  const capVal=+(document.getElementById('pav-cap')?.value)||get(DB.venues,vid)?.capacity||0;
+  const s=proposalShowFromVenue(vid, base, p);
   if(!s) return;
   s.date=fv('pav-date')||'';
-  s.ticketBase=base;
-  const capEl=document.getElementById('pav-cap');
-  const estEl=document.getElementById('pav-est');
-  if(capEl&&capEl.value) s.capacity=+capEl.value;
-  if(estEl&&estEl.value) s.ticketsEst=+estEl.value;
-  else s.ticketsEst=Math.round(s.capacity*0.6);
+  s.capacity=capVal||s.capacity;
+  // Re-apply tiers with actual capacity now that we know it
+  if(p.tourTiers?.length && s.capacity){
+    s.tiers=applyTourTiers(p.tourTiers,s.capacity);
+    s.ticketsEst=s.tiers.reduce((t,r)=>t+r.count,0);
+    // Update VIP merch amount with actual VIP count
+    if(p.vipMerchCost>0){
+      const vipCount=s.tiers.find(t=>t.fixed)?.count||0;
+      const idx=s.expenses.findIndex(x=>x._tourMerch);
+      const amt=p.vipMerchCost*vipCount;
+      if(idx>=0) s.expenses[idx].amount=amt;
+      else s.expenses.push({desc:p.vipMerchDesc||'VIP merch bundle',amount:amt,payer:'artist',markupPct:0,_tourMerch:true});
+    }
+  } else {
+    const estEl=document.getElementById('pav-est');
+    if(estEl&&estEl.value) s.ticketsEst=+estEl.value;
+    else s.ticketsEst=Math.round(s.capacity*0.6);
+  }
   p.shows=p.shows||[]; p.shows.push(s);
   logActivity('edited','Proposal',p.title+' (added '+(get(DB.venues,vid)?.name||'venue')+')');
   persist(); closeModal(); go('proposals',pid);
