@@ -515,12 +515,16 @@ function priceBreakdown(pricing){
   if(pricing.taxOn==='base') taxBase=base;
   else if(pricing.taxOn==='base_fee') taxBase=base+fee;
   const tax=taxBase*taxRate;
-  // Per-ticket fees (pass-through to venue — customer pays, not part of your base revenue)
-  const ptFees=(pricing.perTicketFees||[]).reduce((t,f)=>t+(+f.amount||0),0);
+  // Per-ticket fees: each can be flat $ or % of base
+  const ptFeeLines=pricing.perTicketFees||[];
+  const ptFees=ptFeeLines.reduce((t,f)=>{
+    const amt=f.feeType==='pct' ? base*((+f.amount||0)/100) : (+f.amount||0);
+    return t+amt;
+  },0);
   const sub=base+fee+tax;
   const cc=sub*((+pricing.ccFee||0)/100);
   const total=sub+cc+ptFees;
-  return {base,fee,tax,cc,ptFees,ptFeeLines:pricing.perTicketFees||[],total,allInPrice:total};
+  return {base,fee,tax,cc,ptFees,ptFeeLines,total,allInPrice:total};
 }
 
 /* ---------- CORE FINANCIAL MODEL ----------
@@ -1042,9 +1046,13 @@ function venueForm(id, prefill){
       <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemoveCostRow('fee',${i})">×</button>
     </div>`).join('');
   const ptfRows=ptf.map((l,i)=>`
-    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
       <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="vf-ptf-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-      <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="vf-ptf-type-${i}" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <option value="fixed" ${(!l.feeType||l.feeType==='fixed')?'selected':''}>$ / ticket</option>
+        <option value="pct" ${l.feeType==='pct'?'selected':''}>% of base</option>
+      </select>
+      <input type="number" placeholder="amount" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
       <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemovePtfRow(${i})">×</button>
     </div>`).join('');
   const body=`
@@ -1090,6 +1098,18 @@ function venueForm(id, prefill){
       </div>
       <div class="row2" id="vfd-split-row" style="display:none">
         <div class="field"><label>Split / % of net (%)</label><input id="vf-split" type="number" step="0.1" value="${v.doorSplit||v.rentalPct||''}"></div>
+      </div>
+    </div>
+    <div class="row2" style="margin-top:8px">
+      <div class="field"><label>Deposit amount ($)</label>
+        <input id="vf-deposit" type="number" step="0.01" value="${v.depositAmount||''}" placeholder="0.00">
+      </div>
+      <div class="field"><label>Deposit paid by</label>
+        <select id="vf-deposit-payer">
+          <option value="">— not set —</option>
+          <option value="producer" ${v.depositPayer==='producer'?'selected':''}>Producer (you)</option>
+          <option value="artist" ${v.depositPayer==='artist'?'selected':''}>Artist</option>
+        </select>
       </div>
     </div>
     <div class="form-section">Default show costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(auto-fills crew, equipment and fees on events)</span></div>
@@ -1144,17 +1164,30 @@ function vfReadPtfRows(){
 function vfRenderPtfRows(){
   const host=document.getElementById('vf-ptf-rows'); if(!host) return;
   host.innerHTML=_vfPtf.map((l,i)=>`
-    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
       <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="vf-ptf-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-      <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="vf-ptf-type-${i}" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <option value="fixed" ${(!l.feeType||l.feeType==='fixed')?'selected':''}>$ / ticket</option>
+        <option value="pct" ${l.feeType==='pct'?'selected':''}>% of base</option>
+      </select>
+      <input type="number" placeholder="amount" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
       <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemovePtfRow(${i})">×</button>
     </div>`).join('');
+}
+function vfReadPtfRows(){
+  return [...document.querySelectorAll('#vf-ptf-rows .vf-ptf-row')].map((_,i)=>({
+    desc:document.getElementById('vf-ptf-desc-'+i)?.value||'',
+    feeType:document.getElementById('vf-ptf-type-'+i)?.value||'fixed',
+    amount:+document.getElementById('vf-ptf-amt-'+i)?.value||0
+  }));
 }
 function readVenuePerTicketFees(){
   return vfReadPtfRows().filter(l=>l.desc||l.amount>0);
 }
+// ── Venue form cost row state ──
+let _vfCosts={crew:[],eq:[],fee:[]};
+
 function vfAddCostRow(type){
-  // Read current rows first
   _vfCosts[type]=vfReadCostRows(type);
   _vfCosts[type].push(type==='crew'?{desc:'',hours:4,rate:''}:{desc:'',amount:''});
   vfRenderCostRows(type);
@@ -1238,10 +1271,25 @@ function saveVenue(id){
     doorSplit:fvn('vf-split'),
     rentalPct:fvn('vf-split'),
     showCosts:readVenueShowCosts(),
-    perTicketFees:readVenuePerTicketFees()
+    perTicketFees:readVenuePerTicketFees(),
+    depositAmount:fvn('vf-deposit'),
+    depositPayer:fv('vf-deposit-payer')
   };
   if(id){ Object.assign(get(DB.venues,id),rec); logActivity('edited','Venue',rec.name); }
   else { rec.id=uid('v'); DB.venues.push(rec); logActivity('created','Venue',rec.name); }
+  // Auto-create contact if contact info was provided and doesn't already exist
+  if(rec.contactName && rec.contactEmail){
+    const existing=DB.contacts.find(c=>c.email&&c.email.toLowerCase()===rec.contactEmail.toLowerCase());
+    if(!existing){
+      const contact={
+        id:uid('c'), name:rec.contactName, role:rec.contactRole||'',
+        email:rec.contactEmail, phone:rec.contactPhone||'',
+        venueId:rec.id||id, company:rec.name, tags:['venue contact'], notes:''
+      };
+      DB.contacts.push(contact);
+      logActivity('created','Contact',contact.name+' (from venue: '+rec.name+')');
+    }
+  }
   persist();closeModal();render();
 }
 
@@ -1631,8 +1679,11 @@ function proposalShowFromVenue(venueId, ticketBase){
 }
 
 // Compute projected financials for a proposal show
-function proposalShowFigures(s, ticketsOverride){
+function proposalShowFigures(s, ticketsOverride, tourCostPerShow){
   const tickets = ticketsOverride!==undefined ? ticketsOverride : (+s.ticketsEst||0);
+  // Build expenses: show-level expenses + pro-rated tour costs
+  const baseExps=(s.expenses||[]).map(x=>({...x,payer:x.payer||'producer'}));
+  const tourExps=tourCostPerShow>0?[{desc:'Tour costs (pro-rated)',amount:tourCostPerShow,payer:'artist',markupPct:0}]:[];
   const fakeEvent={
     capacityAlloc:s.capacity||0,
     mgmtPct:+s.mgmtPct||DB.settings.mgmtPct,
@@ -1640,7 +1691,7 @@ function proposalShowFigures(s, ticketsOverride){
       taxRate:+s.taxRate||0,taxOn:s.taxOn||'base'},
     terms:s.terms||{},
     showCosts:s.showCosts||{crew:[],equipment:[],fees:[]},
-    projection:{ticketsEst:tickets, expenses:(s.expenses||[]).map(x=>({...x,payer:x.payer||'producer'}))},
+    projection:{ticketsEst:tickets, expenses:[...baseExps,...tourExps]},
     settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false}
   };
   return projectionFigures(fakeEvent, tickets);
@@ -1981,6 +2032,7 @@ function eventOverview(host,e,v,t){
         <div class="info"><label>Patron pays</label><span>${money(pb.total)}</span></div>
         <div class="info"><label>Capacity</label><span>${e.capacityAlloc}</span></div>
         <div class="info"><label>Status</label><span>${esc(e.status)}${e.settlementV2.settled?' · Settled':''}</span></div>
+        ${e.depositAmount?`<div class="info"><label>Deposit</label><span>${money0(e.depositAmount)} — paid by ${e.depositPayer||'?'}</span></div>`:''}
       </div>
     </div>
     <div class="sec"><div class="sec-label">Deal terms — negotiated for this show</div>
@@ -2389,6 +2441,10 @@ const EXPENSE_PAYERS=[['venue','Venue (off box office)'],['producer','Producer (
 function eventSettlementV2(host,e){
   e.settlementV2 = e.settlementV2 || {venuePayout:'', depositCredits:[], expenses:[], settled:false, notes:''};
   const sv=e.settlementV2;
+  // Auto-populate deposit from event deal terms if not already in settlement
+  if(e.depositAmount && e.depositPayer && !(sv.depositCredits||[]).length){
+    sv.depositCredits=[{desc:'Venue deposit',amount:e.depositAmount,frontedBy:e.depositPayer}];
+  }
   host.innerHTML=`
     ${sv.settled?'<div class="banner">● Settled</div>':''}
     <p class="muted" style="font-size:12px;margin-bottom:18px">Enter the actual amount the venue paid you from their settlement statement. Commission and artist net are calculated directly from this number — no deal-term math involved.</p>
@@ -2860,8 +2916,18 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
       </select>
     </div>
     <div id="ef-deal-fields"><!-- populated by toggleDealFields() --></div>
-
-    <div class="form-section">Venue / show costs</div>
+    <div class="row2" style="margin-top:10px">
+      <div class="field"><label>Deposit amount ($) <span style="font-weight:400;font-size:11px;color:var(--txt3)">(if required)</span></label>
+        <input id="ef-deposit-amt" type="number" step="0.01" value="${e.depositAmount||''}" placeholder="0.00">
+      </div>
+      <div class="field"><label>Deposit paid by</label>
+        <select id="ef-deposit-payer">
+          <option value="">— not paid yet —</option>
+          <option value="producer" ${e.depositPayer==='producer'?'selected':''}>Producer (you)</option>
+          <option value="artist" ${e.depositPayer==='artist'?'selected':''}>Artist</option>
+        </select>
+      </div>
+    </div>
     <p class="muted" style="font-size:12px;margin:-6px 0 10px">These are costs you'll pay the venue — they flow into your fixed costs and settlement deductions.</p>
     <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Crew</div>
     <div id="ef-crew-lines">
@@ -2934,6 +3000,13 @@ function prefillVenueTerms(){
       _efPtf=JSON.parse(JSON.stringify(efPtf));
       efRenderPtfRows();
     }
+  }
+  // Pre-fill deposit info from venue defaults as a note in the event form
+  if(v.depositAmount){
+    const depEl=document.getElementById('ef-deposit-amt');
+    const depPayerEl=document.getElementById('ef-deposit-payer');
+    if(depEl && !depEl.value) depEl.value=v.depositAmount;
+    if(depPayerEl && !depPayerEl.value && v.depositPayer) depPayerEl.value=v.depositPayer;
   }
   if(v.showCosts){
     const sc=v.showCosts;
@@ -3146,7 +3219,9 @@ function saveEvent(id){
       ccFee:fvn('ef-cc'),taxRate:fvn('ef-tax'),taxOn:fv('ef-taxon'),
       perTicketFees:efReadPtfRows().filter(l=>l.desc||l.amount>0)},
     terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
-    showCosts:readShowCosts()
+    showCosts:readShowCosts(),
+    depositAmount:fvn('ef-deposit-amt'),
+    depositPayer:fv('ef-deposit-payer')
   };
   // Saving back to a proposal show
   const psPid=_curProposalShowPid; const psSid=_curProposalShowSid;
@@ -3760,7 +3835,8 @@ VIEWS.proposals={
     const artist=p.artistId?get(DB.artists,p.artistId):null;
     const shows=p.shows||[];
     let totGross=0,totComm=0,totArtist=0;
-    shows.forEach(s=>{const f=proposalShowFigures(s);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;});
+    const tcps=proposalTourCostPerShow(p);
+    shows.forEach(s=>{const f=proposalShowFigures(s,undefined,tcps);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;});
     const isAccepted=p.status==='Accepted';
     const isOwner=!p.createdBy||p.createdBy===AUTH_USER?.username;
     const isAdmin=canDo('admin');
@@ -3797,10 +3873,18 @@ VIEWS.proposals={
         ${shows.length?proposalShowsTable(p,shows,isAccepted)
           :`<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add venue</strong> to build the show list.</p>`}
       </div>
+      ${p.kind==='tour'?`<div class="sec">
+        <div class="sec-label">Tour-level costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(spread evenly across all shows in artist net)</span></div>
+        <p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, transport, accommodation across the run. Each cost is divided by number of shows and shown as an artist expense per show.</p>
+        <div id="prop-tour-costs"></div>
+        ${!isAccepted?`<button class="btn sm" style="margin-top:8px" onclick="addTourCost('${id}')">+ Add tour cost</button>`:''}
+      </div>`:''}
       ${isAccepted&&p.createdTourId?`<div class="sec"><div class="sec-label">Created records</div>
         <p style="font-size:13px;color:var(--txt2)">Accepted and converted. <a onclick="go('tours','${p.createdTourId}')" style="cursor:pointer">View tour →</a></p></div>`:''}
       ${isAccepted&&p.createdEventIds&&!p.createdTourId?`<div class="sec"><div class="sec-label">Created records</div>
         <p style="font-size:13px;color:var(--txt2)">${p.createdEventIds.length} event${p.createdEventIds.length!==1?'s':''} created.</p></div>`:''}`;
+    // Render tour costs if applicable
+    if(p.kind==='tour') renderTourCosts(p);
   },
   showDetail(c,a,pid,sid){
     const p=get(DB.proposals,pid); if(!p){go('proposals',pid);return;}
@@ -3820,14 +3904,14 @@ VIEWS.proposals={
         <span class="badge gray">${esc(s.date||'Date TBD')}</span>
       </div>
       <div class="tabs">
-        ${[['overview','Overview'],['settlement','Settlement'],['scenarios','Scenarios']].map(([tb,lbl])=>
+        ${[['overview','Overview'],['projections','Projections'],['settlement','Settlement']].map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="propShowTab('${pid}','${sid}','${tb}')">${lbl}</div>`).join('')}
       </div>
       <div id="prop-show-tab"></div>`;
     const host=document.getElementById('prop-show-tab');
     if(tab==='overview') propShowOverview(host,p,s,f,v,sliderVal);
-    else if(tab==='settlement') propShowSettlement(host,p,s);
-    else if(tab==='scenarios') propShowScenarios(host,p,s);
+    else if(tab==='projections') propShowSettlement(host,p,s);
+    else if(tab==='settlement') propShowScenarios(host,p,s);
   }
 };
 
@@ -3843,11 +3927,13 @@ function propShowTab(pid,sid,tab){
   const host=document.getElementById('prop-show-tab');
   if(!host||!s) return;
   if(tab==='overview') propShowOverview(host,p,s,f,v,sliderVal);
-  else if(tab==='settlement') propShowSettlement(host,p,s);
-  else if(tab==='scenarios') propShowScenarios(host,p,s);
+  else if(tab==='projections') propShowSettlement(host,p,s);
+  else if(tab==='settlement') propShowScenarios(host,p,s);
 }
 
 function propShowOverview(host,p,s,f,v,sliderVal){
+  const tcps=proposalTourCostPerShow(p);
+  f=proposalShowFigures(s,sliderVal,tcps);
   const cap=+s.capacity||1;
   const pct=Math.round(sliderVal/cap*100);
   const sc=s.showCosts||{};
@@ -4086,33 +4172,52 @@ function psSaveSettlement(pid,sid){
   const btn=document.querySelector('#prop-show-tab .btn.primary.sm');
   if(btn){const orig=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=orig,1500);}
 }
-function psRenderScenario(pid,sid){
+function propShowScenarios(host,p,s){
+  // This is the "Settlement" tab for proposal shows — mirrors confirmed event Projections tab
+  const cap=+s.capacity||1;
+  const est=+s.ticketsEst||Math.round(cap*0.6);
+  const tcps=proposalTourCostPerShow(p);
+  host.innerHTML=`
+    <p class="muted" style="font-size:12px;margin-bottom:16px">Model different attendance scenarios using the deal terms and show costs for this show. Tour costs are spread across all shows automatically.</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <input type="range" id="ps-sc-slider" min="0" max="${cap}" value="${est}"
+        oninput="document.getElementById('ps-sc-num').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
+        style="flex:1">
+      <input type="number" id="ps-sc-num" min="0" max="${cap}" value="${est}"
+        oninput="document.getElementById('ps-sc-slider').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
+        style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+      <span class="muted" style="font-size:12px" id="ps-sc-pct"></span>
+    </div>
+    <div id="ps-sc-waterfall"></div>
+    <div style="overflow-x:auto;margin-top:18px"><div id="ps-sc-table"></div></div>`;
+  psRenderScenario(p.id,s._sid,tcps);
+}
+
+function psRenderScenario(pid,sid,tcpsOverride){
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
   const n=+document.getElementById('ps-sc-num')?.value||0;
   const cap=+s.capacity||1;
   const pctEl=document.getElementById('ps-sc-pct');
   if(pctEl) pctEl.textContent=Math.round(n/cap*100)+'% of capacity';
-  const projExps=(s.expenses||[]).filter(x=>x.payer!=='venue').map(x=>({
-    desc:x.desc,amount:x.amount,payer:x.payer==='producer'?'producer':'artist',markupPct:x.markupPct||0
-  }));
-  const fakeEvent=propShowToFakeEvent(p,s);
-  const model={...fakeEvent,projection:{ticketsEst:n,expenses:projExps}};
-  const f=projectionFigures(model,n);
-  renderProjWaterfall(document.getElementById('ps-sc-waterfall'),f,projExps);
+  const tcps=tcpsOverride!=null?tcpsOverride:proposalTourCostPerShow(p);
+  const f=proposalShowFigures(s,n,tcps);
+  renderProjWaterfall(document.getElementById('ps-sc-waterfall'),f,s.expenses||[]);
   const pcts=[10,25,40,50,60,70,80,90,100];
-  const be=projectionBreakeven(model);
+  // Breakeven
+  let be=null;
+  for(let i=0;i<=cap;i++){ if(proposalShowFigures(s,i,tcps).artistNet>=0){be=i;break;} }
   const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
   const tbl=document.getElementById('ps-sc-table');
   if(tbl) tbl.innerHTML=`<table class="tbl"><thead><tr>
     <th>Tickets</th><th class="num">% cap</th><th class="num">Gross</th>
     <th class="num">Venue payout</th><th class="num">Commission</th>
     <th class="num">Artist gross</th><th class="num">Artist net</th></tr></thead><tbody>
-    ${pcts.map(p=>{
-      const sold=Math.round(cap*p/100);
-      const ff=projectionFigures(model,sold);
-      const hl=p===beStep;
+    ${pcts.map(pp=>{
+      const sold=Math.round(cap*pp/100);
+      const ff=proposalShowFigures(s,sold,tcps);
+      const hl=pp===beStep;
       return `<tr style="${hl?'background:var(--green-soft)':''}cursor:default">
-        <td>${sold}</td><td class="num">${p}%</td>
+        <td>${sold}</td><td class="num">${pp}%</td>
         <td class="num">${money0(ff.grossBoxOffice)}</td>
         <td class="num">${money0(ff.payout)}</td>
         <td class="num pos">${money0(ff.commission)}</td>
@@ -4125,7 +4230,62 @@ function psRenderScenario(pid,sid){
 
 
 
+function renderTourCosts(p){
+  const host=document.getElementById('prop-tour-costs'); if(!host) return;
+  const costs=p.tourCosts||[];
+  const nShows=(p.shows||[]).length||1;
+  const total=costs.reduce((t,c)=>t+(+c.amount||0),0);
+  const perShow=nShows>0?total/nShows:0;
+  if(!costs.length){ host.innerHTML='<p class="muted" style="font-size:13px">No tour costs yet.</p>'; return; }
+  host.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
+      <span>Description</span><span style="text-align:right">Total</span><span style="text-align:right">Per show</span><span></span>
+    </div>
+    ${costs.map((c,i)=>`<div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;align-items:center;margin-bottom:6px">
+      <input type="text" value="${esc(c.desc||'')}" placeholder="e.g. Tour manager" oninput="setTourCost('${p.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" value="${c.amount||0}" oninput="setTourCost('${p.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <span style="text-align:right;font-size:12px;color:var(--txt2)">${money0((+c.amount||0)/nShows)}</span>
+      <button class="btn ghost sm" style="padding:3px 6px" onclick="removeTourCost('${p.id}',${i})">×</button>
+    </div>`).join('')}
+    <div style="font-size:12px;color:var(--txt2);padding-top:8px;border-top:1px solid var(--bord2)">Total: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(perShow)}/show</strong> from artist net</div>`;
+}
+function addTourCost(pid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  p.tourCosts=p.tourCosts||[];
+  p.tourCosts.push({desc:'',amount:0});
+  persist(); renderTourCosts(p);
+  // Refresh shows table totals
+  const sc=document.querySelector('.sec .tbl');
+  if(sc) go('proposals',pid);
+}
+function setTourCost(pid,i,field,val){
+  const p=get(DB.proposals,pid); if(!p) return;
+  p.tourCosts[i][field]=field==='desc'?val:(+val||0);
+  renderTourCosts(p);
+}
+function removeTourCost(pid,i){
+  const p=get(DB.proposals,pid); if(!p) return;
+  p.tourCosts.splice(i,1);
+  persist(); renderTourCosts(p);
+}
+
+// Get per-show share of tour costs for a proposal
+function proposalTourCostPerShow(p){
+  const costs=p?.tourCosts||[];
+  const total=costs.reduce((t,c)=>t+(+c.amount||0),0);
+  const nShows=(p?.shows||[]).length||1;
+  return nShows>0?total/nShows:0;
+}
+
 function proposalShowsTable(p,shows,isAccepted){
+  // Sort by date ascending; undated shows go to the end
+  shows=[...shows].sort((a,b)=>{
+    if(!a.date&&!b.date) return 0;
+    if(!a.date) return 1;
+    if(!b.date) return -1;
+    return a.date<b.date?-1:a.date>b.date?1:0;
+  });
+  const tcps=proposalTourCostPerShow(p);
   return `<div style="overflow-x:auto">
     <table class="tbl" style="min-width:580px"><thead><tr>
       <th>Venue</th><th>Date</th><th class="num">Ticket</th><th class="num">Est. sold</th>
@@ -4134,7 +4294,7 @@ function proposalShowsTable(p,shows,isAccepted){
     </tr></thead><tbody>
     ${shows.map((s,i)=>{
       const v=get(DB.venues,s.venueId);
-      const f=proposalShowFigures(s);
+      const f=proposalShowFigures(s,undefined,tcps);
       return `<tr style="cursor:pointer" onclick="go('proposals','${p.id}','show',null,'${s._sid}')">
         <td><div style="font-weight:500">${v?esc(v.name):'—'}</div>
           ${v?.city?`<div style="font-size:11px;color:var(--txt3)">${esc(v.city)}</div>`:''}
@@ -4153,9 +4313,9 @@ function proposalShowsTable(p,shows,isAccepted){
     }).join('')}
     <tr style="border-top:2px solid var(--bord2);font-weight:600">
       <td colspan="4">${p.kind==='tour'?'Tour total':'Total'} (${shows.length} show${shows.length!==1?'s':''})</td>
-      <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s).grossBoxOffice,0))}</td>
-      <td class="num pos">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s).commission,0))}</td>
-      <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s).artistNet,0))}</td>
+      <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s,undefined,tcps).grossBoxOffice,0))}</td>
+      <td class="num pos">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s,undefined,tcps).commission,0))}</td>
+      <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s,undefined,tcps).artistNet,0))}</td>
       ${!isAccepted?'<td></td>':''}
     </tr>
     </tbody></table></div>`;
@@ -4202,23 +4362,21 @@ function printProposalDoc(id){
         <div style="font-size:15px;font-weight:600">${v?v.name:'Venue TBD'}</div>
         <div style="font-size:12px;color:#5f5e58">${s.date||'Date TBD'} · ${v?v.city||'':''}  · Cap: ${s.capacity||'?'}</div>
       </div>
-      <table style="width:100%;border-collapse:collapse">
-        ${trow('Ticket price','$'+money0(s.ticketBase).replace('$',''))}
-        ${trow('Estimated attendance',s.ticketsEst+' ('+Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)+'%)')}
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr><td style="color:#5f5e58;padding:4px 0">Ticket price</td><td style="text-align:right;padding:4px 0">${money0(s.ticketBase)}</td></tr>
+        <tr><td style="color:#5f5e58;padding:4px 0">Estimated attendance</td><td style="text-align:right;padding:4px 0">${s.ticketsEst} (${Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)}%)</td></tr>
         ${trow('Gross box office',f.grossBoxOffice)}
-        ${trow('Base revenue',f.baseRevenue)}
+        ${trow('Net ticket revenue (base)',f.baseRevenue)}
         ${costRows}
-        ${f.dealRentalFlat>0&&ct!=='rental'?trow('Less: rental flat fee',-f.dealRentalFlat,false,'#a32d2d'):''}
-        ${f.dealRentalPct>0?trow('Less: box office %',-f.dealRentalPct,false,'#a32d2d'):''}
-        <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px"></td></tr>
-        ${trow('Net box office',f.netBoxOffice,true)}
-        ${trow('Venue payout ('+ctLabel(ct)+')',f.payout,true,'#3b6d11')}
+        ${f.dealRentalFlat>0?trow('Less: rental flat fee',-f.dealRentalFlat,false,'#a32d2d'):''}
+        ${f.dealRentalPct>0?trow('Less: box office % ('+(+s.terms?.doorSplit||0)+'%)',-f.dealRentalPct,false,'#a32d2d'):''}
+        <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
+        ${trow('Venue payout',f.payout,true,'#3b6d11')}
         ${trow('Management commission ('+DB.settings.mgmtPct+'%)',-f.commission,false,'#854f0b')}
-        ${f.producerCost>0?trow('Producer expenses',-f.producerCost,false,'#a32d2d'):''}
-        <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px"></td></tr>
+        <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
         ${trow('Artist gross',f.artistGross,true)}
         ${(s.expenses||[]).filter(x=>x.payer==='artist').map(x=>trow(x.desc||'Artist expense',-(+x.amount),false,'#c98a3f')).join('')}
-        <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:2px"></td></tr>
+        <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:2px 0"></td></tr>
         ${trow('Artist net',f.artistNet,true,f.artistNet>=0?'#3b6d11':'#a32d2d')}
       </table>
     </div>`;
@@ -4246,7 +4404,49 @@ function printProposalDoc(id){
 function printShowProposal(pid,sid){
   const p=get(DB.proposals,pid); if(!p) return;
   const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
-  printProposalDoc(p.id); // for now print the full proposal; could scope to single show
+  const v=get(DB.venues,s.venueId);
+  const artist=p.artistId?get(DB.artists,p.artistId):null;
+  const f=proposalShowFigures(s);
+  const sc=s.showCosts||{};
+  const ct=s.terms?.contractType||'rental';
+  const trow=(label,val,bold,color)=>`<tr><td style="padding:5px 0;color:${bold?'#1c1c1a':'#5f5e58'};font-size:13px;font-weight:${bold?600:400}">${label}</td><td style="padding:5px 0;text-align:right;font-weight:${bold?600:400};font-size:13px;color:${color||'#1c1c1a'}">${typeof val==="number"?(val<0?"−":"")+"$"+Math.abs(val).toLocaleString("en-CA",{minimumFractionDigits:0,maximumFractionDigits:0}):val}</td></tr>`;
+  const scRows=[
+    ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>trow(l.desc||"Crew",-((+l.hours||0)*(+l.rate||0)),false,"#a32d2d")),
+    ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>trow(l.desc||"Equipment",-(+l.amount),false,"#a32d2d")),
+    ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>trow(l.desc||"Fee",-(+l.amount),false,"#a32d2d")),
+    ...(s.expenses||[]).filter(x=>x.payer==="venue").map(x=>trow(x.desc||"Venue expense",-(+x.amount),false,"#a32d2d")),
+  ].join("");
+  const artistExpRows=(s.expenses||[]).filter(x=>x.payer==="artist").map(x=>trow(x.desc||"Artist expense",-(+x.amount),false,"#c98a3f")).join("");
+  const doc=`
+    <div style="text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
+      <div style="font-size:18px;font-weight:600">${esc(p.title)}</div>
+      <div style="font-size:13px;color:#5f5e58">${v?esc(v.name):"Venue TBD"} · ${esc(s.date||"Date TBD")} · ${esc(artist?artist.name:p.artistName||"Artist")}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;font-size:12px;color:#5f5e58">
+      <div>Capacity: <strong>${s.capacity||"—"}</strong></div>
+      <div>Est. tickets: <strong>${s.ticketsEst||"—"} (${Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)}%)</strong></div>
+      <div>Ticket price: <strong>${money0(s.ticketBase)}</strong></div>
+      <div>Contract: <strong>${ctLabel(ct)}</strong></div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      ${trow("Gross box office",f.grossBoxOffice)}
+      ${trow("Net ticket revenue (base)",f.baseRevenue)}
+      ${scRows}
+      ${f.dealRentalFlat>0?trow("Less: rental flat fee",-f.dealRentalFlat,false,"#a32d2d"):""}
+      ${f.dealRentalPct>0?trow("Less: box office % ("+(+s.terms?.doorSplit||0)+"%)",-f.dealRentalPct,false,"#a32d2d"):""}
+      <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:3px 0"></td></tr>
+      ${trow("Venue payout",f.payout,true,"#3b6d11")}
+      ${trow("Management commission (${DB.settings.mgmtPct}%)",-f.commission,false,"#854f0b")}
+      <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:3px 0"></td></tr>
+      ${trow("Artist gross",f.artistGross,true)}
+      ${artistExpRows}
+      <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:3px 0"></td></tr>
+      ${trow("Artist net",f.artistNet,true,f.artistNet>=0?"#3b6d11":"#a32d2d")}
+    </table>
+    <p style="font-size:11px;color:#908e85;margin-top:20px">Projection based on estimated attendance. Commission shown transparently. Generated by TourDesk.</p>`;
+  const w=window.open("","_blank");
+  w.document.write("<html><head><title>"+esc(p.title+" — "+( v?v.name:"Show"))+"</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#1c1c1a}</style></head><body>"+doc+"</body></html>");
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
 }
 
 
