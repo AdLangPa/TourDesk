@@ -4359,37 +4359,105 @@ function renderTourCosts(p){
   const host=document.getElementById('prop-tour-costs'); if(!host) return;
   const costs=p.tourCosts||[];
   const nShows=(p.shows||[]).length||1;
-  const total=costs.reduce((t,c)=>t+(+c.amount||0),0);
-  const perShow=nShows>0?total/nShows:0;
   if(!costs.length){ host.innerHTML='<p class="muted" style="font-size:13px">No tour costs yet.</p>'; return; }
   host.innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
       <span>Description</span><span style="text-align:right">Total</span><span style="text-align:right">Per show</span><span></span>
     </div>
-    ${costs.map((c,i)=>`<div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;align-items:center;margin-bottom:6px">
-      <input type="text" value="${esc(c.desc||'')}" placeholder="e.g. Tour manager" oninput="setTourCost('${p.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-      <input type="number" value="${c.amount||0}" oninput="setTourCost('${p.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-      <span style="text-align:right;font-size:12px;color:var(--txt2)">${money0((+c.amount||0)/nShows)}</span>
+    ${costs.map((c,i)=>`<div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;align-items:center;margin-bottom:6px" id="tcr-${i}">
+      <input type="text" value="${esc(c.desc||'')}" placeholder="e.g. Tour manager"
+        onblur="saveTourCostRow('${p.id}',${i})"
+        style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px" id="tc-desc-${i}">
+      <input type="number" value="${c.amount||0}"
+        oninput="updateTourCostSummary('${p.id}')"
+        onblur="saveTourCostRow('${p.id}',${i})"
+        style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right" id="tc-amt-${i}">
+      <span style="text-align:right;font-size:12px;color:var(--txt2)" id="tc-per-${i}">${money0((+c.amount||0)/nShows)}</span>
       <button class="btn ghost sm" style="padding:3px 6px" onclick="removeTourCost('${p.id}',${i})">×</button>
     </div>`).join('')}
-    <div style="font-size:12px;color:var(--txt2);padding-top:8px;border-top:1px solid var(--bord2)">Total: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(perShow)}/show</strong> from artist net</div>`;
+    <div id="tc-summary" style="font-size:12px;color:var(--txt2);padding-top:8px;border-top:1px solid var(--bord2)">${tourCostSummaryHtml(p)}</div>
+    <button class="btn primary sm" style="margin-top:10px" onclick="saveTourCosts('${p.id}')">Save tour costs</button>`;
 }
+
+function tourCostSummaryHtml(p){
+  const costs=p.tourCosts||[];
+  const nShows=(p.shows||[]).length||1;
+  const total=costs.reduce((t,c)=>t+(+c.amount||0),0);
+  const perShow=total/nShows;
+  return `Total: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(perShow)}/show</strong> from artist net`;
+}
+
+function updateTourCostSummary(pid){
+  // Update just the per-show column and summary without re-rendering the whole list
+  const p=get(DB.proposals,pid); if(!p) return;
+  const nShows=(p.shows||[]).length||1;
+  let total=0;
+  (p.tourCosts||[]).forEach((c,i)=>{
+    const amtEl=document.getElementById('tc-amt-'+i);
+    const perEl=document.getElementById('tc-per-'+i);
+    const amt=amtEl?+amtEl.value||0:+c.amount||0;
+    total+=amt;
+    if(perEl) perEl.textContent=money0(amt/nShows);
+  });
+  const sumEl=document.getElementById('tc-summary');
+  if(sumEl) sumEl.innerHTML=`Total: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(total/nShows)}/show</strong> from artist net`;
+}
+
+function saveTourCostRow(pid,i){
+  // Read from DOM and save to data model without re-rendering
+  const p=get(DB.proposals,pid); if(!p) return;
+  if(!p.tourCosts||!p.tourCosts[i]) return;
+  const desc=document.getElementById('tc-desc-'+i)?.value||'';
+  const amount=+document.getElementById('tc-amt-'+i)?.value||0;
+  p.tourCosts[i].desc=desc;
+  p.tourCosts[i].amount=amount;
+  // Don't re-render — just persist quietly
+}
+
+function saveTourCosts(pid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  // Read all rows from DOM
+  (p.tourCosts||[]).forEach((_,i)=>{
+    const desc=document.getElementById('tc-desc-'+i)?.value||'';
+    const amount=+document.getElementById('tc-amt-'+i)?.value||0;
+    p.tourCosts[i].desc=desc;
+    p.tourCosts[i].amount=amount;
+  });
+  logActivity('edited','Proposal',p.title+' (tour costs saved)');
+  persist();
+  const btn=document.querySelector('#prop-tour-costs .btn.primary.sm');
+  if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=o,1500);}
+}
+
 function addTourCost(pid){
   const p=get(DB.proposals,pid); if(!p) return;
+  // Read current values from DOM before re-rendering
+  (p.tourCosts||[]).forEach((_,i)=>{
+    const desc=document.getElementById('tc-desc-'+i)?.value;
+    const amount=document.getElementById('tc-amt-'+i)?.value;
+    if(desc!==undefined) p.tourCosts[i].desc=desc;
+    if(amount!==undefined) p.tourCosts[i].amount=+amount||0;
+  });
   p.tourCosts=p.tourCosts||[];
   p.tourCosts.push({desc:'',amount:0});
   persist(); renderTourCosts(p);
-  // Refresh shows table totals
-  const sc=document.querySelector('.sec .tbl');
-  if(sc) go('proposals',pid);
 }
+
 function setTourCost(pid,i,field,val){
   const p=get(DB.proposals,pid); if(!p) return;
   p.tourCosts[i][field]=field==='desc'?val:(+val||0);
-  renderTourCosts(p);
+  // Don't re-render — handled by updateTourCostSummary and saveTourCostRow
 }
+
 function removeTourCost(pid,i){
   const p=get(DB.proposals,pid); if(!p) return;
+  // Read current values from DOM before splicing
+  (p.tourCosts||[]).forEach((_,j)=>{
+    const desc=document.getElementById('tc-desc-'+j)?.value;
+    const amount=document.getElementById('tc-amt-'+j)?.value;
+    if(desc!==undefined) p.tourCosts[j].desc=desc;
+    if(amount!==undefined) p.tourCosts[j].amount=+amount||0;
+  });
   p.tourCosts.splice(i,1);
   persist(); renderTourCosts(p);
 }
