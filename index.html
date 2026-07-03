@@ -612,11 +612,46 @@ function eventFinancials(ev, ticketsSold){
 function projectionFigures(ev, ticketsOverride){
   const p = ev.projection || {};
   const exps = p.expenses || [];
-  const pb = priceBreakdown(ev.pricing);
-  const sold = ticketsOverride!=null ? ticketsOverride : (+p.ticketsEst||0);
-  const grossBoxOffice = pb.total * sold;
-  const baseRevenue = pb.base * sold;
-  const taxTotal = pb.tax * sold;
+  const pricing = ev.pricing || {};
+
+  // ── Ticket tier support ──
+  // If tiers are defined, sum across them. Otherwise use single price × ticketsEst.
+  const tiers = (pricing.tiers||[]).filter(t=>t.name&&(+t.base||0)>0);
+  let grossBoxOffice=0, baseRevenue=0, taxTotal=0, totalSold=0, tierLines=[];
+
+  if(tiers.length>0){
+    const taxRate=(pricing.taxRate||0)/100;
+    const ptFeeLines=pricing.perTicketFees||[];
+    tiers.forEach(t=>{
+      const base=+t.base||0;
+      const count=ticketsOverride!=null ? Math.round((+t.count||0)/(totalSold||1)*ticketsOverride) : (+t.count||0);
+      // use proportional counts when overriding total
+      const tax=base*taxRate;
+      const ptFees=ptFeeLines.reduce((s,f)=>{
+        return s+(f.feeType==='pct'?base*((+f.amount||0)/100):(+f.amount||0));
+      },0);
+      const allIn=base+tax+ptFees;
+      grossBoxOffice+=allIn*(+t.count||0);
+      baseRevenue+=base*(+t.count||0);
+      taxTotal+=tax*(+t.count||0);
+      totalSold+=(+t.count||0);
+      tierLines.push({name:t.name,base,count:+t.count||0,tax,ptFees,allIn});
+    });
+    // If ticketsOverride given, scale proportionally
+    if(ticketsOverride!=null && totalSold>0){
+      const scale=ticketsOverride/totalSold;
+      grossBoxOffice*=scale; baseRevenue*=scale; taxTotal*=scale; totalSold=ticketsOverride;
+    }
+  } else {
+    const pb = priceBreakdown(pricing);
+    const sold = ticketsOverride!=null ? ticketsOverride : (+p.ticketsEst||0);
+    grossBoxOffice = pb.total * sold;
+    baseRevenue = pb.base * sold;
+    taxTotal = pb.tax * sold;
+    totalSold = sold;
+  }
+
+  const sold=Math.round(totalSold);
   const sc=ev.showCosts||{};
   const showCostLines=[
     ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>({desc:l.desc,amount:(+l.hours||0)*(+l.rate||0)})),
@@ -639,7 +674,7 @@ function projectionFigures(ev, ticketsOverride){
   const artistGross=payout-commission-producerTotal;
   const artistNet=artistGross-artistTracked;
   const cap=+ev.capacityAlloc||1;
-  return {sold,grossBoxOffice,baseRevenue,taxTotal,
+  return {sold,grossBoxOffice,baseRevenue,taxTotal,tierLines,
     dealRentalFlat,dealRentalPct,dealVenueTotal,
     showCostTotal,showCostLines,
     payout,commission,mgmtPct:(+ev.mgmtPct||0),
@@ -2028,7 +2063,11 @@ function eventOverview(host,e,v,t){
         <div class="info"><label>Tour</label><span>${t?esc(t.name):'—'}</span></div>
         <div class="info"><label>Date</label><span>${esc(e.date)}</span></div>
         <div class="info"><label>Show / load-in</label><span>${esc(e.showTime||'—')} / ${esc(e.loadIn||'—')}</span></div>
-        <div class="info"><label>Ticket (base)</label><span>${money(pb.base)}</span></div>
+        <div class="info"><label>Ticket price</label><span>${
+          (e.pricing.tiers&&e.pricing.tiers.length>1)
+            ? e.pricing.tiers.map(t=>`${esc(t.name)} ${money0(t.base)}`).join(' · ')
+            : money(e.pricing.base||0)
+        }</span></div>
         <div class="info"><label>Patron pays</label><span>${money(pb.total)}</span></div>
         <div class="info"><label>Capacity</label><span>${e.capacityAlloc}</span></div>
         <div class="info"><label>Status</label><span>${esc(e.status)}${e.settlementV2.settled?' · Settled':''}</span></div>
@@ -2170,14 +2209,19 @@ function renderProjWaterfall(host,f,expenses){
   const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist').map(x=>(
     {label:'Less: '+(x.desc||'artist expense'),val:-(+x.amount||0),c:'#c98a3f'}
   ));
+  // Show tier breakdown if multiple tiers
+  const tierRows=(f.tierLines&&f.tierLines.length>1)?f.tierLines.map(t=>({
+    label:esc(t.name)+' ('+t.count+'×'+money0(t.base)+')',
+    val:t.base*t.count, c:'#85b7eb'
+  })):[];
   const rows=[
     {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
-    {label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'},
+    ...(tierRows.length>0?tierRows:[{label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'}]),
     null,
     {label:'Venue payout (pot)',val:f.payout,c:'var(--green)',b:1},
     {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
-    {label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'},
-    {label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'},
+    ...(f.producerCost>0?[{label:'Less: producer expenses',val:-f.producerCost,c:'var(--red)'}]:[]),
+    ...(f.producerMarkup>0?[{label:'Less: producer markup',val:-f.producerMarkup,c:'var(--red)'}]:[]),
     null,
     {label:'Artist gross',val:f.artistGross,c:'#97c459',b:1},
     ...artistExpRows,
@@ -2195,7 +2239,11 @@ function renderProjWaterfall(host,f,expenses){
   }).join('');
   if(f.yourTotal>0){
     html+=`<div style="margin-top:12px;padding:9px 12px;background:var(--blue-soft);border-radius:var(--rad);font-size:12px;color:var(--blue)">
-      Projected to you: <strong style="font-weight:600">${money0(f.yourTotal)}</strong> (commission ${money0(f.commission)} + producer ${money0(f.producerTotal)})</div>`;
+      Projected to you: <strong style="font-weight:600">${money0(f.yourTotal)}</strong> (commission ${money0(f.commission)}${f.producerTotal>0?' + producer '+money0(f.producerTotal):''})</div>`;
+  }
+  if(f.tierLines&&f.tierLines.length>1){
+    html+=`<div style="margin-top:10px;font-size:11px;color:var(--txt3)">${f.tierLines.map(t=>
+      `<span style="margin-right:12px">${esc(t.name)}: ${t.count} tickets × ${money0(t.allIn)} all-in = ${money0(t.allIn*t.count)}</span>`).join('')}</div>`;
   }
   host.innerHTML=html;
 }
@@ -2870,33 +2918,41 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
       <div class="field"><label>Presales</label><input id="ef-pre" type="number" value="${e.presales||0}"></div>
     </div>
 
-    <div class="form-section">Ticket pricing</div>
-    <div class="row2">
-      <div class="field"><label>Base ticket price ($)</label><input id="ef-base" type="number" step="0.01" value="${p.base||''}"></div>
-      <div class="field"><label>Comps</label><input id="ef-comps" type="number" value="${e.comps||0}"></div>
+    <div class="form-section">Ticket tiers</div>
+    <p class="muted" style="font-size:12px;margin:-6px 0 10px">Add one tier for a single price, or multiple tiers for GA / Premium / VIP. Tax and per-ticket fees apply to all tiers equally.</p>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:6px;display:grid;grid-template-columns:1fr 90px 90px 28px;gap:8px">
+      <span>Tier name</span><span style="text-align:right">Base price</span><span style="text-align:right">Est. count</span><span></span>
     </div>
+    <div id="ef-tiers">
+      ${(p.tiers&&p.tiers.length?p.tiers:[{name:'General',base:p.base||'',count:e.projection?.ticketsEst||''}]).map((t,i)=>`
+        <div class="ef-tier-row" style="display:grid;grid-template-columns:1fr 90px 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
+          <input placeholder="e.g. General, VIP" value="${esc(t.name||'')}" id="ef-tier-name-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          <input type="number" step="0.01" placeholder="$" value="${t.base||''}" id="ef-tier-base-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+          <input type="number" placeholder="count" value="${t.count||''}" id="ef-tier-count-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+          <button class="btn ghost sm" onclick="efRemoveTier(${i})" style="padding:5px 7px">×</button>
+        </div>`).join('')}
+    </div>
+    <button class="btn sm" onclick="efAddTier()" style="margin-bottom:14px">+ Add tier</button>
     <div class="row3">
-      <div class="field"><label>Service fee</label><input id="ef-fee" type="number" step="0.01" value="${p.serviceFee||0}"></div>
-      <div class="field"><label>Fee type</label><select id="ef-feetype">
-        <option value="fixed" ${p.feeType==='fixed'?'selected':''}>Fixed $</option>
-        <option value="pct" ${p.feeType==='pct'?'selected':''}>% of base</option></select></div>
-      <div class="field"><label>CC surcharge %</label><input id="ef-cc" type="number" step="0.1" value="${p.ccFee||0}"></div>
-    </div>
-    <div class="row2">
       <div class="field"><label>Tax rate %</label><input id="ef-tax" type="number" step="0.5" value="${p.taxRate!=null?p.taxRate:13}"></div>
       <div class="field"><label>Tax applies to</label><select id="ef-taxon">
         <option value="base" ${p.taxOn==='base'?'selected':''}>Base only</option>
         <option value="base_fee" ${p.taxOn==='base_fee'?'selected':''}>Base + fee</option>
         <option value="none" ${p.taxOn==='none'?'selected':''}>Tax exempt</option></select></div>
+      <div class="field"><label>Comps</label><input id="ef-comps" type="number" value="${e.comps||0}"></div>
     </div>
-    <div class="form-section">Per-ticket fees (passed to customer) <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to all-in price — flows straight to venue, not your revenue)</span></div>
-    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 90px 28px;gap:8px">
-      <span>Fee name</span><span style="text-align:right">$/ticket</span><span></span>
+    <div class="form-section">Per-ticket fees (passed to customer) <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to all-in price — flows straight to venue)</span></div>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 60px 90px 28px;gap:8px">
+      <span>Fee name</span><span>Type</span><span style="text-align:right">Amount</span><span></span>
     </div>
     <div id="ef-ptf-rows">
-      ${(p.perTicketFees||[]).map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
+      ${(p.perTicketFees||[]).map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
         <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="ef-ptf-desc-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <select id="ef-ptf-type-${i}" style="padding:6px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+          <option value="fixed" ${(!l.feeType||l.feeType==='fixed')?'selected':''}>$</option>
+          <option value="pct" ${l.feeType==='pct'?'selected':''}>%</option>
+        </select>
+        <input type="number" placeholder="amount" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
         <button class="btn ghost sm" onclick="efRemovePtfRow(${i})" style="padding:5px 7px">×</button>
       </div>`).join('')}
     </div>
@@ -3107,6 +3163,37 @@ function efReadPtfRows(){
     amount:+document.getElementById('ef-ptf-amt-'+i)?.value||0
   }));
 }
+
+// Tier row management (event form)
+let _efTiers=[];
+function efAddTier(){
+  _efTiers=efReadTiers();
+  _efTiers.push({name:'',base:'',count:''});
+  efRenderTiers();
+}
+function efRemoveTier(i){
+  _efTiers=efReadTiers();
+  _efTiers.splice(i,1);
+  efRenderTiers();
+}
+function efReadTiers(){
+  return [...document.querySelectorAll('#ef-tiers .ef-tier-row')].map((_,i)=>({
+    name:document.getElementById('ef-tier-name-'+i)?.value||'',
+    base:+document.getElementById('ef-tier-base-'+i)?.value||0,
+    count:+document.getElementById('ef-tier-count-'+i)?.value||0
+  })).filter(t=>t.name||t.base||t.count);
+}
+function efRenderTiers(){
+  const host=document.getElementById('ef-tiers'); if(!host) return;
+  host.innerHTML=_efTiers.map((t,i)=>`
+    <div class="ef-tier-row" style="display:grid;grid-template-columns:1fr 90px 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
+      <input placeholder="e.g. General, VIP" value="${esc(t.name||'')}" id="ef-tier-name-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" step="0.01" placeholder="$" value="${t.base||''}" id="ef-tier-base-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <input type="number" placeholder="count" value="${t.count||''}" id="ef-tier-count-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <button class="btn ghost sm" onclick="efRemoveTier(${i})" style="padding:5px 7px">×</button>
+    </div>`).join('');
+}
+
 function efRenderPtfRows(){
   const host=document.getElementById('ef-ptf-rows'); if(!host) return;
   host.innerHTML=_efPtf.map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
@@ -3215,9 +3302,21 @@ function saveEvent(id){
     showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),
     capacityAlloc:fvn('ef-cap'),presales:fvn('ef-pre'),comps:fvn('ef-comps'),
     mgmtPct:fvn('ef-mgmt'),
-    pricing:{base:fvn('ef-base'),serviceFee:fvn('ef-fee'),feeType:fv('ef-feetype'),
-      ccFee:fvn('ef-cc'),taxRate:fvn('ef-tax'),taxOn:fv('ef-taxon'),
-      perTicketFees:efReadPtfRows().filter(l=>l.desc||l.amount>0)},
+    pricing:(()=>{
+      const tiers=efReadTiers();
+      const firstBase=tiers.length>0?tiers[0].base:0;
+      const totalCount=tiers.reduce((t,r)=>t+(+r.count||0),0);
+      return {
+        base:firstBase, serviceFee:0, feeType:'fixed', ccFee:0,
+        taxRate:fvn('ef-tax'), taxOn:fv('ef-taxon'),
+        perTicketFees:efReadPtfRows().filter(l=>l.desc||l.amount>0),
+        tiers:tiers.length>1?tiers:[]  // only store tiers array if multi-tier
+      };
+    })(),
+    projection:{ticketsEst:(()=>{
+      const tiers=efReadTiers();
+      return tiers.reduce((t,r)=>t+(+r.count||0),0)||fvn('ef-pre')||0;
+    })(), expenses:(e.projection||{}).expenses||[]},
     terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
     showCosts:readShowCosts(),
     depositAmount:fvn('ef-deposit-amt'),
