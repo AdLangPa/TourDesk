@@ -4197,12 +4197,35 @@ function propShowOverview(host,p,s,f,v,sliderVal){
 
 
 function propShowSettlement(host,p,s){
-  const fakeEvent=propShowToFakeEvent(p,s);
-  const pb=priceBreakdown(fakeEvent.pricing);
   const cap=+s.capacity||1;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  const hasTiers=tiers.length>1;
   const est=+s.ticketsEst||Math.round(cap*0.6);
-  host.innerHTML=`
-    <div class="sec-label">Ticket estimate</div>
+  const pb=priceBreakdown(propShowToFakeEvent(p,s).pricing);
+
+  const sliderHtml=hasTiers?`
+    <div class="sec-label" style="margin-top:24px">Ticket tiers — adjust counts</div>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier to model attendance. Fixed tiers (VIP) can't be changed here.</p>
+    ${tiers.map((t,i)=>`<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
+        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} base${t.fixed?' · fixed':''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="ps-tier-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
+          ${t.fixed?'disabled':''}
+          oninput="document.getElementById('ps-tn-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
+          style="flex:1${t.fixed?';opacity:0.5':''}">
+        <input type="number" id="ps-tn-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
+          ${t.fixed?'disabled':''}
+          onchange="document.getElementById('ps-tier-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
+          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right${t.fixed?';background:var(--surf2)':''}">
+        <span style="font-size:11px;color:var(--txt3);width:55px;text-align:right" id="ps-tpct-${i}">${Math.round((+t.count||0)/cap*100)}%</span>
+      </div>
+    </div>`).join('')}
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px" id="ps-tier-total"></div>`
+  :`
+    <div class="sec-label" style="margin-top:24px">Ticket estimate</div>
     <div class="row3" style="margin-bottom:6px">
       <div class="field"><label>Est. tickets sold</label>
         <input type="number" id="ps-sold" value="${est}" oninput="psUpdateWaterfall('${p.id}','${s._sid}')"></div>
@@ -4212,33 +4235,49 @@ function propShowSettlement(host,p,s){
       <div class="field"><label>Capacity</label>
         <input type="number" value="${cap}" disabled style="background:var(--surf2)"></div>
     </div>
-    <p class="muted" style="font-size:12px;margin-bottom:18px">Leave override blank to auto-calculate from tickets × ${money(pb.total)}.</p>
+    <p class="muted" style="font-size:12px;margin-bottom:18px">Leave override blank to auto-calculate from tickets × ${money(pb.total)}.</p>`;
+
+  host.innerHTML=`
     <div class="sec-label">Expenses</div>
     <div id="ps-expenses"></div>
     <button class="btn sm" style="margin-top:8px" onclick="psAddExpense('${p.id}','${s._sid}')">+ Add expense</button>
+    ${sliderHtml}
     <div class="sec-label" style="margin-top:24px">Waterfall</div>
     <div id="ps-waterfall"></div>
     <div class="sec-label" style="margin-top:22px">Summary</div>
     <div id="ps-summary"></div>
     <div style="margin-top:18px">
       <button class="btn primary sm" onclick="psSaveSettlement('${p.id}','${s._sid}')">Save</button>
-    </div>
-    <div class="divider" style="margin-top:28px"></div>
-    <div class="sec-label" style="margin-top:18px">Scenarios</div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-      <input type="range" id="ps-sc-slider" min="0" max="${cap}" value="${est}"
-        oninput="document.getElementById('ps-sc-num').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
-        style="flex:1">
-      <input type="number" id="ps-sc-num" min="0" max="${cap}" value="${est}"
-        oninput="document.getElementById('ps-sc-slider').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
-        style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
-      <span class="muted" style="font-size:12px" id="ps-sc-pct"></span>
-    </div>
-    <div id="ps-sc-waterfall"></div>
-    <div style="overflow-x:auto;margin-top:18px"><div id="ps-sc-table"></div></div>`;
+    </div>`;
   psRenderExpenses(p,s);
-  psRenderWaterfall(p,s);
-  psRenderScenario(p.id,s._sid);
+  if(hasTiers) psRenderScenarioTiers(p.id,s._sid);
+  else { psRenderWaterfall(p,s); }
+}
+
+// Render waterfall with current tier slider values
+function psRenderScenarioTiers(pid,sid){
+  const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
+  const cap=+s.capacity||1;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  let totalSold=0;
+  const sliderTiers=tiers.map((t,i)=>{
+    const el=document.getElementById('ps-tn-'+i);
+    const count=t.fixed?(+t.count||0):(el?+el.value||0:+t.count||0);
+    totalSold+=count;
+    const pctEl=document.getElementById('ps-tpct-'+i);
+    if(pctEl) pctEl.textContent=Math.round(count/cap*100)+'%';
+    return {...t,count};
+  });
+  const totalEl=document.getElementById('ps-tier-total');
+  if(totalEl) totalEl.innerHTML=`Total: <strong>${totalSold}</strong> / ${cap} seats`;
+  // Build a fake show with updated tier counts
+  const fakeS={...s,tiers:sliderTiers,ticketsEst:totalSold};
+  const tcps=proposalTourCostPerShow(p);
+  const f=proposalShowFigures(fakeS,null,tcps);
+  // Render waterfall
+  const wf=document.getElementById('ps-waterfall');
+  const sm=document.getElementById('ps-summary');
+  if(wf) psRenderWaterfallFromFigures(f,wf,sm,fakeS.expenses||[]);
 }
 
 function propShowToFakeEvent(p,s){
@@ -4246,11 +4285,13 @@ function propShowToFakeEvent(p,s){
   const grossEl=document.getElementById('ps-gross');
   const est=soldEl?+soldEl.value:(+s.ticketsEst||0);
   const grossOverride=grossEl?grossEl.value:(s.grossOverride||'');
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
   return {
     capacityAlloc:+s.capacity||0,
     mgmtPct:+s.mgmtPct||DB.settings.mgmtPct,
     pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
-      taxRate:+s.taxRate||0,taxOn:s.taxOn||'base'},
+      taxRate:+s.taxRate||0,taxOn:s.taxOn||'base',perTicketFees:[],
+      tiers:tiers.length>1?tiers:[]},
     terms:s.terms||{},
     showCosts:s.showCosts||{crew:[],equipment:[],fees:[]},
     projection:{ticketsEst:est,expenses:[]},
@@ -4313,59 +4354,16 @@ function psRemoveExp(pid,sid,i){
 }
 function psUpdateWaterfall(pid,sid){
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
-  const soldEl=document.getElementById('ps-sold');
-  const grossEl=document.getElementById('ps-gross');
-  if(soldEl) s.ticketsEst=+soldEl.value||s.ticketsEst;
-  if(grossEl) s.grossOverride=grossEl.value||'';
-  psRenderWaterfall(p,s);
-}
-function psRenderWaterfall(p,s){
-  const wf=document.getElementById('ps-waterfall');
-  const sm=document.getElementById('ps-summary');
-  if(!wf) return;
-  const fakeEvent=propShowToFakeEvent(p,s);
-  const f=settlementFigures(fakeEvent);
-  const ct=fakeEvent.terms.contractType;
-  const max=Math.max(f.grossBoxOffice,f.baseRevenue,f.payout,1);
-  const bar=(label,val,color,bold)=>{
-    const w=Math.max(2,Math.round(Math.abs(val)/max*100));
-    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-      <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0">${label}</div>
-      <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
-      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}\$${Math.abs(val).toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
-    </div>`;
-  };
-  const sc=fakeEvent.showCosts||{};
-  const showCostRows=[
-    ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>bar('Less: '+(l.desc||'Crew'),(+l.hours||0)*(+l.rate||0)*-1,'var(--red)',false)),
-    ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>bar('Less: '+(l.desc||'Equipment'),-(+l.amount),'var(--red)',false)),
-    ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>bar('Less: '+(l.desc||'Fee'),-(+l.amount),'var(--red)',false)),
-  ];
-  const settlVenueRows=(s.expenses||[]).filter(x=>x.payer==='venue').map(x=>bar('Less: '+(x.desc||'Venue expense'),-(+x.amount),'var(--red)',false));
-  const artistExpRows=(s.expenses||[]).filter(x=>x.payer==='artist').map(x=>bar('Less: '+(x.desc||'Artist expense'),-(+x.amount),'#c98a3f',false));
-  const rows=[
-    bar('Gross box office',f.grossBoxOffice,'var(--blue)',true),
-    bar('Base ticket revenue',f.baseRevenue,'#85b7eb',false),
-    ...showCostRows,...settlVenueRows,
-    ...(f.dealRentalFlat>0&&ct!=='rental'?[bar('Less: rental flat fee',-f.dealRentalFlat,'var(--red)',false)]:[]),
-    ...(f.dealRentalPct>0?[bar('Less: box office % ('+(+fakeEvent.terms.doorSplit||0)+'%)',-f.dealRentalPct,'var(--red)',false)]:[]),
-    '<div style="height:8px"></div>',
-    bar('Net box office',f.netBoxOffice,'#6fa8dc',true),
-    bar('Venue payout ('+ctLabel(ct)+')',f.payout,'var(--green)',true),
-    bar('Less: mgmt commission ('+fakeEvent.mgmtPct+'%)',-f.commission,'var(--amber)',false),
-    ...(f.producerCost>0?[bar('Less: producer expenses',-f.producerCost,'var(--red)',false)]:[]),
-    '<div style="height:8px"></div>',
-    bar('Artist gross',f.artistGross,'#97c459',true),
-    ...artistExpRows,
-    bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
-  ].join('');
-  wf.innerHTML=`<div style="max-width:650px">${rows}</div>`;
-  if(sm) sm.innerHTML=`<div class="stats">
-    <div class="stat"><div class="stat-val">${money0(f.grossBoxOffice)}</div><div class="stat-lbl">Gross</div></div>
-    <div class="stat"><div class="stat-val pos">${money0(f.commission)}</div><div class="stat-lbl">Commission</div></div>
-    <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net</div></div>
-    <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Venue payout</div></div>
-  </div>`;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  if(tiers.length>1){
+    psRenderScenarioTiers(pid,sid);
+  } else {
+    const soldEl=document.getElementById('ps-sold');
+    const grossEl=document.getElementById('ps-gross');
+    if(soldEl) s.ticketsEst=+soldEl.value||s.ticketsEst;
+    if(grossEl) s.grossOverride=grossEl.value||'';
+    psRenderWaterfall(p,s);
+  }
 }
 function psSaveSettlement(pid,sid){
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
@@ -4378,13 +4376,76 @@ function psSaveSettlement(pid,sid){
   const btn=document.querySelector('#prop-show-tab .btn.primary.sm');
   if(btn){const orig=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=orig,1500);}
 }
+function psRenderWaterfallFromFigures(f,wf,sm,expenses){
+  if(!wf) return;
+  const max=Math.max(f.payout,f.grossBoxOffice,1);
+  const bar=(label,val,color,bold)=>{
+    const w=Math.max(2,Math.min(100,Math.round(Math.abs(val)/max*100)));
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0${bold?';font-weight:600;color:var(--txt)':''}">${label}</div>
+      <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
+      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}${money0(Math.abs(val))}</div>
+    </div>`;
+  };
+  const tierRows=(f.tierLines&&f.tierLines.length>1)?f.tierLines.map(t=>
+    bar(esc(t.name)+' ('+t.count+'×'+money0(t.base)+')',t.base*t.count,'#85b7eb',false)):[];
+  const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist'&&+x.amount>0)
+    .map(x=>bar('Less: '+esc(x.desc||'expense'),-(+x.amount),'#c98a3f',false));
+  const rows=[
+    bar('Gross box office',f.grossBoxOffice,'var(--blue)',true),
+    ...(tierRows.length?tierRows:[bar('Base ticket revenue',f.baseRevenue,'#85b7eb',false)]),
+    bar('Venue payout',f.payout,'var(--green)',true),
+    bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
+    '<div style="height:6px"></div>',
+    bar('Artist gross',f.artistGross,'#97c459',true),
+    ...artistExpRows,
+    ...(artistExpRows.length?[bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true)]:[])
+  ].join('');
+  wf.innerHTML=`<div style="max-width:650px">${rows}</div>`;
+  if(sm) sm.innerHTML=`<div class="stats">
+    <div class="stat"><div class="stat-val">${money0(f.grossBoxOffice)}</div><div class="stat-lbl">Gross</div></div>
+    <div class="stat"><div class="stat-val pos">${money0(f.commission)}</div><div class="stat-lbl">Commission</div></div>
+    <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net</div></div>
+    <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Venue payout</div></div>
+  </div>`;
+}
+
+function psRenderWaterfall(p,s){
+  const tcps=proposalTourCostPerShow(p);
+  const f=proposalShowFigures(s,null,tcps);
+  psRenderWaterfallFromFigures(f,
+    document.getElementById('ps-waterfall'),
+    document.getElementById('ps-summary'),
+    s.expenses||[]);
+}
+
 function propShowScenarios(host,p,s){
-  // This is the "Settlement" tab for proposal shows — mirrors confirmed event Projections tab
   const cap=+s.capacity||1;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  const hasTiers=tiers.length>1;
   const est=+s.ticketsEst||Math.round(cap*0.6);
   const tcps=proposalTourCostPerShow(p);
-  host.innerHTML=`
-    <p class="muted" style="font-size:12px;margin-bottom:16px">Model different attendance scenarios using the deal terms and show costs for this show. Tour costs are spread across all shows automatically.</p>
+
+  const sliderHtml=hasTiers?`
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier's slider to model different attendance mixes.</p>
+    ${tiers.map((t,i)=>`<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
+        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)}${t.fixed?' · fixed':''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="ps-sc-tier-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
+          ${t.fixed?'disabled':''} style="flex:1${t.fixed?';opacity:0.5':''}"
+          oninput="document.getElementById('ps-sc-tn-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')">
+        <input type="number" id="ps-sc-tn-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
+          ${t.fixed?'disabled':''} onchange="document.getElementById('ps-sc-tier-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')"
+          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right${t.fixed?';background:var(--surf2)':''}">
+        <span style="font-size:11px;color:var(--txt3);width:55px;text-align:right" id="ps-sc-tpct-${i}">${Math.round((+t.count||0)/cap*100)}%</span>
+      </div>
+    </div>`).join('')}
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px" id="ps-sc-total"></div>`
+  :`
+    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance level.</p>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
       <input type="range" id="ps-sc-slider" min="0" max="${cap}" value="${est}"
         oninput="document.getElementById('ps-sc-num').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
@@ -4393,10 +4454,71 @@ function propShowScenarios(host,p,s){
         oninput="document.getElementById('ps-sc-slider').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
         style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
       <span class="muted" style="font-size:12px" id="ps-sc-pct"></span>
-    </div>
+    </div>`;
+
+  host.innerHTML=`${sliderHtml}
     <div id="ps-sc-waterfall"></div>
     <div style="overflow-x:auto;margin-top:18px"><div id="ps-sc-table"></div></div>`;
-  psRenderScenario(p.id,s._sid,tcps);
+
+  if(hasTiers) psRenderScenarioTable(p.id,s._sid,tcps);
+  else psRenderScenario(p.id,s._sid,tcps);
+}
+
+// Tier-aware scenario table for proposals
+function psRenderScenarioTable(pid,sid,tcpsOverride){
+  const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
+  const cap=+s.capacity||1;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  const tcps=tcpsOverride!=null?tcpsOverride:proposalTourCostPerShow(p);
+  // Read current slider values
+  let totalSold=0;
+  const sliderTiers=tiers.map((t,i)=>{
+    const el=document.getElementById('ps-sc-tn-'+i);
+    const count=t.fixed?(+t.count||0):(el?+el.value||0:+t.count||0);
+    totalSold+=count;
+    const pctEl=document.getElementById('ps-sc-tpct-'+i);
+    if(pctEl) pctEl.textContent=Math.round(count/cap*100)+'%';
+    return {...t,count};
+  });
+  const totalEl=document.getElementById('ps-sc-total');
+  if(totalEl) totalEl.innerHTML=`Total: <strong>${totalSold}</strong> / ${cap} seats`;
+  // Waterfall at current slider values
+  const currS={...s,tiers:sliderTiers,ticketsEst:totalSold};
+  const currF=proposalShowFigures(currS,null,tcps);
+  psRenderWaterfallFromFigures(currF,document.getElementById('ps-sc-waterfall'),null,s.expenses||[]);
+  // Scenarios table at 10% increments
+  const pcts=[10,25,40,50,60,70,80,90,100];
+  const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
+  let be=null;
+  for(let fill=0;fill<=cap;fill++){
+    const scale=fill/baseTotals;
+    const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
+    if(proposalShowFigures({...s,tiers:sc,ticketsEst:fill},null,tcps).artistNet>=0&&be===null) be=fill;
+  }
+  const tbl=document.getElementById('ps-sc-table');
+  if(tbl) tbl.innerHTML=`<table class="tbl"><thead><tr>
+    <th>Fill</th>${tiers.map(t=>`<th class="num">${esc(t.name)}</th>`).join('')}
+    <th class="num">Total</th><th class="num">Gross</th>
+    <th class="num">Venue payout</th><th class="num">Commission</th><th class="num">Artist net</th>
+  </tr></thead><tbody>
+  ${pcts.map(pct=>{
+    const fill=Math.round(cap*pct/100);
+    const scale=fill/baseTotals;
+    const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
+    const scTotal=sc.reduce((s,t)=>s+t.count,0);
+    const ff=proposalShowFigures({...s,tiers:sc,ticketsEst:scTotal},null,tcps);
+    const isCurr=Math.abs(scTotal-totalSold)<cap*0.05;
+    return `<tr style="${isCurr?'background:var(--blue-soft);font-weight:600':''}">
+      <td>${pct}%</td>
+      ${sc.map(t=>`<td class="num">${t.count}</td>`).join('')}
+      <td class="num">${scTotal}</td>
+      <td class="num">${money0(ff.grossBoxOffice)}</td>
+      <td class="num">${money0(ff.payout)}</td>
+      <td class="num pos">${money0(ff.commission)}</td>
+      <td class="num ${ff.artistNet>=0?'pos':'neg'}">${ff.artistNet>=0?'+':'−'}${money0(Math.abs(ff.artistNet))}</td>
+    </tr>`;
+  }).join('')}</tbody></table>
+  ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Artist breakeven around ${be} tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
 }
 
 function psRenderScenario(pid,sid,tcpsOverride){
