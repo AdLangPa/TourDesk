@@ -2373,25 +2373,56 @@ function printProposal(){
 function eventProjections(host,e){
   e.projection = e.projection || {ticketsEst:0, expenses:[]};
   const cap=+e.capacityAlloc||1;
-  const defaultSlider=+e.projection.ticketsEst||Math.round(cap*0.6);
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  const hasTiers=tiers.length>1;
+
+  const sliderSection = hasTiers ? `
+    <div class="sec-label" style="margin-top:24px">Scenarios — adjust per tier</div>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier's slider to model different attendance mixes. Total must stay within capacity (${cap}).</p>
+    ${tiers.map((t,i)=>{
+      const defaultCount=+t.count||0;
+      const maxCount=t.fixed?+t.count:cap;
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
+          <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} base${t.fixed?' · fixed count':''}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="sc-tier-${i}" min="0" max="${maxCount}" value="${defaultCount}"
+            ${t.fixed?'disabled':''}
+            oninput="document.getElementById('sc-tn-${i}').value=this.value;renderScenario('${e.id}')"
+            style="flex:1${t.fixed?';opacity:0.5':''}">
+          <input type="number" id="sc-tn-${i}" min="0" max="${maxCount}" value="${defaultCount}"
+            ${t.fixed?'disabled':''}
+            onchange="document.getElementById('sc-tier-${i}').value=this.value;renderScenario('${e.id}')"
+            style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right${t.fixed?';background:var(--surf2)':''}">
+          <span style="font-size:11px;color:var(--txt3);width:60px;text-align:right" id="sc-tpct-${i}">${Math.round(defaultCount/cap*100)}%</span>
+        </div>
+      </div>`;
+    }).join('')}
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px" id="sc-total-line"></div>
+  ` : `
+    <div class="sec-label" style="margin-top:24px">Scenarios — using deal terms &amp; show costs</div>
+    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance level.</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <input type="range" id="sc-slider" min="0" max="${cap}" value="${+e.projection.ticketsEst||Math.round(cap*0.6)}"
+        oninput="document.getElementById('sc-num').value=this.value;renderScenario('${e.id}')"
+        style="flex:1">
+      <input type="number" id="sc-num" min="0" max="${cap}" value="${+e.projection.ticketsEst||Math.round(cap*0.6)}"
+        oninput="document.getElementById('sc-slider').value=this.value;renderScenario('${e.id}')"
+        style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+      <span class="muted" style="font-size:12px" id="sc-pct"></span>
+    </div>
+  `;
+
   host.innerHTML=`
-    <p class="muted" style="font-size:12px;margin-bottom:18px">Estimate your numbers before the show using your deal terms and show costs. This does not affect the actual Settlement tab — that's for entering the real venue payout after the show.</p>
+    <p class="muted" style="font-size:12px;margin-bottom:18px">Estimate your numbers before the show using your deal terms and show costs. This does not affect the actual Settlement tab.</p>
 
     <div class="sec-label">Expenses (projected)</div>
     <div id="pr-expenses"></div>
     <button class="btn sm" style="margin-top:8px" onclick="addProjExpense('${e.id}')">+ Add expense</button>
 
-    <div class="sec-label" style="margin-top:24px">Scenarios — using deal terms &amp; show costs</div>
-    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance level.</p>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-      <input type="range" id="sc-slider" min="0" max="${cap}" value="${defaultSlider}"
-        oninput="document.getElementById('sc-num').value=this.value;renderScenario('${e.id}')"
-        style="flex:1">
-      <input type="number" id="sc-num" min="0" max="${cap}" value="${defaultSlider}"
-        oninput="document.getElementById('sc-slider').value=this.value;renderScenario('${e.id}')"
-        style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
-      <span class="muted" style="font-size:12px" id="sc-pct"></span>
-    </div>
+    ${sliderSection}
     <div id="sc-waterfall"></div>
     <div style="overflow-x:auto;margin-top:18px"><div id="sc-table"></div></div>
     <div style="margin-top:18px"><button class="btn primary sm" onclick="saveProjection('${e.id}')">Save estimate</button></div>`;
@@ -2400,30 +2431,126 @@ function eventProjections(host,e){
   renderScenario(e.id);
 }
 
-function renderProjExpenses(e){
-  const host=document.getElementById('pr-expenses'); if(!host) return;
-  const exps=e.projection.expenses||[];
-  if(!exps.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses yet.</p>'; return; }
-  host.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
-      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
-    </div>
-    ${exps.map((x,i)=>{
-      const isProd=x.payer==='producer';
-      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
-      const billsOut=isProd?(+x.amount||0)+markup:0;
-      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
-        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Marketing" oninput="setProjExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <input type="number" value="${x.amount||0}" oninput="setProjExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-        <select onchange="setProjExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-          <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (you front)</option>
-          <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
-        </select>
-        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setProjExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
-        <span style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
-        <button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp('${e.id}',${i})">×</button>
-      </div>`;
-    }).join('')}`;
+function renderScenario(id){
+  const e=get(DB.events,id);
+  const cap=+e.capacityAlloc||1;
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  const hasTiers=tiers.length>1;
+  const projExps=e.projection?.expenses||[];
+
+  let model, totalSold;
+
+  if(hasTiers){
+    // Read current slider values per tier
+    const sliderTiers=tiers.map((t,i)=>{
+      const countEl=document.getElementById('sc-tn-'+i);
+      const count=t.fixed?(+t.count||0):(countEl?+countEl.value||0:+t.count||0);
+      return {...t,count};
+    });
+    totalSold=sliderTiers.reduce((s,t)=>s+t.count,0);
+    // Update % labels and total line
+    sliderTiers.forEach((t,i)=>{
+      const pctEl=document.getElementById('sc-tpct-'+i);
+      if(pctEl) pctEl.textContent=Math.round(t.count/cap*100)+'%';
+    });
+    const totalEl=document.getElementById('sc-total-line');
+    const overCap=totalSold>cap;
+    if(totalEl) totalEl.innerHTML=`Total: <strong style="color:${overCap?'var(--red)':'var(--txt)'}">${totalSold}</strong> / ${cap} seats${overCap?' <span style="color:var(--red)">⚠ over capacity</span>':''}`;
+    // Build model with tier counts from sliders
+    model={...e, pricing:{...e.pricing, tiers:sliderTiers}, projection:{ticketsEst:totalSold, expenses:projExps}};
+  } else {
+    const n=+document.getElementById('sc-num')?.value||0;
+    totalSold=n;
+    const pct=document.getElementById('sc-pct');
+    if(pct) pct.textContent=Math.round(n/cap*100)+'% of capacity';
+    model={...e, projection:{ticketsEst:n, expenses:projExps}};
+  }
+
+  const f=projectionFigures(model, hasTiers?null:totalSold);
+  renderProjWaterfall(document.getElementById('sc-waterfall'),f,projExps);
+
+  // Scenarios table — for tiers, show at 10% capacity increments scaling all tiers proportionally
+  const pcts=[10,25,40,50,60,70,80,90,100];
+  const tbl=document.getElementById('sc-table');
+  if(!tbl) return;
+
+  if(hasTiers){
+    // Scale tier counts proportionally for each fill %
+    const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
+    let be=null;
+    for(let fill=0;fill<=cap;fill++){
+      const scale=fill/baseTotals;
+      const scaledTiers=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
+      const fm=projectionFigures({...e,pricing:{...e.pricing,tiers:scaledTiers},projection:{ticketsEst:fill,expenses:projExps}},null);
+      if(fm.artistNet>=0&&be===null) be=fill;
+    }
+    tbl.innerHTML=`<table class="tbl"><thead><tr>
+      <th>Fill</th>${tiers.map(t=>`<th class="num">${esc(t.name)}</th>`).join('')}
+      <th class="num">Total</th><th class="num">Gross</th>
+      <th class="num">Venue payout</th><th class="num">Commission</th><th class="num">Artist net</th>
+    </tr></thead><tbody>
+    ${pcts.map(pct=>{
+      const fill=Math.round(cap*pct/100);
+      const scale=fill/baseTotals;
+      const scaledTiers=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
+      const scaledTotal=scaledTiers.reduce((s,t)=>s+t.count,0);
+      const fm=projectionFigures({...e,pricing:{...e.pricing,tiers:scaledTiers},projection:{ticketsEst:scaledTotal,expenses:projExps}},null);
+      const isCurrent=totalSold>0&&Math.abs(scaledTotal-totalSold)<cap*0.05;
+      return `<tr style="${isCurrent?'background:var(--blue-soft);font-weight:600':''}cursor:default">
+        <td>${pct}%</td>
+        ${scaledTiers.map(t=>`<td class="num">${t.count}</td>`).join('')}
+        <td class="num">${scaledTotal}</td>
+        <td class="num">${money0(fm.grossBoxOffice)}</td>
+        <td class="num">${money0(fm.payout)}</td>
+        <td class="num pos">${money0(fm.commission)}</td>
+        <td class="num ${fm.artistNet>=0?'pos':'neg'}">${fm.artistNet>=0?'+':'−'}${money0(Math.abs(fm.artistNet))}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Artist breakeven around ${be} total tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
+  } else {
+    const be=projectionBreakeven(model);
+    const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
+    tbl.innerHTML=`<table class="tbl"><thead><tr>
+      <th>Tickets</th><th class="num">% cap</th><th class="num">Gross</th>
+      <th class="num">Venue payout</th><th class="num">Commission</th>
+      <th class="num">Artist gross</th><th class="num">Artist net</th></tr></thead><tbody>
+      ${pcts.map(p=>{
+        const sold=Math.round(cap*p/100);
+        const ff=projectionFigures(model,sold);
+        const hl=p===beStep;
+        return `<tr style="${hl?'background:var(--green-soft)':''}cursor:default">
+          <td>${sold}</td><td class="num">${p}%</td>
+          <td class="num">${money0(ff.grossBoxOffice)}</td>
+          <td class="num">${money0(ff.payout)}</td>
+          <td class="num pos">${money0(ff.commission)}</td>
+          <td class="num">${money0(ff.artistGross)}</td>
+          <td class="num ${ff.artistNet>=0?'pos':'neg'}">${ff.artistNet>=0?'+':'−'}${money0(Math.abs(ff.artistNet))}</td>
+        </tr>`;
+      }).join('')}</tbody></table>
+      ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Artist breakeven at ${be} tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
+  }
+}
+
+function saveProjection(id){
+  const e=get(DB.events,id);
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  if(tiers.length>1){
+    // Save current slider counts back to pricing.tiers
+    tiers.forEach((t,i)=>{
+      const countEl=document.getElementById('sc-tn-'+i);
+      if(countEl&&!t.fixed) e.pricing.tiers[i].count=+countEl.value||0;
+    });
+    e.projection.ticketsEst=tiers.reduce((s,t)=>{
+      const countEl=document.getElementById('sc-tn-'+tiers.indexOf(t));
+      return s+(countEl&&!t.fixed?+countEl.value||0:+t.count||0);
+    },0);
+  } else {
+    e.projection.ticketsEst=+document.getElementById('sc-num')?.value||0;
+  }
+  logActivity('edited','Event',e.name+' (projection saved)');
+  persist();
+  const btn=document.querySelector('#ev-tab .btn.primary.sm');
+  if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=o,1500);}
 }
 function addProjExpense(id){
   const e=get(DB.events,id);
@@ -2442,52 +2569,6 @@ function removeProjExp(id,i){
   e.projection.expenses.splice(i,1);
   renderProjExpenses(e); renderScenario(id);
 }
-function saveProjection(id){
-  const e=get(DB.events,id);
-  e.projection.ticketsEst=+document.getElementById('sc-num')?.value||0;
-  logActivity('edited','Event',e.name+' (projection saved)');
-  persist();
-  const btn=document.querySelector('#ev-tab .btn.primary.sm');
-  if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=o,1500);}
-}
-
-function renderScenario(id){
-  const e=get(DB.events,id);
-  const n=+document.getElementById('sc-num')?.value||0;
-  const cap=+e.capacityAlloc||1;
-  const pct=document.getElementById('sc-pct');
-  if(pct) pct.textContent=Math.round(n/cap*100)+'% of capacity';
-
-  const projExps=e.projection?.expenses||[];
-  const model={...e, projection:{ticketsEst:n, expenses:projExps}};
-  const f=projectionFigures(model,n);
-
-  renderProjWaterfall(document.getElementById('sc-waterfall'),f,projExps);
-
-  const pcts=[10,25,40,50,60,70,80,90,100];
-  const be=projectionBreakeven(model);
-  const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
-  const tbl=document.getElementById('sc-table');
-  if(tbl) tbl.innerHTML=`<table class="tbl"><thead><tr>
-    <th>Tickets</th><th class="num">% cap</th><th class="num">Gross</th>
-    <th class="num">Venue payout</th><th class="num">Your commission</th>
-    <th class="num">Artist gross</th><th class="num">Artist net</th></tr></thead><tbody>
-    ${pcts.map(p=>{
-      const sold=Math.round(cap*p/100);
-      const ff=projectionFigures(model,sold);
-      const hl=p===beStep;
-      return `<tr style="${hl?'background:var(--green-soft)':''}cursor:default">
-        <td>${sold}</td><td class="num">${p}%</td>
-        <td class="num">${money0(ff.grossBoxOffice)}</td>
-        <td class="num">${money0(ff.payout)}</td>
-        <td class="num pos">${money0(ff.commission)}</td>
-        <td class="num">${money0(ff.artistGross)}</td>
-        <td class="num ${ff.artistNet>=0?'pos':'neg'}" style="font-weight:500">${ff.artistNet>=0?'+':'−'}${money0(Math.abs(ff.artistNet))}</td>
-      </tr>`;
-    }).join('')}</tbody></table>
-    ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Artist breakeven at ${be} tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
-}
-
 function openProposalFromSettlement(id){
   const e=get(DB.events,id);
   const projExps=e.projection?.expenses||[];
