@@ -4241,12 +4241,14 @@ function propShowSettlement(host,p,s){
     <div id="ps-waterfall"></div>
     <div class="sec-label" style="margin-top:22px">Summary</div>
     <div id="ps-summary"></div>
+    <div class="sec-label" style="margin-top:22px">Scenarios at capacity fill %</div>
+    <div style="overflow-x:auto"><div id="ps-sc-table"></div></div>
     <div style="margin-top:18px">
       <button class="btn primary sm" onclick="psSaveSettlement('${p.id}','${s._sid}')">Save</button>
     </div>`;
   psRenderExpenses(p,s);
-  if(hasTiers) psRenderScenarioTiers(p.id,s._sid);
-  else { psRenderWaterfall(p,s); }
+  if(hasTiers){ psRenderScenarioTiers(p.id,s._sid); psRenderScenarioTable(p.id,s._sid,tcps); }
+  else { psRenderWaterfall(p,s); psRenderScenario(p.id,s._sid,tcps); }
 }
 
 // Render waterfall with current tier slider values
@@ -4453,8 +4455,7 @@ function propShowScenarios(host,p,s){
     </div>`;
 
   host.innerHTML=`${sliderHtml}
-    <div id="ps-sc-waterfall"></div>
-    <div style="overflow-x:auto;margin-top:18px"><div id="ps-sc-table"></div></div>`;
+    <div id="ps-sc-waterfall"></div>`;
 
   if(hasTiers) psRenderScenarioTable(p.id,s._sid,tcps);
   else psRenderScenario(p.id,s._sid,tcps);
