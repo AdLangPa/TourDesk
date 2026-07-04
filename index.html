@@ -2174,15 +2174,14 @@ function calcModel(id){
   return _calcState[id];
 }
 function renderProjExpenses(e){
-  const st=calcModel(e.id);
-  const host=document.getElementById('cl-items');
-  if(!host) return;
-  if(!st.expenses.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses. Add travel, ads, accommodation, etc. — mark who pays and any markup.</p>'; return; }
+  const host=document.getElementById('pr-expenses'); if(!host) return;
+  const exps=e.projection?.expenses||[];
+  if(!exps.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses yet. Add travel, marketing, accommodation — mark who pays and any markup.</p>'; return; }
   host.innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
       <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
     </div>
-    ${st.expenses.map((x,i)=>{
+    ${exps.map((x,i)=>{
       const isProd=x.payer==='producer';
       const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
       const billsOut=isProd?(+x.amount||0)+markup:0;
@@ -2190,27 +2189,33 @@ function renderProjExpenses(e){
         <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Travel" oninput="setProjExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
         <input type="number" value="${x.amount||0}" oninput="setProjExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
         <select onchange="setProjExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-          ${PROJ_PAYERS.map(([v,l])=>`<option value="${v}" ${x.payer===v?'selected':''}>${l}</option>`).join('')}
+          <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (you front)</option>
+          <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
         </select>
         <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setProjExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
-        <span style="text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
+        <span style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
         <button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp('${e.id}',${i})">×</button>
       </div>`;
     }).join('')}`;
 }
 function addProjExpense(id){
-  calcModel(id).expenses.push({desc:'',amount:0,payer:'producer',markupPct:DB.settings.serviceFeePct});
-  renderProjExpenses(get(DB.events,id)); recalcEvent(id);
+  const e=get(DB.events,id);
+  e.projection=e.projection||{ticketsEst:0,expenses:[]};
+  e.projection.expenses=e.projection.expenses||[];
+  e.projection.expenses.push({desc:'',amount:0,payer:'producer',markupPct:0});
+  renderProjExpenses(e); renderScenario(id);
 }
 function setProjExp(id,i,field,val){
-  const st=calcModel(id);
-  st.expenses[i][field] = (field==='desc'||field==='payer') ? val : (+val||0);
-  if(field==='payer') renderProjExpenses(get(DB.events,id));
-  recalcEvent(id);
+  const e=get(DB.events,id);
+  const exps=e.projection?.expenses||[];
+  exps[i][field]=(field==='desc'||field==='payer')?val:(+val||0);
+  if(field==='payer') renderProjExpenses(e);
+  renderScenario(id);
 }
 function removeProjExp(id,i){
-  calcModel(id).expenses.splice(i,1);
-  renderProjExpenses(get(DB.events,id)); recalcEvent(id);
+  const e=get(DB.events,id);
+  e.projection.expenses.splice(i,1);
+  renderProjExpenses(e); renderScenario(id);
 }
 
 function recalcEvent(id){
@@ -2549,23 +2554,6 @@ function saveProjection(id){
   const btn=document.querySelector('#ev-tab .btn.primary.sm');
   if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=o,1500);}
 }
-function addProjExpense(id){
-  const e=get(DB.events,id);
-  e.projection.expenses=e.projection.expenses||[];
-  e.projection.expenses.push({desc:'',amount:0,payer:'producer',markupPct:0});
-  renderProjExpenses(e); renderScenario(id);
-}
-function setProjExp(id,i,field,val){
-  const e=get(DB.events,id);
-  e.projection.expenses[i][field]=(field==='desc'||field==='payer')?val:(+val||0);
-  if(field==='payer') renderProjExpenses(e);
-  renderScenario(id);
-}
-function removeProjExp(id,i){
-  const e=get(DB.events,id);
-  e.projection.expenses.splice(i,1);
-  renderProjExpenses(e); renderScenario(id);
-}
 function openProposalFromSettlement(id){
   const e=get(DB.events,id);
   const projExps=e.projection?.expenses||[];
@@ -2587,13 +2575,16 @@ const EXPENSE_PAYERS=[['venue','Venue (off box office)'],['producer','Producer (
 function eventSettlementV2(host,e){
   e.settlementV2 = e.settlementV2 || {venuePayout:'', depositCredits:[], expenses:[], settled:false, notes:''};
   const sv=e.settlementV2;
-  // Auto-populate deposit from event deal terms if not already in settlement
   if(e.depositAmount && e.depositPayer && !(sv.depositCredits||[]).length){
     sv.depositCredits=[{desc:'Venue deposit',amount:e.depositAmount,frontedBy:e.depositPayer}];
   }
+  const projExps=(e.projection?.expenses||[]);
+  const prodExps=projExps.filter(x=>x.payer==='producer');
+  const artistExps=projExps.filter(x=>x.payer==='artist');
+
   host.innerHTML=`
     ${sv.settled?'<div class="banner">● Settled</div>':''}
-    <p class="muted" style="font-size:12px;margin-bottom:18px">Enter the actual amount the venue paid you from their settlement statement. Commission and artist net are calculated directly from this number — no deal-term math involved.</p>
+    <p class="muted" style="font-size:12px;margin-bottom:18px">Enter the actual venue payout. Expenses flow in from Projections — edit them there if amounts changed.</p>
 
     <div class="sec-label">Venue payout</div>
     <div class="row2" style="margin-bottom:6px">
@@ -2603,14 +2594,25 @@ function eventSettlementV2(host,e){
         <input type="number" id="sv-mgmt" value="${e.mgmtPct||DB.settings.mgmtPct}" oninput="updateSettlementV2('${e.id}')"></div>
     </div>
 
-    <div class="sec-label" style="margin-top:20px">Deposits NOT already netted by the venue <span style="font-weight:400;font-size:11px;color:var(--txt3)">(deducted before commission, then reimbursed to whoever fronted it)</span></div>
-    <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:8px">Check the venue's statement first. If their invoice already shows the deposit credited against what they owe you, leave this empty — it's already inside the venue payout above. Only add a deposit here if you or the artist paid it and it was NOT reflected in the venue's payout.</p>
+    <div class="sec-label" style="margin-top:20px">Deposits <span style="font-weight:400;font-size:11px;color:var(--txt3)">(only if NOT already netted by venue)</span></div>
+    <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:8px">If the venue's statement already credits the deposit back, leave this empty.</p>
     <div id="sv-deposits"></div>
     <button class="btn sm" style="margin-top:8px" onclick="addDepositCredit('${e.id}')">+ Add deposit</button>
 
-    <div class="sec-label" style="margin-top:20px">Artist's own expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(flights, hotel, openers — paid directly by artist)</span></div>
-    <div id="sv-expenses"></div>
-    <button class="btn sm" style="margin-top:8px" onclick="addSettlementV2Expense('${e.id}')">+ Add expense</button>
+    <div class="sec-label" style="margin-top:20px">Producer expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(from Projections — edit there to change)</span></div>
+    ${prodExps.length
+      ? `<table class="tbl" style="margin-top:6px"><thead><tr><th>Description</th><th class="num">Amount</th><th class="num">Bills out</th></tr></thead><tbody>
+          ${prodExps.map(x=>{const bo=(+x.amount||0)*(1+(+x.markupPct||0)/100);return `<tr><td>${esc(x.desc||'—')}</td><td class="num">${money0(x.amount)}</td><td class="num">${money0(bo)}</td></tr>`;}).join('')}
+        </tbody></table>`
+      : `<p class="muted" style="font-size:12px;margin-top:4px">No producer expenses in Projections yet.</p>`}
+
+    <div class="sec-label" style="margin-top:20px">Artist direct expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(from Projections — edit there to change)</span></div>
+    ${artistExps.length
+      ? `<table class="tbl" style="margin-top:6px"><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody>
+          ${artistExps.map(x=>`<tr><td>${esc(x.desc||'—')}</td><td class="num">${money0(x.amount)}</td></tr>`).join('')}
+        </tbody></table>`
+      : `<p class="muted" style="font-size:12px;margin-top:4px">No artist expenses in Projections yet.</p>`}
+    <a onclick="go('events','${e.id}','projections')" style="font-size:12px;cursor:pointer;color:var(--blue)">→ Edit expenses in Projections</a>
 
     <div class="sec-label" style="margin-top:24px">Summary</div>
     <div id="sv-waterfall"></div>
@@ -2622,7 +2624,6 @@ function eventSettlementV2(host,e){
     </div>`;
 
   renderDepositCredits(e);
-  renderSettlementV2Expenses(e);
   renderSettlementV2Waterfall(e);
 }
 
@@ -2649,13 +2650,18 @@ function settlementV2Figures(ev){
   });
   artistGross+=toArtist; // artist gets their float back, not commissioned
 
-  const exps=sv.expenses||[];
-  const expenseTotal=exps.reduce((t,x)=>t+(+x.amount||0),0);
-  const artistNet=artistGross-expenseTotal;
+  // Expenses come from Projections tab — artist and producer tracked separately
+  const projExps=ev.projection?.expenses||[];
+  // Also include any legacy sv.expenses for backward compat
+  const allExps=[...projExps,...(sv.expenses||[])];
+  const artistExpenses=allExps.filter(x=>x.payer==='artist');
+  const producerExpenses=allExps.filter(x=>x.payer==='producer');
+  const expenseTotal=artistExpenses.reduce((t,x)=>t+(+x.amount||0),0);
+  const artistNet=artistGross+toArtist-expenseTotal;
 
   return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,artistGross,
     deposits,depositTotal,toArtist,toProducer,
-    exps,expenseTotal,artistNet,settled:!!sv.settled};
+    exps:artistExpenses,expenseTotal,artistNet,settled:!!sv.settled};
 }
 
 function renderDepositCredits(e){
