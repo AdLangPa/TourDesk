@@ -2633,35 +2633,41 @@ function settlementV2Figures(ev){
   const domMgmt=document.getElementById('sv-mgmt');
   const mgmtPct=(domMgmt&&domMgmt.value ? +domMgmt.value : (+ev.mgmtPct||DB.settings.mgmtPct))/100;
 
-  // Deposits NOT already netted by the venue (i.e. not baked into venuePayout above)
-  // come off the top BEFORE commission, since they're not real "show revenue" to split.
+  // Deposits off the top before commission
   const deposits=sv.depositCredits||[];
   const depositTotal=deposits.reduce((t,d)=>t+(+d.amount||0),0);
   const commissionablePot=Math.max(0, payout-depositTotal);
-
   const commission=commissionablePot*mgmtPct;
-  let artistGross=commissionablePot-commission;
 
-  // Reimburse whoever fronted each deposit
-  let toArtist=0, toProducer=0;
-  deposits.forEach(d=>{
-    if(d.frontedBy==='producer') toProducer+=(+d.amount||0);
-    else toArtist+=(+d.amount||0); // default: artist
-  });
-  artistGross+=toArtist; // artist gets their float back, not commissioned
-
-  // Expenses come from Projections tab — artist and producer tracked separately
+  // Expenses from Projections tab
   const projExps=ev.projection?.expenses||[];
-  // Also include any legacy sv.expenses for backward compat
   const allExps=[...projExps,...(sv.expenses||[])];
   const artistExpenses=allExps.filter(x=>x.payer==='artist');
   const producerExpenses=allExps.filter(x=>x.payer==='producer');
-  const expenseTotal=artistExpenses.reduce((t,x)=>t+(+x.amount||0),0);
-  const artistNet=artistGross+toArtist-expenseTotal;
+  const producerExpTotal=producerExpenses.reduce((t,x)=>t+(+x.amount||0)*(1+(+x.markupPct||0)/100),0);
+  const artistExpTotal=artistExpenses.reduce((t,x)=>t+(+x.amount||0),0);
 
-  return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,artistGross,
-    deposits,depositTotal,toArtist,toProducer,
-    exps:artistExpenses,expenseTotal,artistNet,settled:!!sv.settled};
+  // Waterfall:
+  // commissionable pot - commission - producer expenses = artist gross
+  // artist gross + deposit reimbursed to artist - artist direct expenses = artist net
+  const afterCommission=commissionablePot-commission;
+  const artistGross=afterCommission-producerExpTotal;
+
+  // Deposit reimbursements
+  let toArtist=0, toProducer=0;
+  deposits.forEach(d=>{
+    if(d.frontedBy==='producer') toProducer+=(+d.amount||0);
+    else toArtist+=(+d.amount||0);
+  });
+
+  const artistNet=artistGross+toArtist-artistExpTotal;
+  const yourTotal=commission+producerExpTotal+toProducer;
+
+  return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,
+    producerExpenses,producerExpTotal,
+    artistGross,deposits,depositTotal,toArtist,toProducer,
+    exps:artistExpenses,expenseTotal:artistExpTotal,
+    artistNet,yourTotal,settled:!!sv.settled};
 }
 
 function renderDepositCredits(e){
@@ -2749,27 +2755,30 @@ function renderSettlementV2Waterfall(e){
     </div>`;
   };
   const depositLines=f.deposits.filter(d=>+d.amount>0).map(d=>bar('Less: '+(d.desc||'Deposit')+' (off the top)',-(+d.amount),'var(--red)',false));
-  const reimburseLines=[
-    ...(f.toArtist>0?[bar('Plus: deposit reimbursed to artist',+f.toArtist,'var(--green)',false)]:[]),
-    ...(f.toProducer>0?[bar('Reimbursed to you (producer) — not commissioned',+f.toProducer,'var(--blue)',false)]:[]),
-  ];
+  const producerExpLines=f.producerExpenses.filter(x=>+x.amount>0).map(x=>{
+    const billsOut=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+    return bar('Less: '+(x.desc||'Producer expense')+' (reimbursed to you)',-billsOut,'var(--red)',false);
+  });
+  const reimburseLines=f.toArtist>0?[bar('Plus: deposit reimbursed to artist',+f.toArtist,'var(--green)',false)]:[];
   const rows=[
     bar('Venue payout',f.payout,'var(--green)',true),
     ...depositLines,
     ...(f.depositTotal>0?[bar('Commissionable pot',f.commissionablePot,'#6fa8dc',true)]:[]),
     bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
+    ...producerExpLines,
     '<div style="height:8px"></div>',
-    bar('Artist gross',f.artistGross-f.toArtist,'#97c459',true),
+    bar('Artist gross',f.artistGross,'#97c459',true),
     ...reimburseLines,
     ...f.exps.filter(x=>+x.amount>0).map(x=>bar('Less: '+(x.desc||'Expense'),-(+x.amount),'#c98a3f',false)),
     '<div style="height:8px"></div>',
     bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
   ].join('');
   wf.innerHTML=`<div style="max-width:620px">${rows}</div>
-    ${f.toProducer>0?`<div style="margin-top:10px;padding:8px 12px;background:var(--blue-soft);border-radius:var(--rad);font-size:12px;color:var(--blue)">You're owed an additional ${money0(f.toProducer)} reimbursement (deposit you fronted), on top of your ${money0(f.commission)} commission.</div>`:''}
+    ${f.toProducer>0?`<div style="margin-top:10px;padding:8px 12px;background:var(--blue-soft);border-radius:var(--rad);font-size:12px;color:var(--blue)">You're also owed ${money0(f.toProducer)} deposit reimbursement, on top of your ${money0(f.commission)} commission and ${money0(f.producerExpTotal)} expense reimbursement.</div>`:''}
     <div class="stats" style="margin-top:18px">
       <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Venue payout</div></div>
-      <div class="stat"><div class="stat-val pos">${money0(f.commission+f.toProducer)}</div><div class="stat-lbl">Your total (commission${f.toProducer>0?' + reimbursement':''})</div></div>
+      <div class="stat"><div class="stat-val pos">${money0(f.yourTotal)}</div><div class="stat-lbl">Your total</div></div>
+      <div class="stat"><div class="stat-val pos">${money0(f.commission)}</div><div class="stat-lbl">Commission</div></div>
       <div class="stat"><div class="stat-val ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</div><div class="stat-lbl">Artist net</div></div>
     </div>`;
 }
