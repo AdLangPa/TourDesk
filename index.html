@@ -2633,9 +2633,16 @@ function settlementV2Figures(ev){
   const domMgmt=document.getElementById('sv-mgmt');
   const mgmtPct=(domMgmt&&domMgmt.value ? +domMgmt.value : (+ev.mgmtPct||DB.settings.mgmtPct))/100;
 
-  // Deposits off the top before commission
+  // Deposits off the top — returned to whoever fronted them BEFORE commission
   const deposits=sv.depositCredits||[];
   const depositTotal=deposits.reduce((t,d)=>t+(+d.amount||0),0);
+  let toArtist=0, toProducer=0;
+  deposits.forEach(d=>{
+    if(d.frontedBy==='producer') toProducer+=(+d.amount||0);
+    else toArtist+=(+d.amount||0);
+  });
+
+  // Commissionable pot = payout minus ALL deposits (artist and producer)
   const commissionablePot=Math.max(0, payout-depositTotal);
   const commission=commissionablePot*mgmtPct;
 
@@ -2649,18 +2656,10 @@ function settlementV2Figures(ev){
 
   // Waterfall:
   // commissionable pot - commission - producer expenses = artist gross
-  // artist gross + deposit reimbursed to artist - artist direct expenses = artist net
-  const afterCommission=commissionablePot-commission;
-  const artistGross=afterCommission-producerExpTotal;
-
-  // Deposit reimbursements
-  let toArtist=0, toProducer=0;
-  deposits.forEach(d=>{
-    if(d.frontedBy==='producer') toProducer+=(+d.amount||0);
-    else toArtist+=(+d.amount||0);
-  });
-
-  const artistNet=artistGross+toArtist-artistExpTotal;
+  // artist gross - artist direct expenses = artist net
+  // (deposits are returned separately off the top — tracked in toArtist/toProducer)
+  const artistGross=commissionablePot-commission-producerExpTotal;
+  const artistNet=artistGross-artistExpTotal;
   const yourTotal=commission+producerExpTotal+toProducer;
 
   return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,
@@ -2744,6 +2743,8 @@ function updateSettlementV2(id){
 
 function renderSettlementV2Waterfall(e){
   const f=settlementV2Figures(e);
+  const t=get(DB.tours,e.tourId);
+  const artistName=t?.artist||(e.talentIds?.length?(get(DB.contacts,e.talentIds[0])?.name||'Artist'):'Artist');
   const wf=document.getElementById('sv-waterfall'); if(!wf) return;
   const max=Math.max(f.payout,f.artistGross,Math.abs(f.artistNet),1);
   const bar=(label,val,color,bold)=>{
@@ -2754,24 +2755,25 @@ function renderSettlementV2Waterfall(e){
       <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':val>0&&color==='var(--green)'?'var(--green)':'var(--txt)'}">${val<0?'−':val>0&&(label.includes('reimburse')||label.includes('Plus'))?'+':''}${money0(Math.abs(val))}</div>
     </div>`;
   };
-  const depositLines=f.deposits.filter(d=>+d.amount>0).map(d=>bar('Less: '+(d.desc||'Deposit')+' (off the top)',-(+d.amount),'var(--red)',false));
-  const producerExpLines=f.producerExpenses.filter(x=>+x.amount>0).map(x=>{
-    const billsOut=(+x.amount||0)*(1+(+x.markupPct||0)/100);
-    return bar('Less: '+(x.desc||'Producer expense')+' (reimbursed to you)',-billsOut,'var(--red)',false);
+  const depositLines=f.deposits.filter(d=>+d.amount>0).map(d=>{
+    const who=d.frontedBy==='producer'?'LPA Inc.':artistName;
+    return bar('Less: '+(d.desc||'Deposit')+' → returned to '+who,-(+d.amount),'var(--amber)',false);
   });
-  const reimburseLines=f.toArtist>0?[bar('Plus: deposit reimbursed to artist',+f.toArtist,'var(--green)',false)]:[];
+  const producerExpLines=f.producerExpenses.filter(x=>+x.amount>0).map(x=>{
+    const bo=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+    return bar('Less: '+(x.desc||'Producer expense')+' — LPA Inc.',-bo,'var(--red)',false);
+  });
   const rows=[
     bar('Venue payout',f.payout,'var(--green)',true),
     ...depositLines,
     ...(f.depositTotal>0?[bar('Commissionable pot',f.commissionablePot,'#6fa8dc',true)]:[]),
-    bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
+    bar('Less: mgmt commission ('+f.mgmtPct+'%) — LPA Inc.',-f.commission,'var(--amber)',false),
     ...producerExpLines,
     '<div style="height:8px"></div>',
-    bar('Artist gross',f.artistGross,'#97c459',true),
-    ...reimburseLines,
-    ...f.exps.filter(x=>+x.amount>0).map(x=>bar('Less: '+(x.desc||'Expense'),-(+x.amount),'#c98a3f',false)),
+    bar('Artist gross — '+esc(artistName),f.artistGross,'#97c459',true),
+    ...f.exps.filter(x=>+x.amount>0).map(x=>bar('Less: '+esc(x.desc||'Expense')+' — '+esc(artistName),-(+x.amount),'#c98a3f',false)),
     '<div style="height:8px"></div>',
-    bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
+    bar('Artist net — '+esc(artistName),f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
   ].join('');
   wf.innerHTML=`<div style="max-width:620px">${rows}</div>
     ${f.toProducer>0?`<div style="margin-top:10px;padding:8px 12px;background:var(--blue-soft);border-radius:var(--rad);font-size:12px;color:var(--blue)">You're also owed ${money0(f.toProducer)} deposit reimbursement, on top of your ${money0(f.commission)} commission and ${money0(f.producerExpTotal)} expense reimbursement.</div>`:''}
@@ -2803,31 +2805,61 @@ function toggleSettledV2(id){
 function printSettlementV2(id){
   const e=get(DB.events,id);
   const f=settlementV2Figures(e);
-  const v=get(DB.venues,e.venueId), t=get(DB.tours,e.tourId);
-  const row=(l,val,opts={})=>`<tr><td style="padding:5px 0;${opts.b?'font-weight:600':''}">${l}</td><td style="text-align:right;${opts.b?'font-weight:600':''};${opts.neg?'color:#a32d2d':opts.pos?'color:#3b6d11':''}">${opts.neg?'−':opts.pos?'+':''}${money0(Math.abs(val))}</td></tr>`;
+  const v=get(DB.venues,e.venueId);
+  const t=get(DB.tours,e.tourId);
+  // Get artist name from tour, or from artists DB
+  const artistName=t?.artist || (e.talentIds?.length ? (get(DB.contacts,e.talentIds[0])?.name||'Artist') : 'Artist');
+  const row=(l,val,opts={})=>`<tr>
+    <td style="padding:5px 0;${opts.b?'font-weight:600':'color:#5f5e58'};font-size:13px">${l}</td>
+    <td style="text-align:right;${opts.b?'font-weight:600':''};font-size:13px;color:${opts.neg?'#a32d2d':opts.pos?'#3b6d11':'#1c1c1a'}">${opts.neg?'−':opts.pos?'+':''}${money0(Math.abs(val))}</td>
+  </tr>`;
+  const divider=`<tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:3px 0"></td></tr>`;
+  const thickDivider=`<tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:3px 0"></td></tr>`;
+  const section=(label)=>`<tr><td colspan="2" style="padding-top:10px;padding-bottom:2px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#908e85">${label}</td></tr>`;
+
+  // Producer expenses (reimbursed to LPA Inc.)
+  const prodExpRows=f.producerExpenses.filter(x=>+x.amount>0).map(x=>{
+    const bo=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+    return row('&nbsp;&nbsp;'+esc(x.desc||'Expense')+' — LPA Inc.', -bo, {neg:1});
+  }).join('');
+
+  // Artist direct expenses
+  const artistExpRows=f.exps.filter(x=>+x.amount>0).map(x=>
+    row('&nbsp;&nbsp;'+esc(x.desc||'Expense')+' — '+esc(artistName), -(+x.amount), {neg:1})
+  ).join('');
+
   const doc=`
-    <div style="text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
-      <div style="font-size:18px;font-weight:600">Settlement Statement</div>
-      <div style="color:#5f5e58;font-size:13px">${esc(e.name)} · ${esc(v?v.name:'')} · ${esc(e.date)}${t?' · '+esc(t.artist):''}</div>
-      ${f.settled?'<div style="font-size:12px;color:#3b6d11;margin-top:4px">● Settled</div>':''}
+    <div style="text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
+      <div style="font-size:20px;font-weight:600">Settlement Statement</div>
+      <div style="color:#5f5e58;font-size:13px;margin-top:4px">${esc(e.name)} · ${esc(v?v.name:'')} · ${esc(e.date)}</div>
+      <div style="color:#5f5e58;font-size:12px;margin-top:2px">Artist: <strong>${esc(artistName)}</strong> · Manager: <strong>LPA Inc.</strong></div>
+      ${f.settled?'<div style="font-size:12px;color:#3b6d11;margin-top:6px">● Settled</div>':''}
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <table style="width:100%;border-collapse:collapse">
       ${row('Venue payout', f.payout, {b:1})}
-      ${f.deposits.filter(d=>+d.amount>0).length?`<tr><td colspan="2" style="padding-top:8px;font-weight:600;font-size:12px">Less: deposits (off the top, before commission)</td></tr>`:''}
-      ${f.deposits.filter(d=>+d.amount>0).map(d=>row('&nbsp;&nbsp;'+esc(d.desc||'Deposit'), -(+d.amount), {neg:1})).join('')}
+      ${f.deposits.filter(d=>+d.amount>0).length?section('Deposits — off the top before commission'):''}
+      ${f.deposits.filter(d=>+d.amount>0).map(d=>row('&nbsp;&nbsp;'+esc(d.desc||'Deposit')+' (fronted by '+(d.frontedBy==='producer'?'LPA Inc.':esc(artistName))+')', -(+d.amount), {neg:1})).join('')}
+      ${f.depositTotal>0?divider:''}
       ${f.depositTotal>0?row('Commissionable pot', f.commissionablePot, {b:1}):''}
-      ${row('Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
-      <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding-top:8px"></td></tr>
-      ${row('Artist gross', f.artistGross-f.toArtist, {b:1})}
-      ${f.toArtist>0?row('&nbsp;&nbsp;Deposit reimbursed to artist', +f.toArtist, {pos:1}):''}
-      ${f.toProducer>0?row('&nbsp;&nbsp;Deposit reimbursed to producer (not shown in artist net)', 0, {})  :''}
-      ${f.exps.filter(x=>+x.amount>0).length?`<tr><td colspan="2" style="padding-top:10px;font-weight:600;font-size:12px">Artist's own expenses</td></tr>`:''}
-      ${f.exps.filter(x=>+x.amount>0).map(x=>row('&nbsp;&nbsp;'+esc(x.desc||'Expense'), -(+x.amount), {neg:1})).join('')}
-      <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding-top:8px"></td></tr>
-      ${row('Artist net', f.artistNet, {b:1})}
-      ${f.toProducer>0?`<tr><td colspan="2" style="padding-top:10px;font-size:12px;color:#185fa5">Note: you are separately owed ${money0(f.toProducer)} for the deposit you fronted, on top of your ${money0(f.commission)} commission.</td></tr>`:''}
+      ${divider}
+      ${row('Management commission ('+f.mgmtPct+'%) — LPA Inc.', -f.commission, {neg:1})}
+      ${f.producerExpenses.filter(x=>+x.amount>0).length?section('Producer expenses — reimbursed to LPA Inc.'):''}
+      ${prodExpRows}
+      ${thickDivider}
+      ${row('Artist gross — '+esc(artistName), f.artistGross, {b:1})}
+      ${f.toArtist>0?section('Deposit reimbursement to '+esc(artistName)):''}
+      ${f.toArtist>0?row('&nbsp;&nbsp;Deposit returned to '+esc(artistName), +f.toArtist, {pos:1}):''}
+      ${f.exps.filter(x=>+x.amount>0).length?section('Artist direct expenses — '+esc(artistName)):''}
+      ${artistExpRows}
+      ${thickDivider}
+      ${row('Artist net — '+esc(artistName), f.artistNet, {b:1})}
     </table>
-    <p style="font-size:11px;color:#908e85;margin-top:16px">Generated by TourDesk · ${new Date().toLocaleDateString()}</p>`;
+    ${f.toProducer>0?`<div style="margin-top:14px;padding:10px 14px;background:#eef4fb;border-radius:6px;font-size:12px;color:#185fa5">LPA Inc. is separately owed ${money0(f.toProducer)} deposit reimbursement, in addition to commission of ${money0(f.commission)}${f.producerExpTotal>0?' and expense reimbursement of '+money0(f.producerExpTotal):''}. Total due to LPA Inc.: ${money0(f.yourTotal)}.</div>`:''}
+    <div style="margin-top:20px;display:flex;justify-content:space-between;font-size:11px;color:#908e85;border-top:1px solid #e4e2da;padding-top:10px">
+      <span>Generated by TourDesk · ${new Date().toLocaleDateString('en-CA')}</span>
+      <span>Total to LPA Inc.: ${money0(f.yourTotal)} · Artist net: ${money0(f.artistNet)}</span>
+    </div>`;
+
   const w=window.open('','_blank');
   w.document.write('<html><head><title>Settlement — '+esc(e.name)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#1c1c1a}table{width:100%}</style></head><body>'+doc+'</body></html>');
   w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
