@@ -2381,22 +2381,20 @@ function eventProjections(host,e){
     <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier's slider to model different attendance mixes. Total must stay within capacity (${cap}).</p>
     ${tiers.map((t,i)=>{
       const defaultCount=+t.count||0;
-      const maxCount=t.fixed?+t.count:cap;
+      const maxCount=+t.count||0;
       return `<div style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
-          <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} base${t.fixed?' · fixed count':''}</span>
+          <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${maxCount} seats allocated</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <input type="range" id="sc-tier-${i}" min="0" max="${maxCount}" value="${defaultCount}"
-            ${t.fixed?'disabled':''}
             oninput="document.getElementById('sc-tn-${i}').value=this.value;renderScenario('${e.id}')"
-            style="flex:1${t.fixed?';opacity:0.5':''}">
+            style="flex:1">
           <input type="number" id="sc-tn-${i}" min="0" max="${maxCount}" value="${defaultCount}"
-            ${t.fixed?'disabled':''}
             onchange="document.getElementById('sc-tier-${i}').value=this.value;renderScenario('${e.id}')"
-            style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right${t.fixed?';background:var(--surf2)':''}">
-          <span style="font-size:11px;color:var(--txt3);width:60px;text-align:right" id="sc-tpct-${i}">${Math.round(defaultCount/cap*100)}%</span>
+            style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+          <span style="font-size:11px;color:var(--txt3);width:70px;text-align:right" id="sc-tpct-${i}">${maxCount>0?Math.round(defaultCount/maxCount*100)+'% sold':''}</span>
         </div>
       </div>`;
     }).join('')}
@@ -2444,19 +2442,18 @@ function renderScenario(id){
     // Read current slider values per tier
     const sliderTiers=tiers.map((t,i)=>{
       const countEl=document.getElementById('sc-tn-'+i);
-      const count=t.fixed?(+t.count||0):(countEl?+countEl.value||0:+t.count||0);
+      const count=countEl?+countEl.value||0:+t.count||0;
       return {...t,count};
     });
     totalSold=sliderTiers.reduce((s,t)=>s+t.count,0);
-    // Update % labels and total line
+    // Update sold/allocated labels and total line
     sliderTiers.forEach((t,i)=>{
       const pctEl=document.getElementById('sc-tpct-'+i);
-      if(pctEl) pctEl.textContent=Math.round(t.count/cap*100)+'%';
+      const alloc=tiers[i]?.count||0;
+      if(pctEl) pctEl.textContent=alloc>0?Math.round(t.count/alloc*100)+'% sold':'';
     });
     const totalEl=document.getElementById('sc-total-line');
-    const overCap=totalSold>cap;
-    if(totalEl) totalEl.innerHTML=`Total: <strong style="color:${overCap?'var(--red)':'var(--txt)'}">${totalSold}</strong> / ${cap} seats${overCap?' <span style="color:var(--red)">⚠ over capacity</span>':''}`;
-    // Build model with tier counts from sliders
+    if(totalEl) totalEl.innerHTML=`<strong>${totalSold}</strong> sold of ${cap} capacity (${Math.round(totalSold/cap*100)}% full)`;    // Build model with tier counts from sliders
     model={...e, pricing:{...e.pricing, tiers:sliderTiers}, projection:{ticketsEst:totalSold, expenses:projExps}};
   } else {
     const n=+document.getElementById('sc-num')?.value||0;
@@ -2542,7 +2539,7 @@ function saveProjection(id){
     });
     e.projection.ticketsEst=tiers.reduce((s,t)=>{
       const countEl=document.getElementById('sc-tn-'+tiers.indexOf(t));
-      return s+(countEl&&!t.fixed?+countEl.value||0:+t.count||0);
+      return s+(countEl?+countEl.value||0:+t.count||0);
     },0);
   } else {
     e.projection.ticketsEst=+document.getElementById('sc-num')?.value||0;
@@ -4209,17 +4206,15 @@ function propShowSettlement(host,p,s){
     ${tiers.map((t,i)=>`<div style="margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
-        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} base${t.fixed?' · fixed':''}</span>
+        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${+t.count||0} seats allocated${t.fixed?' · default '+t.count:''}</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
-        <input type="range" id="ps-tier-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
-          ${t.fixed?'disabled':''}
+        <input type="range" id="ps-tier-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
           oninput="document.getElementById('ps-tn-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
-          style="flex:1${t.fixed?';opacity:0.5':''}">
-        <input type="number" id="ps-tn-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
-          ${t.fixed?'disabled':''}
+          style="flex:1">
+        <input type="number" id="ps-tn-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
           onchange="document.getElementById('ps-tier-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
-          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right${t.fixed?';background:var(--surf2)':''}">
+          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
         <span style="font-size:11px;color:var(--txt3);width:55px;text-align:right" id="ps-tpct-${i}">${Math.round((+t.count||0)/cap*100)}%</span>
       </div>
     </div>`).join('')}
@@ -4262,14 +4257,15 @@ function psRenderScenarioTiers(pid,sid){
   let totalSold=0;
   const sliderTiers=tiers.map((t,i)=>{
     const el=document.getElementById('ps-tn-'+i);
-    const count=t.fixed?(+t.count||0):(el?+el.value||0:+t.count||0);
+    const count=el?+el.value||0:+t.count||0;
     totalSold+=count;
     const pctEl=document.getElementById('ps-tpct-'+i);
-    if(pctEl) pctEl.textContent=Math.round(count/cap*100)+'%';
+    const alloc=tiers[i]?.count||0;
+    if(pctEl) pctEl.textContent=alloc>0?Math.round(count/alloc*100)+'% sold':'';
     return {...t,count};
   });
   const totalEl=document.getElementById('ps-tier-total');
-  if(totalEl) totalEl.innerHTML=`Total: <strong>${totalSold}</strong> / ${cap} seats`;
+  if(totalEl) totalEl.innerHTML=`<strong>${totalSold}</strong> sold of ${cap} capacity (${Math.round(totalSold/cap*100)}% full)`;
   // Build a fake show with updated tier counts
   const fakeS={...s,tiers:sliderTiers,ticketsEst:totalSold};
   const tcps=proposalTourCostPerShow(p);
@@ -4431,15 +4427,15 @@ function propShowScenarios(host,p,s){
     ${tiers.map((t,i)=>`<div style="margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
-        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)}${t.fixed?' · fixed':''}</span>
+        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${+t.count||0} seats allocated${t.fixed?' · default '+t.count:''}</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
-        <input type="range" id="ps-sc-tier-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
-          ${t.fixed?'disabled':''} style="flex:1${t.fixed?';opacity:0.5':''}"
+        <input type="range" id="ps-sc-tier-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
+          style="flex:1"
           oninput="document.getElementById('ps-sc-tn-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')">
-        <input type="number" id="ps-sc-tn-${i}" min="0" max="${t.fixed?+t.count:cap}" value="${+t.count||0}"
-          ${t.fixed?'disabled':''} onchange="document.getElementById('ps-sc-tier-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')"
-          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right${t.fixed?';background:var(--surf2)':''}">
+        <input type="number" id="ps-sc-tn-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
+          onchange="document.getElementById('ps-sc-tier-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')"
+          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
         <span style="font-size:11px;color:var(--txt3);width:55px;text-align:right" id="ps-sc-tpct-${i}">${Math.round((+t.count||0)/cap*100)}%</span>
       </div>
     </div>`).join('')}
@@ -4474,14 +4470,15 @@ function psRenderScenarioTable(pid,sid,tcpsOverride){
   let totalSold=0;
   const sliderTiers=tiers.map((t,i)=>{
     const el=document.getElementById('ps-sc-tn-'+i);
-    const count=t.fixed?(+t.count||0):(el?+el.value||0:+t.count||0);
+    const count=el?+el.value||0:+t.count||0;
     totalSold+=count;
     const pctEl=document.getElementById('ps-sc-tpct-'+i);
-    if(pctEl) pctEl.textContent=Math.round(count/cap*100)+'%';
+    const alloc=tiers[i]?.count||0;
+    if(pctEl) pctEl.textContent=alloc>0?Math.round(count/alloc*100)+'% sold':'';
     return {...t,count};
   });
   const totalEl=document.getElementById('ps-sc-total');
-  if(totalEl) totalEl.innerHTML=`Total: <strong>${totalSold}</strong> / ${cap} seats`;
+  if(totalEl) totalEl.innerHTML=`<strong>${totalSold}</strong> sold of ${cap} capacity (${Math.round(totalSold/cap*100)}% full)`;
   // Waterfall at current slider values
   const currS={...s,tiers:sliderTiers,ticketsEst:totalSold};
   const currF=proposalShowFigures(currS,null,tcps);
