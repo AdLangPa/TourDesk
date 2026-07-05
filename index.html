@@ -1180,6 +1180,18 @@ function venueForm(id, prefill){
     </div>
     <div id="vf-ptf-rows">${ptfRows}</div>
     <button class="btn ghost sm" onclick="vfAddPtfRow()" style="margin-bottom:14px">+ Add per-ticket fee</button>
+    <div class="form-section">Tax</div>
+    <div class="row2">
+      <div class="field"><label>Tax rate % <span style="font-weight:400;font-size:11px;color:var(--txt3)">(HST/GST for this province)</span></label>
+        <input id="vf-taxrate" type="number" step="0.5" value="${v.taxRate!=null?v.taxRate:13}" placeholder="e.g. 13 for Ontario HST"></div>
+      <div class="field"><label>Tax applies to</label>
+        <select id="vf-taxon">
+          <option value="base" ${(!v.taxOn||v.taxOn==='base')?'selected':''}>Base ticket price only</option>
+          <option value="base_fee" ${v.taxOn==='base_fee'?'selected':''}>Base + service fee</option>
+          <option value="none" ${v.taxOn==='none'?'selected':''}>Tax exempt</option>
+        </select>
+      </div>
+    </div>
     <div class="field"><label>Notes</label><textarea id="vf-notes">${esc(v.notes||'')}</textarea></div>
     <div class="field"><label>Tags (comma separated)</label><input id="vf-tags" value="${esc((v.tags||[]).join(', '))}"></div>`;
   openModal(id?'Edit venue':'Add venue', body,
@@ -1318,7 +1330,9 @@ function saveVenue(id){
     showCosts:readVenueShowCosts(),
     perTicketFees:readVenuePerTicketFees(),
     depositAmount:fvn('vf-deposit'),
-    depositPayer:fv('vf-deposit-payer')
+    depositPayer:fv('vf-deposit-payer'),
+    taxRate:fvn('vf-taxrate'),
+    taxOn:fv('vf-taxon')||'base'
   };
   if(id){ Object.assign(get(DB.venues,id),rec); logActivity('edited','Venue',rec.name); }
   else { rec.id=uid('v'); DB.venues.push(rec); logActivity('created','Venue',rec.name); }
@@ -1587,7 +1601,10 @@ function venueFormFromExtracted(d, filename){
       crew:(d.crew||[]).map(l=>({desc:l.desc||'',hours:l.hours||4,rate:l.rate||0})),
       equipment:(d.equipment||[]).map(l=>({desc:l.desc||'',amount:l.amount||0})),
       fees:(d.fees||[]).map(l=>({desc:l.desc||'',amount:l.amount||0}))
-    }
+    },
+    // Infer tax rate from province if available
+    taxRate:d.taxRate||inferProvinceTaxRate(d.province||''),
+    taxOn:'base'
   };
   // Open the full venue form pre-filled, with a banner noting the source
   venueForm(null, prefill);
@@ -1601,6 +1618,18 @@ function venueFormFromExtracted(d, filename){
       body.insertBefore(banner,body.firstChild);
     }
   },50);
+}
+
+// Infer Canadian tax rate from province abbreviation or name
+function inferProvinceTaxRate(province){
+  const p=(province||'').toUpperCase().trim();
+  // HST provinces
+  if(['ON','ONTARIO'].includes(p)) return 13;
+  if(['NB','NEW BRUNSWICK','NL','NEWFOUNDLAND','NS','NOVA SCOTIA','LABRADOR'].some(x=>p.includes(x))) return 15;
+  if(['PE','PEI','PRINCE EDWARD ISLAND'].some(x=>p.includes(x))) return 15;
+  // GST only (5%)
+  if(['AB','ALBERTA','BC','BRITISH COLUMBIA','MB','MANITOBA','SK','SASKATCHEWAN','QC','QUEBEC','YT','YUKON','NT','NORTHWEST','NU','NUNAVUT'].some(x=>p.includes(x))) return 5;
+  return 13; // default Ontario HST
 }
 
 // Repair truncated or malformed JSON from AI responses
@@ -1707,8 +1736,9 @@ function proposalShowFromVenue(venueId, ticketBase, proposal){
   const showCosts=prev?JSON.parse(JSON.stringify(prev.showCosts||{crew:[],equipment:[],fees:[]}))
     :{crew:[],equipment:[],fees:[]};
   const prevExpenses=prev?(prev.projection?.expenses||[]).filter(x=>x.payer==='producer').map(x=>({...x})):[];
-  const taxRate=prev?.pricing?.taxRate??proposal?.tourTaxRate??DB.settings.taxRate;
-  const taxOn=prev?.pricing?.taxOn||proposal?.tourTaxOn||'base';
+  // Tax rate from venue location, fallback to prev event, then settings
+  const taxRate=v.taxRate!=null?v.taxRate:(prev?.pricing?.taxRate??DB.settings.taxRate??13);
+  const taxOn=v.taxOn||prev?.pricing?.taxOn||'base';
   const capacity=+v.capacity||0;
   const base=ticketBase||+prev?.pricing?.base||0;
 
@@ -3242,6 +3272,13 @@ function prefillVenueTerms(){
       if(v.guarantee) { const el=document.getElementById('ef-guar'); if(el) el.value=v.guarantee; }
       if(v.doorSplit) { const el=document.getElementById('ef-split'); if(el) el.value=v.doorSplit; }
     }, 80);
+  }
+  // Pre-fill tax rate from venue
+  if(v.taxRate!=null){
+    const taxEl=document.getElementById('ef-tax');
+    const taxOnEl=document.getElementById('ef-taxon');
+    if(taxEl) taxEl.value=v.taxRate;
+    if(taxOnEl&&v.taxOn) taxOnEl.value=v.taxOn;
   }
   // Pre-fill per-ticket fees from venue defaults into event pricing
   if(v.perTicketFees && v.perTicketFees.length){
@@ -4982,12 +5019,7 @@ function proposalNew(){
       <button class="btn ghost sm" onclick="pnAddTier('fixed')">+ Add fixed tier (VIP)</button>
     </div>
 
-    <div class="row2">
-      <div class="field"><label>Tax rate %</label><input id="pn-taxrate" type="number" step="0.5" value="${DB.settings.taxRate||13}"></div>
-      <div class="field"><label>Tax applies to</label><select id="pn-taxon">
-        <option value="base">Base only</option><option value="none">Tax exempt</option>
-      </select></div>
-    </div>
+    <p class="muted" style="font-size:11px;margin-bottom:14px">Tax rate is set per venue based on their location — you'll find it in each venue's profile.</p>
 
     <div class="form-section">Per-show expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to each show individually)</span></div>
     <p class="muted" style="font-size:11px;margin:-4px 0 8px">e.g. $500 social marketing per show. Each show gets this expense.</p>
@@ -5054,7 +5086,10 @@ function pnRenderTiers(){
 }
 
 function pnAddExp(which){
-  const hostId=which==='pershow'?'pn-pershow-exps':'pn-tourwide-exps';
+  // Read current DOM values before re-rendering so nothing is lost
+  const cur=pnReadExps(which);
+  if(which==='pershow') _pnPershowExps=cur;
+  else _pnTourwideExps=cur;
   const arr=which==='pershow'?_pnPershowExps:_pnTourwideExps;
   arr.push({desc:'',amount:0,payer:'artist'});
   pnRenderExps(which);
@@ -5076,16 +5111,21 @@ function pnRenderExps(which){
     </div>`).join('');
 }
 function pnRemoveExp(which,i){
+  // Read current DOM values before splicing
+  const cur=pnReadExps(which);
+  if(which==='pershow') _pnPershowExps=cur;
+  else _pnTourwideExps=cur;
   const arr=which==='pershow'?_pnPershowExps:_pnTourwideExps;
   arr.splice(i,1);
   pnRenderExps(which);
 }
 function pnReadExps(which){
-  const arr=which==='pershow'?_pnPershowExps:_pnTourwideExps;
-  return arr.map((_,i)=>({
-    desc:document.getElementById(`pn-exp-${which}-desc-${i}`)?.value||'',
-    amount:+document.getElementById(`pn-exp-${which}-amt-${i}`)?.value||0,
-    payer:document.getElementById(`pn-exp-${which}-payer-${i}`)?.value||'artist',
+  const prefix=`pn-exp-${which}`;
+  const rows=[...document.querySelectorAll(`#pn-${which}-exps > div`)];
+  return rows.map((_,i)=>({
+    desc:document.getElementById(`${prefix}-desc-${i}`)?.value||'',
+    amount:+document.getElementById(`${prefix}-amt-${i}`)?.value||0,
+    payer:document.getElementById(`${prefix}-payer-${i}`)?.value||'artist',
     markupPct:0
   })).filter(x=>x.desc||x.amount>0);
 }
@@ -5095,8 +5135,8 @@ function saveProposalNew(){
   if(!title){alert('Please enter a proposal title.');return;}
   const artistId=fv('pf-artist');
   const kind=fv('pf-kind');
-  const taxRate=+document.getElementById('pn-taxrate')?.value||13;
-  const taxOn=fv('pn-taxon')||'base';
+  const taxRate=DB.settings.taxRate||13;
+  const taxOn='base';
   const vipMerchCost=+document.getElementById('pn-vip-merch')?.value||0;
   const vipMerchDesc=fv('pn-vip-merch-desc')||'VIP merch bundle';
 
