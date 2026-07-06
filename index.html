@@ -2450,41 +2450,108 @@ function printProposal(){
 /* ---- Settlement tab: real figures + scenario slider ---- */
 function eventProjections(host,e){
   e.projection = e.projection || {ticketsEst:0, expenses:[]};
+  // salesTracker: {tierSold:{tierIndex->count}, lastUpdated}
+  e.projection.salesTracker = e.projection.salesTracker || {tierSold:{}, comps:+e.comps||0, lastUpdated:null};
+  const st=e.projection.salesTracker;
   const cap=+e.capacityAlloc||1;
   const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
   const hasTiers=tiers.length>1;
+  const pb=priceBreakdown(e.pricing||{});
 
+  // ── Sales tracker section ──
+  const tierTrackerRows = hasTiers ? tiers.map((t,i)=>{
+    const alloc=+t.count||0;
+    const sold=+st.tierSold[i]||0;
+    const pct=alloc>0?Math.round(sold/alloc*100):0;
+    const revenue=sold*+t.base;
+    const barColor=pct>=90?'var(--green)':pct>=60?'#97c459':'var(--blue)';
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:500">${esc(t.name)}</span>
+        <span style="font-size:12px;color:var(--txt2)">${money0(t.base)}/ticket · ${money0(revenue)} revenue</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;height:22px;background:var(--surf2);border-radius:6px;overflow:hidden;position:relative">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:6px;transition:width .3s"></div>
+          <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:600;color:${pct>30?'#fff':'var(--txt)'}">${sold} sold</span>
+        </div>
+        <input type="number" id="st-tier-${i}" min="0" max="${alloc}" value="${sold}"
+          onchange="updateTierSold('${e.id}',${i},this.value)"
+          style="width:72px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+        <span style="font-size:11px;color:var(--txt3);width:90px;text-align:right">${sold}/${alloc} · ${pct}%</span>
+      </div>
+    </div>`;
+  }).join('') : `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:500">Tickets sold</span>
+        <span style="font-size:12px;color:var(--txt2)">${money0(pb.base)}/ticket</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${(()=>{
+          const sold=+st.tierSold[0]||0;
+          const pct=cap>0?Math.round(sold/cap*100):0;
+          const barColor=pct>=90?'var(--green)':pct>=60?'#97c459':'var(--blue)';
+          return `<div style="flex:1;height:22px;background:var(--surf2);border-radius:6px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:6px;transition:width .3s"></div>
+            <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:600;color:${pct>30?'#fff':'var(--txt)'}">${sold} sold</span>
+          </div>
+          <input type="number" id="st-tier-0" min="0" max="${cap}" value="${sold}"
+            onchange="updateTierSold('${e.id}',0,this.value)"
+            style="width:72px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+          <span style="font-size:11px;color:var(--txt3);width:90px;text-align:right">${sold}/${cap} · ${pct}%</span>`;
+        })()}
+      </div>
+    </div>`;
+
+  // Revenue and comps totals
+  const totalSold = hasTiers
+    ? tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0),0)
+    : +st.tierSold[0]||0;
+  const totalRevenue = hasTiers
+    ? tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0)*(+t.base||0),0)
+    : (+st.tierSold[0]||0)*(+pb.base||0);
+  const remaining=cap-totalSold-(+st.comps||0);
+
+  // Expense tracker
+  const exps=e.projection.expenses||[];
+  const prodExps=exps.filter(x=>x.payer==='producer');
+  const artistExps=exps.filter(x=>x.payer==='artist');
+  const prodTotal=prodExps.reduce((s,x)=>{const bo=(+x.amount||0)*(1+(+x.markupPct||0)/100);return s+bo;},0);
+  const artistTotal=artistExps.reduce((s,x)=>s+(+x.amount||0),0);
+
+  // Slider defaults = current sold counts
   const sliderSection = hasTiers ? `
-    <div class="sec-label" style="margin-top:24px">Scenarios — adjust per tier</div>
-    <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier's slider to model different attendance mixes. Total must stay within capacity (${cap}).</p>
+    <div class="sec-label" style="margin-top:28px">Scenario modeler</div>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Sliders start at current sales. Adjust to project different outcomes.</p>
     ${tiers.map((t,i)=>{
-      const defaultCount=+t.count||0;
-      const maxCount=+t.count||0;
+      const sold=+st.tierSold[i]||0;
+      const alloc=+t.count||0;
       return `<div style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
-          <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${maxCount} seats allocated</span>
+          <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${alloc} seats allocated</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <input type="range" id="sc-tier-${i}" min="0" max="${maxCount}" value="${defaultCount}"
+          <input type="range" id="sc-tier-${i}" min="0" max="${alloc}" value="${sold}"
             oninput="document.getElementById('sc-tn-${i}').value=this.value;renderScenario('${e.id}')"
             style="flex:1">
-          <input type="number" id="sc-tn-${i}" min="0" max="${maxCount}" value="${defaultCount}"
+          <input type="number" id="sc-tn-${i}" min="0" max="${alloc}" value="${sold}"
             onchange="document.getElementById('sc-tier-${i}').value=this.value;renderScenario('${e.id}')"
             style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
-          <span style="font-size:11px;color:var(--txt3);width:70px;text-align:right" id="sc-tpct-${i}">${maxCount>0?Math.round(defaultCount/maxCount*100)+'% sold':''}</span>
+          <span style="font-size:11px;color:var(--txt3);width:70px;text-align:right" id="sc-tpct-${i}">${alloc>0?Math.round(sold/alloc*100)+'% sold':''}</span>
         </div>
       </div>`;
     }).join('')}
     <div style="font-size:12px;color:var(--txt2);margin-bottom:14px" id="sc-total-line"></div>
   ` : `
-    <div class="sec-label" style="margin-top:24px">Scenarios — using deal terms &amp; show costs</div>
-    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance level.</p>
+    <div class="sec-label" style="margin-top:28px">Scenario modeler</div>
+    <p class="muted" style="font-size:12px;margin-bottom:12px">Slider starts at current sales. Adjust to project different outcomes.</p>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-      <input type="range" id="sc-slider" min="0" max="${cap}" value="${+e.projection.ticketsEst||Math.round(cap*0.6)}"
+      <input type="range" id="sc-slider" min="0" max="${cap}" value="${+st.tierSold[0]||Math.round(cap*0.6)}"
         oninput="document.getElementById('sc-num').value=this.value;renderScenario('${e.id}')"
         style="flex:1">
-      <input type="number" id="sc-num" min="0" max="${cap}" value="${+e.projection.ticketsEst||Math.round(cap*0.6)}"
+      <input type="number" id="sc-num" min="0" max="${cap}" value="${+st.tierSold[0]||Math.round(cap*0.6)}"
         oninput="document.getElementById('sc-slider').value=this.value;renderScenario('${e.id}')"
         style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
       <span class="muted" style="font-size:12px" id="sc-pct"></span>
@@ -2492,19 +2559,92 @@ function eventProjections(host,e){
   `;
 
   host.innerHTML=`
-    <p class="muted" style="font-size:12px;margin-bottom:18px">Estimate your numbers before the show using your deal terms and show costs. This does not affect the actual Settlement tab.</p>
+    <div class="sec-label">Live ticket sales</div>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Update sold counts as the venue reports in. Changes save automatically.${st.lastUpdated?` Last updated: ${new Date(st.lastUpdated).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:''}</p>
+    ${tierTrackerRows}
+    <div style="display:flex;gap:10px;align-items:center;margin-top:4px;margin-bottom:8px">
+      <label style="font-size:12px;color:var(--txt2)">Comps:</label>
+      <input type="number" id="st-comps" min="0" value="${+st.comps||0}" onchange="updateComps('${e.id}',this.value)"
+        style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+    </div>
+    <div class="stats" style="margin-top:12px;margin-bottom:4px">
+      <div class="stat"><div class="stat-val">${totalSold}</div><div class="stat-lbl">Sold</div></div>
+      <div class="stat"><div class="stat-val">${+st.comps||0}</div><div class="stat-lbl">Comps</div></div>
+      <div class="stat"><div class="stat-val ${remaining<0?'neg':''}">${remaining}</div><div class="stat-lbl">Remaining</div></div>
+      <div class="stat"><div class="stat-val pos">${money0(totalRevenue)}</div><div class="stat-lbl">Revenue to date</div></div>
+    </div>
 
-    <div class="sec-label">Expenses (projected)</div>
+    <div class="divider" style="margin:20px 0"></div>
+
+    <div class="sec-label">Expenses</div>
     <div id="pr-expenses"></div>
     <button class="btn sm" style="margin-top:8px" onclick="addProjExpense('${e.id}')">+ Add expense</button>
+    ${exps.length?`<div class="stats" style="margin-top:12px">
+      <div class="stat"><div class="stat-val neg">${money0(prodTotal)}</div><div class="stat-lbl">Producer committed</div></div>
+      <div class="stat"><div class="stat-val neg">${money0(artistTotal)}</div><div class="stat-lbl">Artist committed</div></div>
+    </div>`:''}
+
+    <div class="divider" style="margin:20px 0"></div>
 
     ${sliderSection}
     <div id="sc-waterfall"></div>
     <div style="overflow-x:auto;margin-top:18px"><div id="sc-table"></div></div>
-    <div style="margin-top:18px"><button class="btn primary sm" onclick="saveProjection('${e.id}')">Save estimate</button></div>`;
+    <div style="margin-top:18px"><button class="btn primary sm" onclick="saveProjection('${e.id}')">Save</button></div>`;
 
   renderProjExpenses(e);
   renderScenario(e.id);
+}
+
+function updateTierSold(id,tierIndex,val){
+  const e=get(DB.events,id);
+  e.projection.salesTracker=e.projection.salesTracker||{tierSold:{},comps:0,lastUpdated:null};
+  e.projection.salesTracker.tierSold[tierIndex]=Math.max(0,+val||0);
+  e.projection.salesTracker.lastUpdated=new Date().toISOString();
+  // Update the slider in the scenario section if it exists
+  const sliderEl=document.getElementById('sc-tier-'+tierIndex);
+  const numEl=document.getElementById('sc-tn-'+tierIndex);
+  if(sliderEl) sliderEl.value=val;
+  if(numEl) numEl.value=val;
+  // Update progress bar and label
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  const t=tiers[tierIndex];
+  const alloc=t?+t.count:+e.capacityAlloc||1;
+  const sold=+val||0;
+  const pct=alloc>0?Math.round(sold/alloc*100):0;
+  // Refresh totals and scenario without full re-render
+  _refreshTrackerTotals(e);
+  renderScenario(id);
+  persist();
+}
+
+function updateComps(id,val){
+  const e=get(DB.events,id);
+  e.projection.salesTracker=e.projection.salesTracker||{tierSold:{},comps:0,lastUpdated:null};
+  e.projection.salesTracker.comps=Math.max(0,+val||0);
+  e.projection.salesTracker.lastUpdated=new Date().toISOString();
+  _refreshTrackerTotals(e);
+  persist();
+}
+
+function _refreshTrackerTotals(e){
+  const st=e.projection.salesTracker||{tierSold:{},comps:0};
+  const cap=+e.capacityAlloc||1;
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  const hasTiers=tiers.length>1;
+  const totalSold=hasTiers?tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0),0):(+st.tierSold[0]||0);
+  const totalRevenue=hasTiers?tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0)*(+t.base||0),0):(+st.tierSold[0]||0)*(+e.pricing?.base||0);
+  const remaining=cap-totalSold-(+st.comps||0);
+  // Update stat cards without re-render
+  const stats=document.querySelectorAll('#ev-tab .stat-val');
+  // Find them by proximity — just re-render the stats block
+  const statsHost=document.querySelector('#ev-tab .stats');
+  if(statsHost&&statsHost.querySelector('.stat-lbl')?.textContent==='Sold'){
+    const divs=statsHost.querySelectorAll('.stat');
+    if(divs[0]) divs[0].querySelector('.stat-val').textContent=totalSold;
+    if(divs[1]) divs[1].querySelector('.stat-val').textContent=st.comps||0;
+    if(divs[2]){divs[2].querySelector('.stat-val').textContent=remaining;divs[2].querySelector('.stat-val').className='stat-val'+(remaining<0?' neg':'');}
+    if(divs[3]) divs[3].querySelector('.stat-val').textContent=money0(totalRevenue);
+  }
 }
 
 function renderScenario(id){
@@ -2610,18 +2750,19 @@ function saveProjection(id){
   const e=get(DB.events,id);
   const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
   if(tiers.length>1){
-    // Save current slider counts back to pricing.tiers
     tiers.forEach((t,i)=>{
       const countEl=document.getElementById('sc-tn-'+i);
-      if(countEl&&!t.fixed) e.pricing.tiers[i].count=+countEl.value||0;
+      if(countEl) e.pricing.tiers[i].count=+countEl.value||0;
     });
-    e.projection.ticketsEst=tiers.reduce((s,t)=>{
-      const countEl=document.getElementById('sc-tn-'+tiers.indexOf(t));
-      return s+(countEl?+countEl.value||0:+t.count||0);
+    e.projection.ticketsEst=tiers.reduce((s,t,i)=>{
+      const el=document.getElementById('sc-tn-'+i);
+      return s+(el?+el.value||0:+t.count||0);
     },0);
   } else {
     e.projection.ticketsEst=+document.getElementById('sc-num')?.value||0;
   }
+  const compsEl=document.getElementById('st-comps');
+  if(compsEl && e.projection.salesTracker) e.projection.salesTracker.comps=+compsEl.value||0;
   logActivity('edited','Event',e.name+' (projection saved)');
   persist();
   const btn=document.querySelector('#ev-tab .btn.primary.sm');
