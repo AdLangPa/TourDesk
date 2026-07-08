@@ -1909,8 +1909,8 @@ VIEWS.events={
           ${DB.venues.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('')}
         </select>
         <select id="ev-sort" onchange="filterEventsList()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
+          <option value="asc">Date: closest first</option>
           <option value="desc">Date: newest first</option>
-          <option value="asc">Date: oldest first</option>
         </select>
       </div>
       <div id="ev-list">${list.length?tableEventsSearchable(list):emptyState('◉','No events yet')}</div>`;
@@ -1956,7 +1956,7 @@ function filterEventsList(){
   const status=document.getElementById('ev-filter-status')?.value||'';
   const artist=document.getElementById('ev-filter-artist')?.value||'';
   const venueId=document.getElementById('ev-filter-venue')?.value||'';
-  const sort=document.getElementById('ev-sort')?.value||'desc';
+  const sort=document.getElementById('ev-sort')?.value||'asc';
   let list=[...DB.events];
   if(q) list=list.filter(e=>{
     const v=get(DB.venues,e.venueId);
@@ -2171,6 +2171,14 @@ function splitTotals(events){
 function eventOverview(host,e,v,t){
   e.projection = e.projection || {ticketsEst: defaultEstimate(e), expenses:[]};
   e.settlementV2 = e.settlementV2 || {venuePayout:'', depositCredits:[], expenses:[], settled:false, notes:''};
+  // Sync ticketsEst from salesTracker so overview reflects current sold counts
+  const _st=e.projection.salesTracker;
+  if(_st && Object.keys(_st.tierSold||{}).length){
+    const _tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+    const _hasTiers=_tiers.length>1;
+    const _totalSold=_hasTiers?_tiers.reduce((s,t,i)=>s+(+_st.tierSold[i]||0),0):(+_st.tierSold[0]||0);
+    if(_totalSold>0) e.projection.ticketsEst=_totalSold;
+  }
   const pf=projectionFigures(e);
   const sf=settlementV2Figures(e);
   const hasActuals = (+e.settlementV2.venuePayout>0) || e.settlementV2.settled;
@@ -4389,7 +4397,7 @@ VIEWS.proposals={
     const isReady=p.status==='Ready for review';
     a.innerHTML=`
       ${(isAdmin||(isOwner&&!isAccepted))?`<button class="btn sm" onclick="proposalEditMeta('${id}')">Edit details</button>
-        <button class="btn primary sm" onclick="proposalAddVenue('${id}')">+ Add venue</button>`:''}
+        <button class="btn primary sm" onclick="proposalAddVenue('${id}')">+ Add show</button>`:''}
       <button class="btn sm" onclick="printProposalDoc('${id}')">Print / PDF</button>
       ${isAdmin&&!isAccepted?`<button class="btn primary" onclick="acceptProposal('${id}')">✓ Accept</button>`:''}
       ${!isAdmin&&isOwner&&!isAccepted?`<button class="btn ${isReady?'':'primary'} sm" onclick="markProposalReady('${id}')">${isReady?'✓ Ready for review':'Mark ready for review'}</button>`:''}
@@ -4419,7 +4427,7 @@ VIEWS.proposals={
       </div>
       <div class="sec"><div class="sec-label">Shows — click a row for full detail</div>
         ${shows.length?proposalShowsTable(p,shows,isAccepted)
-          :`<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add venue</strong> to build the show list.</p>`}
+          :`<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> to build the show list.</p>`}
       </div>
       ${p.kind==='tour'?`<div class="sec">
         <div class="sec-label">Tour-level costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(spread evenly across all shows in artist net)</span></div>
@@ -5439,20 +5447,68 @@ function proposalEditMeta(id){
           <input id="pf-vip-merch-desc" value="${esc(p.vipMerchDesc||'VIP merch bundle')}" placeholder="VIP merch bundle"></div>
       </div>
 
-      <div class="form-section">Tax rate (all tiers)</div>
-      <div class="row2">
-        <div class="field"><label>Tax rate %</label>
-          <input type="number" step="0.5" id="pf-taxrate" value="${p.tourTaxRate!=null?p.tourTaxRate:13}"></div>
-        <div class="field"><label>Tax applies to</label>
-          <select id="pf-taxon">
-            <option value="base" ${(!p.tourTaxOn||p.tourTaxOn==='base')?'selected':''}>Base only</option>
-            <option value="none" ${p.tourTaxOn==='none'?'selected':''}>Tax exempt</option>
-          </select></div>
-      </div>
+      <p class="muted" style="font-size:11px;margin-top:8px">Tax rate is set per venue based on their location.</p>
+
+      <div class="form-section" style="margin-top:16px">Per-show expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to each show)</span></div>
+      <p class="muted" style="font-size:11px;margin:-4px 0 8px">e.g. $500 social marketing per show.</p>
+      <div id="pem-pershow-exps"></div>
+      <button class="btn ghost sm" onclick="pemAddExp('pershow')">+ Add per-show expense</button>
+
+      <div class="form-section" style="margin-top:16px">Tour-wide expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(divided equally across all shows)</span></div>
+      <p class="muted" style="font-size:11px;margin:-4px 0 8px">e.g. flights, tour manager — total divided by number of shows.</p>
+      <div id="pem-tourwide-exps"></div>
+      <button class="btn ghost sm" onclick="pemAddExp('tourwide')">+ Add tour-wide expense</button>
     </div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveProposalMeta('${id}')">Save &amp; push to shows</button>`);
-  setTimeout(ptToggleTourFields,50);
+  setTimeout(()=>{
+    ptToggleTourFields();
+    _pemPershowExps=JSON.parse(JSON.stringify(p.perShowExpenses||[]));
+    _pemTourwideExps=JSON.parse(JSON.stringify(p.tourCosts||[]));
+    pemRenderExps('pershow');
+    pemRenderExps('tourwide');
+  },50);
+}
+
+let _pemPershowExps=[], _pemTourwideExps=[];
+function pemAddExp(which){
+  const cur=pemReadExps(which);
+  if(which==='pershow') _pemPershowExps=cur; else _pemTourwideExps=cur;
+  const arr=which==='pershow'?_pemPershowExps:_pemTourwideExps;
+  arr.push({desc:'',amount:0,payer:'artist',markupPct:0});
+  pemRenderExps(which);
+}
+function pemRemoveExp(which,i){
+  const cur=pemReadExps(which);
+  if(which==='pershow') _pemPershowExps=cur; else _pemTourwideExps=cur;
+  (which==='pershow'?_pemPershowExps:_pemTourwideExps).splice(i,1);
+  pemRenderExps(which);
+}
+function pemRenderExps(which){
+  const hostId=which==='pershow'?'pem-pershow-exps':'pem-tourwide-exps';
+  const arr=which==='pershow'?_pemPershowExps:_pemTourwideExps;
+  const host=document.getElementById(hostId); if(!host) return;
+  if(!arr.length){host.innerHTML='';return;}
+  host.innerHTML=arr.map((x,i)=>`
+    <div style="display:grid;grid-template-columns:1fr 90px 130px 28px;gap:6px;margin-bottom:6px;align-items:center">
+      <input placeholder="Description" value="${esc(x.desc||'')}" id="pem-exp-${which}-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pem-exp-${which}-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="pem-exp-${which}-payer-${i}" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
+        <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (LPA)</option>
+      </select>
+      <button class="btn ghost sm" style="padding:2px 6px" onclick="pemRemoveExp('${which}',${i})">×</button>
+    </div>`).join('');
+}
+function pemReadExps(which){
+  const prefix=`pem-exp-${which}`;
+  const rows=[...document.querySelectorAll(`#pem-${which}-exps > div`)];
+  return rows.map((_,i)=>({
+    desc:document.getElementById(`${prefix}-desc-${i}`)?.value||'',
+    amount:+document.getElementById(`${prefix}-amt-${i}`)?.value||0,
+    payer:document.getElementById(`${prefix}-payer-${i}`)?.value||'artist',
+    markupPct:0
+  })).filter(x=>x.desc||x.amount>0);
 }
 
 function ptToggleTourFields(){
@@ -5516,14 +5572,18 @@ function saveProposalMeta(id){
   const newTiers=newKind==='tour'?ptReadTiers():(p.tourTiers||[]);
   const newMerchCost=+document.getElementById('pf-vip-merch')?.value||0;
   const newMerchDesc=fv('pf-vip-merch-desc')||'VIP merch bundle';
-  const newTaxRate=+document.getElementById('pf-taxrate')?.value??p.tourTaxRate??13;
-  const newTaxOn=fv('pf-taxon')||'base';
+  const newTaxRate=p.tourTaxRate??13;
+  const newTaxOn=p.tourTaxOn||'base';
 
   // Track what changed at tour level to push only those fields
+  const newPerShowExpenses=pemReadExps('pershow');
+  const newTourCosts=pemReadExps('tourwide');
+
   const changed={
     tiers: JSON.stringify(newTiers)!==JSON.stringify(p.tourTiers||[]),
     merch: newMerchCost!==(p.vipMerchCost||0) || newMerchDesc!==(p.vipMerchDesc||'VIP merch bundle'),
-    tax: newTaxRate!==(p.tourTaxRate??13) || newTaxOn!==(p.tourTaxOn||'base')
+    tax: newTaxRate!==(p.tourTaxRate??13) || newTaxOn!==(p.tourTaxOn||'base'),
+    perShowExpenses: JSON.stringify(newPerShowExpenses)!==JSON.stringify(p.perShowExpenses||[])
   };
 
   Object.assign(p,{
@@ -5534,7 +5594,9 @@ function saveProposalMeta(id){
     vipMerchCost:newMerchCost,
     vipMerchDesc:newMerchDesc,
     tourTaxRate:newTaxRate,
-    tourTaxOn:newTaxOn
+    tourTaxOn:newTaxOn,
+    perShowExpenses:newPerShowExpenses,
+    tourCosts:newTourCosts
   });
 
   // Push changed fields to all shows
@@ -5562,6 +5624,11 @@ function saveProposalMeta(id){
         s.taxRate=newTaxRate;
         s.taxOn=newTaxOn;
       }
+      if(changed.perShowExpenses){
+        // Remove old per-show expenses, add new ones (keep _tourMerch and other custom expenses)
+        s.expenses=(s.expenses||[]).filter(x=>x._tourMerch||(!x._perShow));
+        newPerShowExpenses.forEach(x=>s.expenses.push({...x,_perShow:true}));
+      }
     });
   }
 
@@ -5572,7 +5639,7 @@ function saveProposalMeta(id){
 function proposalAddVenue(pid){
   const p=get(DB.proposals,pid); if(!p) return;
   const existingVids=new Set((p.shows||[]).map(s=>s.venueId));
-  openModal('Add venue to proposal',`
+  openModal('Add show',`
     <div class="field"><label>Venue</label>
       <select id="pav-venue" onchange="pavPreview('${pid}')">
         <option value="">— select venue —</option>
@@ -5581,12 +5648,9 @@ function proposalAddVenue(pid){
     <div id="pav-preview"></div>
     <div class="row2" style="margin-top:12px">
       <div class="field"><label>Date (optional)</label><input id="pav-date" type="date"></div>
-      <div class="field"><label>Ticket price ($)</label><input id="pav-price" type="number" step="0.01" value="${p.basePrice||''}"></div>
+      <div class="field"><label>Capacity (leave blank to use venue default)</label><input id="pav-cap" type="number"></div>
     </div>
-    <div class="row2">
-      <div class="field"><label>Capacity</label><input id="pav-cap" type="number"></div>
-      <div class="field"><label>Est. tickets sold</label><input id="pav-est" type="number"></div>
-    </div>`,
+    <p class="muted" style="font-size:11px;margin-top:4px">Ticket tiers and prices are set at the tour level. Tax rate comes from the venue's location.</p>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="pavSave('${pid}')">Add to proposal</button>`);
 }
@@ -5597,10 +5661,7 @@ function pavPreview(pid){
   const v=get(DB.venues,vid);
   const prev=mostRecentEventAtVenue(vid);
   const cap=v?.capacity||0;
-  const base=+(document.getElementById('pav-price')?.value)||p?.basePrice||+(prev?.pricing?.base)||0;
   if(document.getElementById('pav-cap')&&!document.getElementById('pav-cap').value) document.getElementById('pav-cap').value=cap||'';
-  if(document.getElementById('pav-price')&&!document.getElementById('pav-price').value) document.getElementById('pav-price').value=base||'';
-  if(document.getElementById('pav-est')&&!document.getElementById('pav-est').value) document.getElementById('pav-est').value=Math.round(cap*0.6)||'';
   const ct=prev?.terms?.contractType||v?.contractType||'—';
   const host=document.getElementById('pav-preview'); if(!host) return;
   host.innerHTML=`<div style="background:var(--surf2);border-radius:var(--rad);padding:10px 12px;margin-top:8px;font-size:12px">
@@ -5612,9 +5673,8 @@ function pavPreview(pid){
 function pavSave(pid){
   const vid=fv('pav-venue'); if(!vid){alert('Please select a venue.');return;}
   const p=get(DB.proposals,pid); if(!p) return;
-  const base=+(document.getElementById('pav-price')?.value)||p.basePrice||0;
   const capVal=+(document.getElementById('pav-cap')?.value)||get(DB.venues,vid)?.capacity||0;
-  const s=proposalShowFromVenue(vid, base, p);
+  const s=proposalShowFromVenue(vid, 0, p);
   if(!s) return;
   s.date=fv('pav-date')||'';
   s.capacity=capVal||s.capacity;
@@ -5631,9 +5691,7 @@ function pavSave(pid){
       else s.expenses.push({desc:p.vipMerchDesc||'VIP merch bundle',amount:amt,payer:'artist',markupPct:0,_tourMerch:true});
     }
   } else {
-    const estEl=document.getElementById('pav-est');
-    if(estEl&&estEl.value) s.ticketsEst=+estEl.value;
-    else s.ticketsEst=Math.round(s.capacity*0.6);
+    s.ticketsEst=Math.round(s.capacity*0.6);
   }
   p.shows=p.shows||[]; p.shows.push(s);
   logActivity('edited','Proposal',p.title+' (added '+(get(DB.venues,vid)?.name||'venue')+')');
@@ -5663,7 +5721,8 @@ function proposalEditShow(pid,sid){
       base:s.ticketBase||0,
       serviceFee:0,feeType:'fixed',ccFee:0,
       taxRate:s.taxRate||DB.settings.taxRate,
-      taxOn:s.taxOn||'base'
+      taxOn:s.taxOn||'base',
+      tiers:(s.tiers||[]).length>1?JSON.parse(JSON.stringify(s.tiers)):[]
     },
     terms:s.terms||{},
     showCosts:s.showCosts||{crew:[],equipment:[],fees:[]}
