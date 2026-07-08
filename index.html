@@ -4399,6 +4399,7 @@ VIEWS.proposals={
       ${(isAdmin||(isOwner&&!isAccepted))?`<button class="btn sm" onclick="proposalEditMeta('${id}')">Edit details</button>
         <button class="btn primary sm" onclick="proposalAddVenue('${id}')">+ Add show</button>`:''}
       <button class="btn sm" onclick="printProposalDoc('${id}')">Print / PDF</button>
+      <button class="btn sm" onclick="exportProposalHTML('${id}')">⬇ Export for artist</button>
       ${isAdmin&&!isAccepted?`<button class="btn primary" onclick="acceptProposal('${id}')">✓ Accept</button>`:''}
       ${!isAdmin&&isOwner&&!isAccepted?`<button class="btn ${isReady?'':'primary'} sm" onclick="markProposalReady('${id}')">${isReady?'✓ Ready for review':'Mark ready for review'}</button>`:''}
       ${(isAdmin||isOwner)&&!isAccepted?`<button class="btn sm danger" onclick="deleteProposal('${id}')">Delete</button>`:''}`;
@@ -4460,14 +4461,13 @@ VIEWS.proposals={
         <span class="badge gray">${esc(s.date||'Date TBD')}</span>
       </div>
       <div class="tabs">
-        ${[['overview','Overview'],['projections','Projections'],['settlement','Settlement']].map(([tb,lbl])=>
+        ${[['overview','Overview'],['projections','Projections']].map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="propShowTab('${pid}','${sid}','${tb}')">${lbl}</div>`).join('')}
       </div>
       <div id="prop-show-tab"></div>`;
     const host=document.getElementById('prop-show-tab');
     if(tab==='overview') propShowOverview(host,p,s,f,v,sliderVal);
-    else if(tab==='projections') propShowSettlement(host,p,s);
-    else if(tab==='settlement') propShowScenarios(host,p,s);
+    else if(tab==='projections') propShowProjections(host,p,s);
   }
 };
 
@@ -4483,8 +4483,7 @@ function propShowTab(pid,sid,tab){
   const host=document.getElementById('prop-show-tab');
   if(!host||!s) return;
   if(tab==='overview') propShowOverview(host,p,s,f,v,sliderVal);
-  else if(tab==='projections') propShowSettlement(host,p,s);
-  else if(tab==='settlement') propShowScenarios(host,p,s);
+  else if(tab==='projections') propShowProjections(host,p,s);
 }
 
 function propShowOverview(host,p,s,f,v,sliderVal){
@@ -4550,7 +4549,74 @@ function propShowOverview(host,p,s,f,v,sliderVal){
 }
 
 
-function propShowSettlement(host,p,s){
+function propShowProjections(host,p,s){
+  const cap=+s.capacity||1;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  const hasTiers=tiers.length>1;
+  const tcps=proposalTourCostPerShow(p);
+  const est=+s.ticketsEst||Math.round(cap*0.6);
+
+  // Expenses section
+  const exps=s.expenses||[];
+  const artistExps=exps.filter(x=>x.payer==='artist');
+  const prodExps=exps.filter(x=>x.payer==='producer');
+  const expTable=(arr,label)=>arr.length?`
+    <div style="font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">${label}</div>
+    ${arr.map(x=>`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+      <span style="color:var(--txt2)">${esc(x.desc||'—')}</span>
+      <span>${money0(x.amount)}</span></div>`).join('')}`:'';
+
+  // Tour-wide expense share
+  const twLabel=tcps>0?`<div style="font-size:12px;color:var(--txt2);margin-top:8px">Tour-wide costs (pro-rated): <strong>${money0(tcps)}/show</strong></div>`:'';
+
+  // Per-tier sliders or single slider
+  const sliderBlock=hasTiers?`
+    ${tiers.map((t,i)=>`<div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <span style="width:100px;font-size:12px;font-weight:500">${esc(t.name)}</span>
+        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${+t.count||0} seats</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="range" id="ps-tier-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
+          oninput="document.getElementById('ps-tn-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
+          style="flex:1">
+        <input type="number" id="ps-tn-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
+          onchange="document.getElementById('ps-tier-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
+          style="width:68px;padding:4px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+        <span style="font-size:11px;color:var(--txt3);width:60px;text-align:right" id="ps-tpct-${i}">${+t.count>0?'100% sold':''}</span>
+      </div>
+    </div>`).join('')}
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:12px" id="ps-tier-total"></div>`
+  :`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <input type="range" id="ps-sc-slider" min="0" max="${cap}" value="${est}" style="flex:1"
+        oninput="document.getElementById('ps-sc-num').value=this.value;psRenderScenario('${p.id}','${s._sid}')">
+      <input type="number" id="ps-sc-num" min="0" max="${cap}" value="${est}"
+        onchange="document.getElementById('ps-sc-slider').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
+        style="width:72px;padding:4px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <span style="font-size:11px;color:var(--txt3);width:70px" id="ps-sc-pct"></span>
+    </div>`;
+
+  host.innerHTML=`
+    ${(prodExps.length||artistExps.length||tcps>0)?`
+    <div class="sec-label">Expenses</div>
+    ${expTable(prodExps,'Producer (LPA Inc.)')}
+    ${expTable(artistExps,'Artist direct')}
+    ${twLabel}
+    <div class="divider" style="margin:14px 0"></div>`:''}
+
+    <div class="sec-label">Projections</div>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Adjust to model different attendance.</p>
+    ${sliderBlock}
+    <div id="ps-sc-waterfall" style="margin-bottom:16px"></div>
+
+    <div class="sec-label" style="margin-top:20px">Scenarios at capacity fill %</div>
+    <div style="overflow-x:auto"><div id="ps-sc-table"></div></div>`;
+
+  if(hasTiers) psRenderScenarioTiers(p.id,s._sid);
+  else psRenderScenario(p.id,s._sid,tcps);
+  psRenderScenarioTable(p.id,s._sid,tcps);
+}
   const cap=+s.capacity||1;
   const tiers=(s.tiers||[]).filter(t=>t.base>0);
   const hasTiers=tiers.length>1;
@@ -4593,21 +4659,6 @@ function propShowSettlement(host,p,s){
     <div class="sec-label">Expenses</div>
     <div id="ps-expenses"></div>
     <button class="btn sm" style="margin-top:8px" onclick="psAddExpense('${p.id}','${s._sid}')">+ Add expense</button>
-    ${sliderHtml}
-    <div class="sec-label" style="margin-top:24px">Waterfall</div>
-    <div id="ps-waterfall"></div>
-    <div class="sec-label" style="margin-top:22px">Summary</div>
-    <div id="ps-summary"></div>
-    <div class="sec-label" style="margin-top:22px">Scenarios at capacity fill %</div>
-    <div style="overflow-x:auto"><div id="ps-sc-table"></div></div>
-    <div style="margin-top:18px">
-      <button class="btn primary sm" onclick="psSaveSettlement('${p.id}','${s._sid}')">Save</button>
-    </div>`;
-  psRenderExpenses(p,s);
-  if(hasTiers){ psRenderScenarioTiers(p.id,s._sid); psRenderScenarioTable(p.id,s._sid,tcps); }
-  else { psRenderWaterfall(p,s); psRenderScenario(p.id,s._sid,tcps); }
-}
-
 // Render waterfall with current tier slider values
 function psRenderScenarioTiers(pid,sid){
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
@@ -4630,7 +4681,7 @@ function psRenderScenarioTiers(pid,sid){
   const tcps=proposalTourCostPerShow(p);
   const f=proposalShowFigures(fakeS,null,tcps);
   // Render waterfall
-  const wf=document.getElementById('ps-waterfall');
+  const wf=document.getElementById('ps-sc-waterfall')||document.getElementById('ps-waterfall');
   const sm=document.getElementById('ps-summary');
   if(wf) psRenderWaterfallFromFigures(f,wf,sm,fakeS.expenses||[]);
 }
@@ -4772,50 +4823,6 @@ function psRenderWaterfall(p,s){
     document.getElementById('ps-waterfall'),
     document.getElementById('ps-summary'),
     s.expenses||[]);
-}
-
-function propShowScenarios(host,p,s){
-  const cap=+s.capacity||1;
-  const tiers=(s.tiers||[]).filter(t=>t.base>0);
-  const hasTiers=tiers.length>1;
-  const est=+s.ticketsEst||Math.round(cap*0.6);
-  const tcps=proposalTourCostPerShow(p);
-
-  const sliderHtml=hasTiers?`
-    <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier's slider to model different attendance mixes.</p>
-    ${tiers.map((t,i)=>`<div style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
-        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${+t.count||0} seats allocated${t.fixed?' · default '+t.count:''}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <input type="range" id="ps-sc-tier-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
-          style="flex:1"
-          oninput="document.getElementById('ps-sc-tn-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')">
-        <input type="number" id="ps-sc-tn-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
-          onchange="document.getElementById('ps-sc-tier-${i}').value=this.value;psRenderScenarioTable('${p.id}','${s._sid}')"
-          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
-        <span style="font-size:11px;color:var(--txt3);width:55px;text-align:right" id="ps-sc-tpct-${i}">${Math.round((+t.count||0)/cap*100)}%</span>
-      </div>
-    </div>`).join('')}
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px" id="ps-sc-total"></div>`
-  :`
-    <p class="muted" style="font-size:12px;margin-bottom:12px">Drag to model any attendance level.</p>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-      <input type="range" id="ps-sc-slider" min="0" max="${cap}" value="${est}"
-        oninput="document.getElementById('ps-sc-num').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
-        style="flex:1">
-      <input type="number" id="ps-sc-num" min="0" max="${cap}" value="${est}"
-        oninput="document.getElementById('ps-sc-slider').value=this.value;psRenderScenario('${p.id}','${s._sid}')"
-        style="width:80px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
-      <span class="muted" style="font-size:12px" id="ps-sc-pct"></span>
-    </div>`;
-
-  host.innerHTML=`${sliderHtml}
-    <div id="ps-sc-waterfall"></div>`;
-
-  if(hasTiers) psRenderScenarioTable(p.id,s._sid,tcps);
-  else psRenderScenario(p.id,s._sid,tcps);
 }
 
 // Tier-aware scenario table for proposals
@@ -5092,67 +5099,346 @@ function proposalCard(p){
     </div></div>`;
 }
 
+function _proposalScenarioTable(p,s,tcps){
+  const cap=+s.capacity||1;
+  const tiers=(s.tiers||[]).filter(t=>t.base>0);
+  const hasTiers=tiers.length>1;
+  const pcts=[25,50,60,70,75,80,90,100];
+  const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
+  const rows=pcts.map(pct=>{
+    const fill=Math.round(cap*pct/100);
+    const ff=hasTiers?(()=>{
+      const scale=fill/baseTotals;
+      const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
+      return proposalShowFigures({...s,tiers:sc,ticketsEst:fill},null,tcps);
+    })():proposalShowFigures(s,fill,tcps);
+    return `<tr style="${pct===75?'background:#f0fce8':''}">
+      <td style="padding:4px 6px">${pct}%</td>
+      <td style="padding:4px 6px;text-align:right">${fill}</td>
+      <td style="padding:4px 6px;text-align:right">${money0(ff.grossBoxOffice)}</td>
+      <td style="padding:4px 6px;text-align:right">${money0(ff.payout)}</td>
+      <td style="padding:4px 6px;text-align:right;color:#854f0b">${money0(ff.commission)}</td>
+      <td style="padding:4px 6px;text-align:right;font-weight:600;color:${ff.artistNet>=0?'#3b6d11':'#a32d2d'}">${ff.artistNet>=0?'+':'-'}${money0(Math.abs(ff.artistNet))}</td>
+    </tr>`;
+  }).join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:10px">
+    <thead><tr style="color:#908e85;font-size:10px;text-transform:uppercase;letter-spacing:.3px">
+      <th style="padding:3px 6px;text-align:left">Fill</th>
+      <th style="padding:3px 6px;text-align:right">Tickets</th>
+      <th style="padding:3px 6px;text-align:right">Gross</th>
+      <th style="padding:3px 6px;text-align:right">Payout</th>
+      <th style="padding:3px 6px;text-align:right">Commission</th>
+      <th style="padding:3px 6px;text-align:right">Artist net</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function printProposalDoc(id){
   const p=get(DB.proposals,id); if(!p) return;
   const artist=p.artistId?get(DB.artists,p.artistId):null;
-  const shows=p.shows||[];
-  let totGross=0,totComm=0,totArtist=0;
-  shows.forEach(s=>{const f=proposalShowFigures(s);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;});
-  const trow=(label,val,bold,color)=>`<tr><td style="padding:4px 0;color:#5f5e58;font-size:12px">${label}</td><td style="padding:4px 0;text-align:right;font-weight:${bold?600:400};font-size:12px;color:${color||'#1c1c1a'}">${typeof val==='number'?(val<0?'−':'')+'$'+Math.abs(val).toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:0}):val}</td></tr>`;
+  const artistName=artist?.name||p.artistName||'Artist';
+  const shows=(p.shows||[]).sort((a,b)=>(!a.date?1:!b.date?-1:a.date<b.date?-1:1));
+  const tcps=proposalTourCostPerShow(p);
+  const twTotal=(p.tourCosts||[]).reduce((t,c)=>t+(+c.amount||0),0);
+
+  let totGross=0,totComm=0,totArtist=0,totPayout=0;
+  shows.forEach(s=>{const f=proposalShowFigures(s,null,tcps);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;totPayout+=f.payout;});
+
+  const m0=(v)=>'$'+Math.round(Math.abs(v)).toLocaleString('en-CA');
+  const trow=(label,val,bold,color)=>`<tr><td style="padding:4px 0;color:${bold?'#1c1c1a':'#5f5e58'};font-size:12px;font-weight:${bold?600:400}">${label}</td><td style="padding:4px 0;text-align:right;font-weight:${bold?600:400};font-size:12px;color:${color||'#1c1c1a'}">${typeof val==='number'?(val<0?'−':'')+'$'+Math.abs(val).toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:0}):val}</td></tr>`;
+
   const showBlocks=shows.map(s=>{
-    const v=get(DB.venues,s.venueId); const f=proposalShowFigures(s);
-    const sc=s.showCosts||{}; const ct=s.terms?.contractType||'rental';
+    const v=get(DB.venues,s.venueId);
+    const f=proposalShowFigures(s,null,tcps);
+    const sc=s.showCosts||{};
+    const tiers=(s.tiers||[]).filter(t=>t.base>0);
+    const tierStr=tiers.length>1?tiers.map(t=>`${esc(t.name)} ${m0(t.base)} (${t.count})`).join(', '):`${m0(s.ticketBase||0)}/ticket`;
     const costRows=[
       ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>trow(l.desc||'Crew',-((+l.hours||0)*(+l.rate||0)),false,'#a32d2d')),
       ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>trow(l.desc||'Equipment',-(+l.amount),false,'#a32d2d')),
       ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>trow(l.desc||'Fee',-(+l.amount),false,'#a32d2d')),
-      ...(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>trow(x.desc||'Expense',-(+x.amount),false,'#a32d2d')),
     ].join('');
-    return `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid #e4e2da">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-        <div style="font-size:15px;font-weight:600">${v?v.name:'Venue TBD'}</div>
-        <div style="font-size:12px;color:#5f5e58">${s.date||'Date TBD'} · ${v?v.city||'':''}  · Cap: ${s.capacity||'?'}</div>
+    const artistExpRows=(s.expenses||[]).filter(x=>x.payer==='artist').map(x=>trow('  '+esc(x.desc||'Expense'),-(+x.amount),false,'#c98a3f')).join('');
+    const prodExpRows=(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>trow('  LPA: '+esc(x.desc||'Expense'),-(+x.amount),false,'#854f0b')).join('');
+    const tcpsRow=tcps>0?trow('  Tour costs (pro-rated)',-tcps,false,'#854f0b'):'';
+    return `<div style="margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid #e4e2da;page-break-inside:avoid">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <div style="font-size:14px;font-weight:600">${v?esc(v.name):'Venue TBD'}${v?.city?` <span style="font-weight:400;color:#5f5e58">· ${esc(v.city)}</span>`:''}</div>
+        <div style="font-size:11px;color:#5f5e58">${esc(s.date||'Date TBD')} · Cap: ${s.capacity||'?'}</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <tr><td style="color:#5f5e58;padding:4px 0">Ticket price</td><td style="text-align:right;padding:4px 0">${money0(s.ticketBase)}</td></tr>
-        <tr><td style="color:#5f5e58;padding:4px 0">Estimated attendance</td><td style="text-align:right;padding:4px 0">${s.ticketsEst} (${Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)}%)</td></tr>
-        ${trow('Gross box office',f.grossBoxOffice)}
-        ${trow('Net ticket revenue (base)',f.baseRevenue)}
-        ${costRows}
-        ${f.dealRentalFlat>0?trow('Less: rental flat fee',-f.dealRentalFlat,false,'#a32d2d'):''}
-        ${f.dealRentalPct>0?trow('Less: box office % ('+(+s.terms?.doorSplit||0)+'%)',-f.dealRentalPct,false,'#a32d2d'):''}
-        <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
-        ${trow('Venue payout',f.payout,true,'#3b6d11')}
-        ${trow('Management commission ('+DB.settings.mgmtPct+'%)',-f.commission,false,'#854f0b')}
-        <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
-        ${trow('Artist gross',f.artistGross,true)}
-        ${(s.expenses||[]).filter(x=>x.payer==='artist').map(x=>trow(x.desc||'Artist expense',-(+x.amount),false,'#c98a3f')).join('')}
-        <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:2px 0"></td></tr>
-        ${trow('Artist net',f.artistNet,true,f.artistNet>=0?'#3b6d11':'#a32d2d')}
-      </table>
+      <div style="font-size:11px;color:#5f5e58;margin-bottom:10px">Tickets: ${tierStr} · ${ctLabel(s.terms?.contractType)}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <table style="width:100%;border-collapse:collapse">
+          ${trow('Gross box office',f.grossBoxOffice)}
+          ${trow('Net ticket revenue',f.baseRevenue)}
+          ${costRows}
+          ${f.dealRentalFlat>0?trow('Rental flat fee',-f.dealRentalFlat,false,'#a32d2d'):''}
+          ${f.dealRentalPct>0?trow('Box office % ('+(s.terms?.doorSplit||0)+'%)',-f.dealRentalPct,false,'#a32d2d'):''}
+          <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
+          ${trow('Venue payout',f.payout,true,'#3b6d11')}
+          ${trow('Commission ('+DB.settings.mgmtPct+'%)',-f.commission,false,'#854f0b')}
+          ${prodExpRows}${tcpsRow}
+          <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
+          ${trow('Artist gross',f.artistGross,true)}
+          ${artistExpRows}
+          <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:2px 0"></td></tr>
+          ${trow('Artist net',f.artistNet,true,f.artistNet>=0?'#3b6d11':'#a32d2d')}
+        </table>
+        <div>${_proposalScenarioTable(p,s,tcps)}</div>
+      </div>
     </div>`;
   }).join('');
+
+  // Tour scenario table at fill %
+  const tourScenarioPcts=[25,50,60,70,75,80,90,100];
+  const tourScenarioRows=tourScenarioPcts.map(pct=>{
+    let g=0,c=0,a=0,pay=0;
+    shows.forEach(s=>{
+      const cap=+s.capacity||1;
+      const fill=Math.round(cap*pct/100);
+      const tiers=(s.tiers||[]).filter(t=>t.base>0);
+      const hasTiers=tiers.length>1;
+      const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
+      const f=hasTiers?(()=>{
+        const scale=fill/baseTotals;
+        const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
+        return proposalShowFigures({...s,tiers:sc,ticketsEst:fill},null,tcps);
+      })():proposalShowFigures(s,fill,tcps);
+      g+=f.grossBoxOffice;c+=f.commission;a+=f.artistNet;pay+=f.payout;
+    });
+    return `<tr style="${pct===75?'background:#f0fce8':''}">
+      <td style="padding:4px 6px">${pct}%</td>
+      <td style="padding:4px 6px;text-align:right">${m0(g)}</td>
+      <td style="padding:4px 6px;text-align:right">${m0(pay)}</td>
+      <td style="padding:4px 6px;text-align:right;color:#854f0b">${m0(c)}</td>
+      <td style="padding:4px 6px;text-align:right;font-weight:600;color:${a>=0?'#3b6d11':'#a32d2d'}">${a>=0?'+':'-'}${m0(Math.abs(a))}</td>
+    </tr>`;
+  }).join('');
+
   const doc=`
-    <div style="text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1c1c1a">
-      <div style="font-size:20px;font-weight:600">${esc(p.title)}</div>
-      <div style="font-size:13px;color:#5f5e58">Proposal for ${esc(artist?artist.name:p.artistName||'Artist')} · ${new Date().toLocaleDateString()}</div>
+    <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #1c1c1a">
+      <div style="font-size:22px;font-weight:600">${esc(p.title)}</div>
+      <div style="font-size:13px;color:#5f5e58;margin-top:4px">Proposal for ${esc(artistName)} · ${new Date().toLocaleDateString('en-CA')}</div>
     </div>
-    ${p.intro?`<p style="font-size:13px;line-height:1.6;margin-bottom:20px">${esc(p.intro)}</p>`:''}
-    <div style="margin-bottom:24px;padding:12px 16px;background:#f4f3ef;border-radius:8px">
-      <table style="width:100%;border-collapse:collapse">
-        <tr><td style="font-size:12px;color:#5f5e58">Total projected gross</td><td style="text-align:right;font-weight:600">${money0(totGross)}</td>
-            <td style="font-size:12px;color:#5f5e58;padding-left:20px">Total commission</td><td style="text-align:right;font-weight:600;color:#854f0b">${money0(totComm)}</td>
-            <td style="font-size:12px;color:#5f5e58;padding-left:20px">Total artist net</td><td style="text-align:right;font-weight:600;color:${totArtist>=0?'#3b6d11':'#a32d2d'}">${money0(totArtist)}</td></tr>
-      </table>
+    ${p.intro?`<p style="font-size:13px;line-height:1.6;margin-bottom:20px;color:#5f5e58">${esc(p.intro)}</p>`:''}
+
+    <div style="margin-bottom:28px;padding:16px 18px;background:#f4f3ef;border-radius:8px;page-break-inside:avoid">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Tour summary — ${shows.length} show${shows.length!==1?'s':''}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          ${trow('Total gross box office',totGross)}
+          ${trow('Total venue payout',totPayout)}
+          ${trow('Total commission ('+DB.settings.mgmtPct+'%)',-totComm,false,'#854f0b')}
+          ${twTotal>0?trow('Tour-wide costs',-twTotal,false,'#854f0b'):''}
+          <tr><td colspan="2" style="border-top:2px solid #1c1c1a;padding:2px 0"></td></tr>
+          ${trow('Total artist net (est.)',totArtist,true,totArtist>=0?'#3b6d11':'#a32d2d')}
+        </table>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#908e85;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Tour totals at fill %</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="color:#908e85;font-size:10px;text-transform:uppercase">
+              <th style="padding:3px 6px;text-align:left">Fill</th>
+              <th style="padding:3px 6px;text-align:right">Gross</th>
+              <th style="padding:3px 6px;text-align:right">Payout</th>
+              <th style="padding:3px 6px;text-align:right">Comm.</th>
+              <th style="padding:3px 6px;text-align:right">Artist net</th>
+            </tr></thead>
+            <tbody>${tourScenarioRows}</tbody>
+          </table>
+        </div>
+      </div>
+      ${p.tourCosts?.length?`<div style="font-size:11px;color:#908e85;margin-top:10px">Tour-wide costs: ${p.tourCosts.map(c=>esc(c.desc)+' $'+Math.round(c.amount).toLocaleString('en-CA')).join(', ')} — $${Math.round(tcps).toLocaleString('en-CA')}/show</div>`:''}
     </div>
+
     ${showBlocks}
-    <p style="font-size:11px;color:#908e85">All figures are projections based on estimated attendance. Management commission shown transparently. Generated by TourDesk.</p>`;
+    <p style="font-size:11px;color:#908e85;margin-top:16px">All figures are projections based on estimated attendance. Highlighted rows (75% fill) represent a realistic target scenario. Figures do not include applicable taxes. This is not an invoice. Generated by TourDesk.</p>`;
+
   const w=window.open('','_blank');
-  w.document.write('<html><head><title>'+esc(p.title)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#1c1c1a}</style></head><body>'+doc+'</body></html>');
-  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
+  w.document.write('<html><head><title>'+esc(p.title)+'</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#1c1c1a}@media print{.no-print{display:none}}</style></head><body>'+doc+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),400);
 }
 
-function printShowProposal(pid,sid){
+function exportProposalHTML(id){
+  const p=get(DB.proposals,id); if(!p) return;
+  const artist=p.artistId?get(DB.artists,p.artistId):null;
+  const artistName=artist?.name||p.artistName||'Artist';
+  const shows=(p.shows||[]).sort((a,b)=>(!a.date?1:!b.date?-1:a.date<b.date?-1:1));
+  const tcps=proposalTourCostPerShow(p);
+  const twTotal=(p.tourCosts||[]).reduce((t,c)=>t+(+c.amount||0),0);
+
+  // Bake all show data into the HTML as JSON
+  const showData=shows.map((s,si)=>{
+    const v=get(DB.venues,s.venueId);
+    const tiers=(s.tiers||[]).filter(t=>t.base>0);
+    return {
+      sid:s._sid, si,
+      venueName:v?.name||'Venue TBD', city:v?.city||'', date:s.date||'',
+      capacity:+s.capacity||0,
+      tiers:tiers.length>1?tiers:[{name:'Tickets',base:+s.ticketBase||0,count:+s.ticketsEst||Math.round((+s.capacity||0)*0.6)}],
+      hasTiers:tiers.length>1,
+      terms:s.terms||{},
+      showCosts:s.showCosts||{crew:[],equipment:[],fees:[]},
+      expenses:s.expenses||[],
+      mgmtPct:+s.mgmtPct||DB.settings.mgmtPct,
+      taxRate:+s.taxRate||0, taxOn:s.taxOn||'base',
+      tcps
+    };
+  });
+
+  // Self-contained financial engine (minimal subset)
+  const financialEngine=[
+"function m0(v){return '$'+Math.round(Math.abs(v)).toLocaleString('en-CA');}",
+"function calcShow(sd, soldPerTier){",
+"  var tiers=sd.tiers, terms=sd.terms, sc=sd.showCosts, expenses=sd.expenses, mgmtPct=sd.mgmtPct/100;",
+"  var gross=0, base=0, tax=0;",
+"  tiers.forEach(function(t,i){ var s=soldPerTier[i]||0; var taxR=(sd.taxRate||0)/100; gross+=s*(t.base*(1+taxR)); base+=s*t.base; tax+=s*t.base*taxR; });",
+"  var costs=0;",
+"  (sc.crew||[]).forEach(function(l){costs+=(+l.hours||0)*(+l.rate||0);});",
+"  (sc.equipment||[]).forEach(function(l){costs+=(+l.amount||0);});",
+"  (sc.fees||[]).forEach(function(l){costs+=(+l.amount||0);});",
+"  var ct=terms.contractType||'rental', g=+terms.guarantee||0, r=+terms.rental||0, sp=+terms.doorSplit/100||0;",
+"  var payout=base;",
+"  if(ct==='guarantee') payout=Math.max(g,base*sp);",
+"  else if(ct==='door') payout=base*sp;",
+"  else if(ct==='rental') payout=base-r-costs;",
+"  else if(ct==='rental_plus_pct') payout=base-r-costs-(base*sp);",
+"  else if(ct==='rental_greater_of') payout=Math.max(r,base*sp)-costs;",
+"  payout=Math.max(0,payout);",
+"  var commission=payout*mgmtPct;",
+"  var prodExps=expenses.filter(function(x){return x.payer==='producer';}).reduce(function(s,x){return s+(+x.amount||0);},0);",
+"  var artistExps=expenses.filter(function(x){return x.payer==='artist';}).reduce(function(s,x){return s+(+x.amount||0);},0);",
+"  var tourCostShare=sd.tcps||0;",
+"  var artistGross=payout-commission-prodExps;",
+"  var artistNet=artistGross-artistExps-tourCostShare;",
+"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
+"}",
+"function updateShow(si){",
+"  var sd=SHOWS[si];",
+"  var soldPerTier=sd.tiers.map(function(_,i){",
+"    var el=document.getElementById('sl-'+si+'-'+i); return el?+el.value||0:sd.tiers[i].count||0;",
+"  });",
+"  var f=calcShow(sd,soldPerTier);",
+"  var wf=document.getElementById('wf-'+si);",
+"  if(wf){",
+"    var pct=sd.capacity>0?Math.round(f.totalSold/sd.capacity*100):0;",
+"    wf.innerHTML=",
+"      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Gross box office</span><strong>'+m0(f.gross)+'</strong></div>'+",
+"      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Venue payout</span><strong style=\"color:#3b6d11\">'+m0(f.payout)+'</strong></div>'+",
+"      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Commission (LPA)</span><span style=\"color:#854f0b\">-'+m0(f.commission)+'</span></div>'+",
+"      (f.tourCostShare>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Tour costs (shared)</span><span style=\"color:#854f0b\">-'+m0(f.tourCostShare)+'</span></div>':'')+",
+"      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Artist gross</span><strong>'+m0(f.artistGross)+'</strong></div>'+",
+"      (f.artistExps>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Artist expenses</span><span style=\"color:#c98a3f\">-'+m0(f.artistExps)+'</span></div>':'')+",
+"      '<div style=\"display:flex;justify-content:space-between;padding:8px 0 4px;font-size:14px;border-top:2px solid #1c1c1a;margin-top:4px\"><strong>Artist net</strong><strong style=\"color:'+(f.artistNet>=0?'#3b6d11':'#a32d2d')+'\">'+m0(f.artistNet)+'</strong></div>'+",
+"      '<div style=\"font-size:11px;color:#908e85;margin-top:4px\">'+f.totalSold+' tickets sold ('+pct+'% of '+sd.capacity+')</div>';",
+"  }",
+"  updateTourTotal();",
+"}",
+"function updateTourTotal(){",
+"  var totG=0,totP=0,totC=0,totAN=0;",
+"  SHOWS.forEach(function(sd,si){",
+"    var sold=sd.tiers.map(function(_,i){var el=document.getElementById('sl-'+si+'-'+i);return el?+el.value||0:sd.tiers[i].count||0;});",
+"    var f=calcShow(sd,sold); totG+=f.gross;totP+=f.payout;totC+=f.commission;totAN+=f.artistNet;",
+"  });",
+"  var el=document.getElementById('tour-total');",
+"  if(el) el.innerHTML=",
+"    '<div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center\">'+",
+"    '<div><div style=\"font-size:18px;font-weight:600\">'+m0(totG)+'</div><div style=\"font-size:11px;color:#908e85\">Total gross</div></div>'+",
+"    '<div><div style=\"font-size:18px;font-weight:600\">'+m0(totP)+'</div><div style=\"font-size:11px;color:#908e85\">Total payout</div></div>'+",
+"    '<div><div style=\"font-size:18px;font-weight:600;color:#854f0b\">'+m0(totC)+'</div><div style=\"font-size:11px;color:#908e85\">Total commission</div></div>'+",
+"    '<div><div style=\"font-size:18px;font-weight:600;color:'+(totAN>=0?'#3b6d11':'#a32d2d')+'\">'+m0(totAN)+'</div><div style=\"font-size:11px;color:#908e85\">Artist net</div></div>'+",
+"    '</div>';",
+"}",
+].join("\n");
+
+  const showSections=showData.map((sd,si)=>{
+    const tierSliders=sd.tiers.map((t,i)=>`
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px">
+          <strong>${t.name}</strong>
+          <span style="color:#5f5e58">$${Math.round(t.base)}/ticket · ${t.count} seats</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="sl-${si}-${i}" min="0" max="${t.count}" value="${t.count}"
+            oninput="document.getElementById('sn-${si}-${i}').value=this.value;updateShow(${si})"
+            style="flex:1;accent-color:#3b6d11">
+          <input type="number" id="sn-${si}-${i}" min="0" max="${t.count}" value="${t.count}"
+            onchange="document.getElementById('sl-${si}-${i}').value=this.value;updateShow(${si})"
+            style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:right">
+          <span style="font-size:11px;color:#908e85;width:50px;text-align:right">${t.count} max</span>
+        </div>
+      </div>`).join('');
+    return `
+      <div style="margin-bottom:32px;padding-bottom:32px;border-bottom:1px solid #e4e2da">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <div style="font-size:16px;font-weight:600">${sd.venueName}</div>
+          <div style="font-size:12px;color:#5f5e58">${sd.date||'Date TBD'}${sd.city?' · '+sd.city:''}</div>
+        </div>
+        <div style="font-size:12px;color:#5f5e58;margin-bottom:14px">Capacity: ${sd.capacity}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#908e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Ticket sales</div>
+            ${tierSliders}
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#908e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Projection</div>
+            <div id="wf-${si}"></div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${p.title} — Artist Projection</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#fafaf8;color:#1c1c1a;padding:24px}
+  .container{max-width:860px;margin:0 auto}
+  input[type=range]{cursor:pointer}
+  @media(max-width:600px){.grid-2{grid-template-columns:1fr!important}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div style="text-align:center;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #1c1c1a">
+    <div style="font-size:24px;font-weight:700">${esc(p.title)}</div>
+    <div style="font-size:14px;color:#5f5e58;margin-top:6px">Projection tool for ${esc(artistName)}</div>
+    <div style="font-size:12px;color:#908e85;margin-top:3px">Adjust ticket sales sliders to see how revenue changes. Generated ${new Date().toLocaleDateString('en-CA')}.</div>
+  </div>
+
+  <div style="background:#f4f3ef;border-radius:10px;padding:18px 20px;margin-bottom:28px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:#1c1c1a">Tour total</div>
+    <div id="tour-total"></div>
+  </div>
+
+  ${showSections}
+
+  <p style="font-size:11px;color:#908e85;text-align:center;margin-top:16px">Figures are projections only. Figures do not include applicable taxes. This is not an invoice or contract.</p>
+</div>
+<scr`+'ipt>'+`
+var SHOWS=${JSON.stringify(showData)};
+${financialEngine}
+// Initialize all shows
+SHOWS.forEach(function(_,i){updateShow(i);});
+</scr`+'ipt>'+`
+</body>
+</html>`;
+
+  // Trigger download
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=(p.title||'proposal').replace(/[^a-z0-9]/gi,'_')+'_projection.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
   const p=get(DB.proposals,pid); if(!p) return;
   const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
   const v=get(DB.venues,s.venueId);
