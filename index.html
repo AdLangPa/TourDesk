@@ -998,11 +998,38 @@ VIEWS.venues={
     if(route.id) return this.detail(c,a,route.id);
     a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueContractImport()">📄 Import from contract</button>
       <button class="btn primary" onclick="venueForm()">+ Add venue</button>`:'';
+    // Collect unique provinces and countries for filters
+    const provs=[...new Set(DB.venues.map(v=>v.province).filter(Boolean))].sort();
+    const countries=[...new Set(DB.venues.map(v=>v.country||'Canada').filter(Boolean))].sort();
     c.innerHTML=`
-      <div class="field" style="max-width:340px;margin-bottom:16px">
-        <input id="vn-search" placeholder="Search venues by name, city…" oninput="filterCards('vn')" style="width:100%">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <input id="vn-search" placeholder="Search venues…" oninput="filterVenues()"
+          style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--bord2);border-radius:var(--rad)">
+        <select id="vn-size" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
+          <option value="">All sizes</option>
+          <option value="small">Under 200</option>
+          <option value="medium">200–500</option>
+          <option value="large">500–1000</option>
+          <option value="xlarge">1000+</option>
+        </select>
+        <select id="vn-prov" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
+          <option value="">All provinces/states</option>
+          ${provs.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+        </select>
+        <select id="vn-country" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
+          <option value="">All countries</option>
+          ${countries.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+        </select>
+        <select id="vn-sort" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
+          <option value="name">Sort: Name A–Z</option>
+          <option value="cap-asc">Sort: Capacity ↑</option>
+          <option value="cap-desc">Sort: Capacity ↓</option>
+          <option value="prov">Sort: Province/State</option>
+          <option value="country">Sort: Country</option>
+        </select>
       </div>
-      <div id="vn-list" class="cards-grid">${DB.venues.map(venueCard).join('')||emptyState('▣','No venues yet')}</div>`;
+      <div id="vn-list" class="cards-grid">${renderVenueCards(DB.venues)}</div>`;
+    filterVenues();
   },
   detail(c,a,id){
     const v=get(DB.venues,id); if(!v){go('venues');return;}
@@ -1021,6 +1048,7 @@ VIEWS.venues={
         <div class="info-grid">
           <div class="info"><label>Hall</label><span>${esc(v.hall||'—')}</span></div>
           <div class="info"><label>City</label><span>${esc(v.city)}, ${esc(v.province)}</span></div>
+          <div class="info"><label>Country</label><span>${esc(v.country||'Canada')}</span></div>
           <div class="info"><label>Capacity</label><span>${v.capacity||'—'}</span></div>
           <div class="info"><label>Address</label><span>${esc(v.address||'—')}</span></div>
         </div>
@@ -1041,11 +1069,45 @@ VIEWS.venues={
 };
 function ctLabel(ct){return {guarantee:'Guarantee',door:'Door split',guarantee_plus:'Guarantee+',rental:'Rental (flat fee)',rental_greater_of:'Rental (greater of flat or %)',rental_plus_pct:'Rental (flat fee + % of net)'}[ct]||'—';}
 
+function renderVenueCards(list){
+  return list.length ? list.map(venueCard).join('') : emptyState('▣','No venues match');
+}
+function filterVenues(){
+  const q=(document.getElementById('vn-search')?.value||'').toLowerCase();
+  const size=document.getElementById('vn-size')?.value||'';
+  const prov=document.getElementById('vn-prov')?.value||'';
+  const country=document.getElementById('vn-country')?.value||'';
+  const sort=document.getElementById('vn-sort')?.value||'name';
+  let list=DB.venues.filter(v=>{
+    if(q && !((v.name||'').toLowerCase().includes(q)||(v.city||'').toLowerCase().includes(q)||(v.province||'').toLowerCase().includes(q))) return false;
+    if(prov && v.province!==prov) return false;
+    if(country && (v.country||'Canada')!==country) return false;
+    if(size){
+      const cap=+v.capacity||0;
+      if(size==='small'&&cap>=200) return false;
+      if(size==='medium'&&(cap<200||cap>=500)) return false;
+      if(size==='large'&&(cap<500||cap>=1000)) return false;
+      if(size==='xlarge'&&cap<1000) return false;
+    }
+    return true;
+  });
+  list=[...list].sort((a,b)=>{
+    if(sort==='name') return (a.name||'').localeCompare(b.name||'');
+    if(sort==='cap-asc') return (+a.capacity||0)-(+b.capacity||0);
+    if(sort==='cap-desc') return (+b.capacity||0)-(+a.capacity||0);
+    if(sort==='prov') return (a.province||'').localeCompare(b.province||'');
+    if(sort==='country') return (a.country||'Canada').localeCompare(b.country||'Canada');
+    return 0;
+  });
+  const host=document.getElementById('vn-list');
+  if(host) host.innerHTML=renderVenueCards(list);
+}
+
 function venueCard(v){
   const t=v.terms||{};
   return `<div class="card" onclick="go('venues','${v.id}')">
     <div class="card-top"><div><div class="card-title">${esc(v.name)}</div>
-    <div class="card-sub">${esc(v.city)}, ${esc(v.province)}</div></div>
+    <div class="card-sub">${esc(v.city)}, ${esc(v.province)}${v.country&&v.country!=='Canada'?' · '+esc(v.country):''}</div></div>
     <span class="badge gray">${esc(v.type||'')}</span></div>
     <div class="card-meta">
       <div class="meta"><label>Capacity</label><span>${v.capacity||'—'}</span></div>
@@ -1110,7 +1172,8 @@ function venueForm(id, prefill){
     </div>
     <div class="row3">
       <div class="field"><label>City</label><input id="vf-city" value="${esc(v.city||'')}"></div>
-      <div class="field"><label>Province</label><input id="vf-prov" value="${esc(v.province||'')}"></div>
+      <div class="field"><label>Province / State</label><input id="vf-prov" value="${esc(v.province||'')}"></div>
+      <div class="field"><label>Country</label><input id="vf-country" value="${esc(v.country||'Canada')}"></div>
       <div class="field"><label>Capacity</label><input id="vf-cap" type="number" value="${v.capacity||''}"></div>
     </div>
     <div class="field"><label>Address</label><input id="vf-addr" value="${esc(v.address||'')}"></div>
@@ -1318,7 +1381,7 @@ function saveVenue(id){
   const ct=fv('vf-ct');
   const rec={
     name:fv('vf-name'),hall:fv('vf-hall'),type:fv('vf-type'),city:fv('vf-city'),
-    province:fv('vf-prov'),capacity:fvn('vf-cap'),address:fv('vf-addr'),
+    province:fv('vf-prov'),country:fv('vf-country')||'Canada',capacity:fvn('vf-cap'),address:fv('vf-addr'),
     contactName:fv('vf-cname'),contactRole:fv('vf-crole'),
     contactEmail:fv('vf-cemail'),contactPhone:fv('vf-cphone'),
     notes:fv('vf-notes'),tags:fv('vf-tags').split(',').map(s=>s.trim()).filter(Boolean),
@@ -1584,6 +1647,7 @@ function venueFormFromExtracted(d, filename){
     type:d.type||'Theatre',
     city:d.city||'',
     province:d.province||'',
+    country:d.country||'Canada',
     address:d.address||'',
     capacity:d.capacity||'',
     contactName:d.contactName||'',
@@ -2129,7 +2193,15 @@ function eventOverview(host,e,v,t){
     <div class="stats">
       <div class="stat"><div class="stat-val ${(hasActuals?sf.artistNet:pf.artistNet)>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
       <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.commission):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'Your commission (actual)':'To you (projected)'}</div></div>
-      <div class="stat"><div class="stat-val">${hasActuals?'—':pf.sold}</div><div class="stat-lbl">${hasActuals?'Settled':'Tickets (est.)'} / ${e.capacityAlloc}</div></div>
+      <div class="stat"><div class="stat-val">${(()=>{
+        const st=e.projection?.salesTracker;
+        const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+        const hasTiers=tiers.length>1;
+        if(st&&Object.keys(st.tierSold||{}).length){
+          return hasTiers?tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0),0):(+st.tierSold[0]||0);
+        }
+        return hasActuals?'—':pf.sold;
+      })()}</div><div class="stat-lbl">${hasActuals?'Settled':'Tickets sold'} / ${e.capacityAlloc}</div></div>
       <div class="stat"><div class="stat-val">${money0(hasActuals?sf.payout:pf.payout)}</div><div class="stat-lbl">Venue payout</div></div>
     </div>
 
@@ -5692,11 +5764,12 @@ function acceptProposal(id){
       status:'Routing',capacityAlloc:s.capacity||0,presales:0,comps:0,
       mgmtPct:s.mgmtPct||DB.settings.mgmtPct,
       pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
-        taxRate:+s.taxRate||DB.settings.taxRate,taxOn:s.taxOn||'base'},
+        taxRate:+s.taxRate||DB.settings.taxRate,taxOn:s.taxOn||'base',
+        tiers:(s.tiers||[]).length>1?JSON.parse(JSON.stringify(s.tiers)):[]},
       terms:s.terms||{},
       showCosts:JSON.parse(JSON.stringify(s.showCosts||{crew:[],equipment:[],fees:[]})),
       projection:{ticketsEst:+s.ticketsEst||Math.round((+s.capacity||0)*0.6),
-        expenses:(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>({...x}))},
+        expenses:(s.expenses||[]).map(x=>({...x}))},
       settlementV2:{venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''},
       logistics:DEFAULT_LOGISTICS.map((item,i)=>({id:'lg'+(Date.now()+i),label:item.label,confirmed:false,note:'',confirmedAt:null})),
       talentIds:[],vendorIds:[],crewIds:[],files:[]
