@@ -870,15 +870,24 @@ function render(){
   const c=document.getElementById('content');
   const a=document.getElementById('page-actions');
   a.innerHTML='';
-  // Show user info
   if(AUTH_USER){
     const userInfo=document.getElementById('user-info');
-    if(userInfo){
-      userInfo.innerHTML=`<span>${esc(AUTH_USER.displayName)}</span>`;
-    }
+    if(userInfo) userInfo.innerHTML=`<span>${esc(AUTH_USER.displayName)}</span>`;
   }
   const R=VIEWS[route.view];
-  if(R){ R.render(c,a); } else { c.innerHTML='<div class="empty">Not found</div>'; }
+  if(R){
+    try{ R.render(c,a); }
+    catch(err){
+      console.error('Render error on view',route.view,err);
+      c.innerHTML=`<div style="padding:32px;max-width:560px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px">Something went wrong rendering this page.</div>
+        <pre style="font-size:11px;color:var(--txt3);white-space:pre-wrap;margin-bottom:16px">${esc(err.message)}</pre>
+        <button class="btn sm" onclick="go('dashboard')">← Back to dashboard</button>
+      </div>`;
+    }
+  } else {
+    c.innerHTML='<div class="empty">Not found</div>';
+  }
 }
 
 /* View modules are attached to VIEWS in later sections */
@@ -6196,10 +6205,10 @@ function saveSettings(){
   DB.settings.taxRate=fvn('set-tax'); 
   DB.settings.serviceFeePct=fvn('set-svc');
   const sbUrl=fv('set-sb-url'), sbKey=fv('set-sb-key');
-  if(sbUrl && sbKey){
-    DB.settings.supabaseConfig={projectUrl:sbUrl,apiKey:sbKey};
-  }
-  persist(); render(); 
+  if(sbUrl && sbKey) DB.settings.supabaseConfig={projectUrl:sbUrl,apiKey:sbKey};
+  persist();
+  const btn=document.querySelector('#content .btn.sm');
+  if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>{btn.textContent=o;},1500);}
 }
 
 
