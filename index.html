@@ -398,6 +398,8 @@ function initSupabase() {
 async function persist() {
   try {
     if (SBDB) {
+      // Record time of our own write so the real-time listener can ignore the echo
+      if(window._recordPersist) window._recordPersist();
       const { error } = await SBDB
         .from('tourdesk_data')
         .upsert({ id: 1, data: DB }, { onConflict: 'id' });
@@ -6235,16 +6237,22 @@ async function connectSupabase(){
       // First time; upload current data
       await SBDB.from('tourdesk_data').upsert({id:1,data:DB},{onConflict:'id'});
     }
-    // Set up real-time listener
+    // Set up real-time listener — ignore echoes of our own writes
+    let _lastPersistTime=0;
+    const _origPersist=persist;
     SBSUB=SBDB.channel('tourdesk_changes').on('postgres_changes',
       {event:'*',schema:'public',table:'tourdesk_data'},
       payload=>{
+        // Ignore if this fired within 2s of our own persist (it's our own write echoing back)
+        if(Date.now()-_lastPersistTime < 2000) return;
         if(payload.new && payload.new.data){
           const d=typeof payload.new.data==='string'?JSON.parse(payload.new.data):payload.new.data;
           Object.assign(DB,d);
           if(route && route.view) render();
         }
       }).subscribe();
+    // Patch persist to record when we last wrote
+    window._recordPersist=()=>{ _lastPersistTime=Date.now(); };
     updateSyncBadge();
     openModal('Supabase connected','<p style="font-size:13px;color:var(--green)">✓ Connected. Your data is now syncing across all devices.</p>','<button class="btn primary" onclick="closeModal();render()">Done</button>');
   }catch(err){
