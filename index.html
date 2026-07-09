@@ -950,22 +950,22 @@ function todayStr(){return new Date().toISOString().slice(0,10);}
 
 function tableEvents(list){
   const hideComm=inArtistView();
-  return `<table class="tbl"><thead><tr>
-    <th>Event</th><th>Date</th><th>Venue</th><th>Sold</th>
-    <th class="num">Gross</th>${hideComm?'':'<th class="num">My comm.</th>'}<th class="num">Artist net</th><th>Status</th></tr></thead><tbody>
-    ${list.map(e=>{
-      const v=get(DB.venues,e.venueId), f=eventBest(e);
-      const cap=+e.capacityAlloc||1;
-      const sold=f.actual?(e.projection?+e.projection.ticketsEst||0:0):(e.projection?+e.projection.ticketsEst||0:0);
-      return `<tr onclick="go('events','${e.id}')">
-        <td style="font-weight:500">${esc(e.name)}</td><td>${esc(e.date)}</td>
-        <td>${v?esc(v.name):'—'}</td>
-        <td>${sold}/${e.capacityAlloc} <span class="muted">(${Math.round(sold/cap*100)}%${f.actual?'':' est'})</span></td>
-        <td class="num">${money0(f.gross)}</td>
-        ${hideComm?'':`<td class="num pos">${money0(f.commission)}</td>`}
-        <td class="num ${f.artistNet>=0?'pos':'neg'}">${money0(f.artistNet)}</td>
-        <td><span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span></td></tr>`;
-    }).join('')}</tbody></table>`;
+  const hdr='<table class="tbl"><thead><tr><th>Event</th><th>Date</th><th>Venue</th><th>Sold</th>'
+    +'<th class="num">Gross</th>'+(hideComm?'':'<th class="num">My comm.</th>')+'<th class="num">Artist net</th><th>Status</th></tr></thead><tbody>';
+  const rows=list.map(e=>{
+    const v=get(DB.venues,e.venueId), f=eventBest(e);
+    const cap=+e.capacityAlloc||1;
+    const sold=f.actual?(e.projection?+e.projection.ticketsEst||0:0):(e.projection?+e.projection.ticketsEst||0:0);
+    return '<tr onclick="go(\'events\',\''+e.id+'\')">'
+      +'<td style="font-weight:500">'+esc(e.name)+'</td><td>'+esc(e.date)+'</td>'
+      +'<td>'+(v?esc(v.name):'—')+'</td>'
+      +'<td>'+sold+'/'+e.capacityAlloc+' <span class="muted">('+Math.round(sold/cap*100)+'%'+(f.actual?'':' est')+')</span></td>'
+      +'<td class="num">'+money0(f.gross)+'</td>'
+      +(hideComm?'':'<td class="num pos">'+money0(f.commission)+'</td>')
+      +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'">'+money0(f.artistNet)+'</td>'
+      +'<td><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span></td></tr>';
+  }).join('');
+  return hdr+rows+'</tbody></table>';
 }
 function statusColor(s){
   if(s==='Confirmed') return 'green';
@@ -1073,7 +1073,7 @@ VIEWS.venues={
         </div>
       </div>
       ${v.notes?`<div class="sec"><div class="sec-label">Notes</div><p style="font-size:13px;color:var(--txt2);line-height:1.6">${esc(v.notes)}</p></div>`:''}
-      ${(v.tags||[]).length?`<div class="sec">${v.tags.map(tg=>`<span class="tag">${esc(tg)}</span>`).join('')}</div>`:''}
+      ${(v.tags||[]).length?('<div class="sec">'+v.tags.map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('')+'</div>'):''}
       <div class="sec"><div class="sec-label">Events at this venue (${evts.length})</div>
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No events here yet.</p>'}</div>`;
   }
@@ -1766,9 +1766,11 @@ VIEWS.tours={
     const t=get(DB.tours,id); if(!t){go('tours');return;}
     const evts=DB.events.filter(e=>e.tourId===id);
     const {firm,routing}=splitTotals(evts);
-    a.innerHTML=`${canDo('admin')?`<button class="btn sm" onclick="tourFormEdit('${id}')">Edit</button>
-      <button class="btn sm danger" onclick="deleteTour('${id}')">Delete</button>
-      <button class="btn primary sm" onclick="eventForm(null,'${id}')">+ Add show</button>`:'<span class="badge gray" style="font-size:11px">View only</span>'}`;
+    a.innerHTML=canDo('admin')
+      ? '<button class="btn sm" onclick="tourFormEdit(\''+id+'\')">' + 'Edit</button>'
+        + ' <button class="btn sm danger" onclick="deleteTour(\''+id+'\')">' + 'Delete</button>'
+        + ' <button class="btn primary sm" onclick="eventForm(null,\''+id+'\')">+ Add show</button>'
+      : '<span class="badge gray" style="font-size:11px">View only</span>';
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="go('tours')">← Tours</span>
         <span class="detail-title">${esc(t.name)}</span>
@@ -1934,9 +1936,14 @@ VIEWS.events={
     const refProp=route.ref||null;
     const backLabel=refProp?'← Proposal':'← Events';
     const backAction=refProp?`go('proposals','${refProp}')`:`go('events')`;
-    a.innerHTML=`${canDo('admin')?`<button class="btn sm" onclick="eventForm('${id}',null,null,null,'${refProp||''}')">Edit deal</button>
-      <button class="btn sm" onclick="duplicateEvent('${id}')">Duplicate</button>
-      <button class="btn sm danger" onclick="deleteEvent('${id}')">Delete</button>`:'<span class="badge gray" style="font-size:11px">View only</span>'}`;
+    const _refP=refProp||'';
+    if(canDo('admin')){
+      a.innerHTML='<button class="btn sm" onclick="eventForm(\''+id+'\',null,null,null,\''+_refP+'\')">' + 'Edit deal</button>'
+        +' <button class="btn sm" onclick="duplicateEvent(\''+id+'\')">' + 'Duplicate</button>'
+        +' <button class="btn sm danger" onclick="deleteEvent(\''+id+'\')">' + 'Delete</button>';
+    } else {
+      a.innerHTML='<span class="badge gray" style="font-size:11px">View only</span>';
+    }
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="${backAction}">${backLabel}</span>
         <span class="detail-title">${esc(e.name)}</span>
@@ -2341,26 +2348,24 @@ function renderProjExpenses(e){
   const host=document.getElementById('pr-expenses'); if(!host) return;
   const exps=e.projection?.expenses||[];
   if(!exps.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses yet. Add travel, marketing, accommodation — mark who pays and any markup.</p>'; return; }
-  host.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
-      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
-    </div>
-    ${exps.map((x,i)=>{
-      const isProd=x.payer==='producer';
-      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
-      const billsOut=isProd?(+x.amount||0)+markup:0;
-      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
-        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Travel" oninput="setProjExp('${e.id}',${i},'desc',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <input type="number" value="${x.amount||0}" oninput="setProjExp('${e.id}',${i},'amount',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-        <select onchange="setProjExp('${e.id}',${i},'payer',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-          <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (you front)</option>
-          <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
-        </select>
-        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'} oninput="setProjExp('${e.id}',${i},'markupPct',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
-        <span style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
-        <button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp('${e.id}',${i})">×</button>
-      </div>`;
-    }).join('')}`;
+  const hdr='<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px"><span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span></div>';
+  const rows=exps.map((x,i)=>{
+    const isProd=x.payer==='producer';
+    const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
+    const billsOut=isProd?(+x.amount||0)+markup:0;
+    return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
+      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Travel" oninput="setProjExp(\''+e.id+'\','+i+',\'desc\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProjExp(\''+e.id+'\','+i+',\'amount\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="setProjExp(\''+e.id+'\','+i+',\'payer\',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<option value="producer"'+(x.payer==='producer'?' selected':'')+'>Producer (you front)</option>'
+      +'<option value="artist"'+(x.payer==='artist'?' selected':'')+'>Artist (direct)</option>'
+      +'</select>'
+      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProjExp(\''+e.id+'\','+i+',\'markupPct\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<span style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'\">'+(isProd?money0(billsOut):'—')+'</span>'
+      +'<button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp(\''+e.id+'\','+i+')">×</button>'
+      +'</div>';
+  }).join('');
+  host.innerHTML=hdr+rows;
 }
 function addProjExpense(id){
   const e=get(DB.events,id);
@@ -2762,7 +2767,7 @@ function renderScenario(id){
       if(pctEl) pctEl.textContent=alloc>0?Math.round(t.count/alloc*100)+'% sold':'';
     });
     const totalEl=document.getElementById('sc-total-line');
-    if(totalEl) totalEl.innerHTML=`<strong>${totalSold}</strong> sold of ${cap} capacity (${Math.round(totalSold/cap*100)}% full)`;    // Build model with tier counts from sliders
+    if(totalEl) totalEl.innerHTML='<strong>'+totalSold+'</strong> sold of '+cap+' capacity ('+Math.round(totalSold/cap*100)+'% full)';    // Build model with tier counts from sliders
     model={...e, pricing:{...e.pricing, tiers:sliderTiers}, projection:{ticketsEst:totalSold, expenses:projExps}};
   } else {
     const n=+document.getElementById('sc-num')?.value||0;
@@ -3927,9 +3932,11 @@ VIEWS.artists={
     const allEvents=DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(e.talentIds&&e.talentIds.includes(ar.contactId)));
     let totalEarned=0, totalShows=allEvents.length;
     allEvents.forEach(e=>{const f=eventBest(e);totalEarned+=f.artistNet;});
-    a.innerHTML=`${ar.type==='roster'?`<button class="btn sm primary" onclick="enterArtistView('${id}')">View as ${esc(ar.name.split(' ')[0])}</button>`:''}
-      <button class="btn sm" onclick="artistForm('${id}')">Edit</button>
-      <button class="btn sm danger" onclick="deleteArtist('${id}')">Delete</button>`;
+    if(canDo('admin')){
+      a.innerHTML=(ar.type==='roster'?'<button class="btn sm primary" onclick="enterArtistView(\''+id+'\')">' + 'View as '+esc(ar.name.split(' ')[0])+'</button> ':'')
+        +'<button class="btn sm" onclick="artistForm(\''+id+'\')">' + 'Edit</button>'
+        +' <button class="btn sm danger" onclick="deleteArtist(\''+id+'\')">' + 'Delete</button>';
+    } else { a.innerHTML=''; }
     c.innerHTML=`
       <div class="detail-head">
         <span class="back" onclick="go('artists',null,'${ar.type==='prospect'?'prospects':'roster'}')">← Artists</span>
@@ -3995,7 +4002,7 @@ function artistOverview(host,ar,contact,tours,allEvents,totalShows,totalEarned){
         ${contact?`<div class="info"><label>Contact</label><span><a onclick="go('contacts','${contact.id}')" style="cursor:pointer">${esc(contact.name)}</a></span></div>`:''}
         ${contact&&contact.email?`<div class="info"><label>Email</label><span><a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a></span></div>`:''}
       </div>
-      ${(ar.tags||[]).length?`<div style="margin-top:12px">${ar.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
+      ${(ar.tags||[]).length?('<div style="margin-top:12px">'+ar.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+'</div>'):''}
     </div>
     <div class="sec">
       <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
@@ -4432,25 +4439,17 @@ VIEWS.proposals={
           <div class="info"><label>Type</label><span>${p.kind==='tour'?'Full tour':'Single show'}</span></div>
           <div class="info"><label>Base ticket</label><span>${p.basePrice?money0(p.basePrice):'—'}</span></div>
           ${isAccepted&&p.acceptedAt?`<div class="info"><label>Accepted</label><span>${p.acceptedAt.slice(0,10)}</span></div>`:''}
-          ${p.tourTiers?.length?`<div class="info"><label>Ticket tiers</label><span>${p.tourTiers.map(t=>`${esc(t.name)} ${t.base?money0(t.base):'TBD'}`).join(' · ')}</span></div>`:''}
+          ${p.tourTiers?.length?('<div class="info"><label>Ticket tiers</label><span>'+p.tourTiers.map(t=>esc(t.name)+' '+(t.base?money0(t.base):'TBD')).join(' · ')+'</span></div>'):''}
           ${p.vipMerchCost?`<div class="info"><label>VIP merch/pkg</label><span>${money0(p.vipMerchCost)}</span></div>`:''}
         </div>
         ${p.intro?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(p.intro)}</p>`:''}
       </div>
       <div class="sec"><div class="sec-label">Shows — click a row for full detail</div>
-        ${shows.length?proposalShowsTable(p,shows,isAccepted)
-          :`<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> to build the show list.</p>`}
+        ${shows.length?proposalShowsTable(p,shows,isAccepted):'<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> to build the show list.</p>'}
       </div>
-      ${p.kind==='tour'?`<div class="sec">
-        <div class="sec-label">Tour-level costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(spread evenly across all shows in artist net)</span></div>
-        <p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, transport, accommodation across the run. Each cost is divided by number of shows and shown as an artist expense per show.</p>
-        <div id="prop-tour-costs"></div>
-        ${!isAccepted?`<button class="btn sm" style="margin-top:8px" onclick="addTourCost('${id}')">+ Add tour cost</button>`:''}
-      </div>`:''}
-      ${isAccepted&&p.createdTourId?`<div class="sec"><div class="sec-label">Created records</div>
-        <p style="font-size:13px;color:var(--txt2)">Accepted and converted. <a onclick="go('tours','${p.createdTourId}')" style="cursor:pointer">View tour →</a></p></div>`:''}
-      ${isAccepted&&p.createdEventIds&&!p.createdTourId?`<div class="sec"><div class="sec-label">Created records</div>
-        <p style="font-size:13px;color:var(--txt2)">${p.createdEventIds.length} event${p.createdEventIds.length!==1?'s':''} created.</p></div>`:''}`;
+      ${p.kind==='tour'?('<div class="sec"><div class="sec-label">Tour-level costs</div><p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, transport, accommodation — divided by number of shows.</p><div id="prop-tour-costs"></div>'+(isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="addTourCost(\''+id+'\')" >+ Add tour cost</button>')+'</div>'):''}
+      ${isAccepted&&p.createdTourId?('<div class="sec"><div class="sec-label">Created records</div><p style="font-size:13px;color:var(--txt2)">Accepted and converted. <a onclick="go(\'tours\',\''+p.createdTourId+'\')" style="cursor:pointer">View tour →</a></p></div>'):''}
+      ${isAccepted&&p.createdEventIds&&!p.createdTourId?('<div class="sec"><div class="sec-label">Created records</div><p style="font-size:13px;color:var(--txt2)">'+p.createdEventIds.length+' event'+(p.createdEventIds.length!==1?'s':'')+' created.</p></div>'):''}`;
     // Render tour costs if applicable
     if(p.kind==='tour') renderTourCosts(p);
   },
@@ -4462,19 +4461,17 @@ VIEWS.proposals={
     const sliderVal=_propSlider[sid]!==undefined?_propSlider[sid]:+s.ticketsEst||0;
     const f=proposalShowFigures(s,sliderVal);
     const tab=route.tab2||'overview';
-    a.innerHTML=`
-      ${!isAccepted?`<button class="btn sm" onclick="proposalEditShow('${pid}','${sid}')">Edit show</button>`:''}
-      <button class="btn sm" onclick="printShowProposal('${pid}','${sid}')">Print show</button>`;
+    a.innerHTML=(isAccepted?'':'<button class="btn sm" onclick="proposalEditShow(\''+pid+'\',\''+sid+'\')">Edit show</button> ')
+      +'<button class="btn sm" onclick="printShowProposal(\''+pid+'\',\''+sid+'\')">Print show</button>';
+    const _tabs=[['overview','Overview'],['projections','Projections']].map(([tb,lbl])=>
+      '<div class="tab '+(tab===tb?'active':'')+'" onclick="propShowTab(\''+pid+'\',\''+sid+'\',\''+tb+'\')">'+lbl+'</div>').join('');
     c.innerHTML=`
       <div class="detail-head">
         <span class="back" onclick="go('proposals','${pid}')">← ${esc(p.title)}</span>
         <span class="detail-title">${v?esc(v.name):'Show'}</span>
         <span class="badge gray">${esc(s.date||'Date TBD')}</span>
       </div>
-      <div class="tabs">
-        ${[['overview','Overview'],['projections','Projections']].map(([tb,lbl])=>
-          `<div class="tab ${tab===tb?'active':''}" onclick="propShowTab('${pid}','${sid}','${tb}')">${lbl}</div>`).join('')}
-      </div>
+      <div class="tabs">${_tabs}</div>
       <div id="prop-show-tab"></div>`;
     const host=document.getElementById('prop-show-tab');
     if(tab==='overview') propShowOverview(host,p,s,f,v,sliderVal);
@@ -4628,48 +4625,6 @@ function propShowProjections(host,p,s){
   else psRenderScenario(p.id,s._sid,tcps);
   psRenderScenarioTable(p.id,s._sid,tcps);
 }
-  const cap=+s.capacity||1;
-  const tiers=(s.tiers||[]).filter(t=>t.base>0);
-  const hasTiers=tiers.length>1;
-  const est=+s.ticketsEst||Math.round(cap*0.6);
-  const pb=priceBreakdown(propShowToFakeEvent(p,s).pricing);
-
-  const sliderHtml=hasTiers?`
-    <div class="sec-label" style="margin-top:24px">Ticket tiers — adjust counts</div>
-    <p class="muted" style="font-size:12px;margin-bottom:14px">Drag each tier to model attendance. Fixed tiers (VIP) can't be changed here.</p>
-    ${tiers.map((t,i)=>`<div style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="width:120px;font-size:12px;font-weight:500">${esc(t.name)}</span>
-        <span style="font-size:11px;color:var(--txt3)">${money0(t.base)} · ${+t.count||0} seats allocated${t.fixed?' · default '+t.count:''}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <input type="range" id="ps-tier-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
-          oninput="document.getElementById('ps-tn-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
-          style="flex:1">
-        <input type="number" id="ps-tn-${i}" min="0" max="${+t.count||0}" value="${+t.count||0}"
-          onchange="document.getElementById('ps-tier-${i}').value=this.value;psRenderScenarioTiers('${p.id}','${s._sid}')"
-          style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
-        <span style="font-size:11px;color:var(--txt3);width:55px;text-align:right" id="ps-tpct-${i}">${Math.round((+t.count||0)/cap*100)}%</span>
-      </div>
-    </div>`).join('')}
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px" id="ps-tier-total"></div>`
-  :`
-    <div class="sec-label" style="margin-top:24px">Ticket estimate</div>
-    <div class="row3" style="margin-bottom:6px">
-      <div class="field"><label>Est. tickets sold</label>
-        <input type="number" id="ps-sold" value="${est}" oninput="psUpdateWaterfall('${p.id}','${s._sid}')"></div>
-      <div class="field"><label>Gross override ($)</label>
-        <input type="number" id="ps-gross" value="${s.grossOverride||''}" placeholder="auto"
-          oninput="psUpdateWaterfall('${p.id}','${s._sid}')"></div>
-      <div class="field"><label>Capacity</label>
-        <input type="number" value="${cap}" disabled style="background:var(--surf2)"></div>
-    </div>
-    <p class="muted" style="font-size:12px;margin-bottom:18px">Leave override blank to auto-calculate from tickets × ${money(pb.total)}.</p>`;
-
-  host.innerHTML=`
-    <div class="sec-label">Expenses</div>
-    <div id="ps-expenses"></div>
-    <button class="btn sm" style="margin-top:8px" onclick="psAddExpense('${p.id}','${s._sid}')">+ Add expense</button>
 // Render waterfall with current tier slider values
 function psRenderScenarioTiers(pid,sid){
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
@@ -4686,7 +4641,7 @@ function psRenderScenarioTiers(pid,sid){
     return {...t,count};
   });
   const totalEl=document.getElementById('ps-tier-total');
-  if(totalEl) totalEl.innerHTML=`<strong>${totalSold}</strong> sold of ${cap} capacity (${Math.round(totalSold/cap*100)}% full)`;
+  if(totalEl) totalEl.innerHTML='<strong>'+totalSold+'</strong> sold of '+cap+' capacity ('+Math.round(totalSold/cap*100)+'% full)';
   // Build a fake show with updated tier counts
   const fakeS={...s,tiers:sliderTiers,ticketsEst:totalSold};
   const tcps=proposalTourCostPerShow(p);
@@ -4723,33 +4678,23 @@ function psRenderExpenses(p,s){
     host.innerHTML='<p class="muted" style="font-size:13px">No expenses yet. Add marketing, insurance, travel, etc.</p>';
     return;
   }
-  host.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
-      <span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span>
-    </div>
-    ${exps.map((x,i)=>{
-      const isProd=x.payer==='producer';
-      const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
-      const billsOut=isProd?(+x.amount||0)+markup:0;
-      return `<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">
-        <input type="text" value="${esc(x.desc||'')}" placeholder="e.g. Marketing"
-          oninput="psSetExp('${p.id}','${s._sid}',${i},'desc',this.value)"
-          style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <input type="number" value="${x.amount||0}"
-          oninput="psSetExp('${p.id}','${s._sid}',${i},'amount',this.value)"
-          style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-        <select onchange="psSetExp('${p.id}','${s._sid}',${i},'payer',this.value)"
-          style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-          ${EXPENSE_PAYERS.map(([v,l])=>`<option value="${v}" ${x.payer===v?'selected':''}>${l}</option>`).join('')}
-        </select>
-        <input type="number" value="${x.markupPct||0}" ${isProd?'':'disabled'}
-          oninput="psSetExp('${p.id}','${s._sid}',${i},'markupPct',this.value)"
-          style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
-        <span style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
-        <button class="btn ghost sm" style="padding:3px 6px"
-          onclick="psRemoveExp('${p.id}','${s._sid}',${i})">×</button>
-      </div>`;
-    }).join('')}`;
+  const hdr='<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px"><span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span></div>';
+  const rows=exps.map((x,i)=>{
+    const isProd=x.payer==='producer';
+    const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
+    const billsOut=isProd?(+x.amount||0)+markup:0;
+    const pid=p.id, sid=s._sid;
+    const opts=EXPENSE_PAYERS.map(([v,l])=>'<option value="'+v+'"'+(x.payer===v?' selected':'')+'>'+l+'</option>').join('');
+    return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
+      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Marketing" oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'desc\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(x.amount||0)+'" oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'amount\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'payer\',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
+      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'markupPct\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<span style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'\">'+(isProd?money0(billsOut):'—')+'</span>'
+      +'<button class="btn ghost sm" style="padding:3px 6px" onclick="psRemoveExp(\''+pid+'\',\''+sid+'\','+i+')">×</button>'
+      +'</div>';
+  }).join('');
+  host.innerHTML=hdr+rows;
 }
 
 function psAddExpense(pid,sid){
@@ -4854,7 +4799,7 @@ function psRenderScenarioTable(pid,sid,tcpsOverride){
     return {...t,count};
   });
   const totalEl=document.getElementById('ps-sc-total');
-  if(totalEl) totalEl.innerHTML=`<strong>${totalSold}</strong> sold of ${cap} capacity (${Math.round(totalSold/cap*100)}% full)`;
+  if(totalEl) totalEl.innerHTML='<strong>'+totalSold+'</strong> sold of '+cap+' capacity ('+Math.round(totalSold/cap*100)+'% full)';
   // Waterfall at current slider values
   const currS={...s,tiers:sliderTiers,ticketsEst:totalSold};
   const currF=proposalShowFigures(currS,null,tcps);
@@ -5164,7 +5109,7 @@ function printProposalDoc(id){
     const f=proposalShowFigures(s,null,tcps);
     const sc=s.showCosts||{};
     const tiers=(s.tiers||[]).filter(t=>t.base>0);
-    const tierStr=tiers.length>1?tiers.map(t=>`${esc(t.name)} ${m0(t.base)} (${t.count})`).join(', '):`${m0(s.ticketBase||0)}/ticket`;
+    const tierStr=tiers.length>1?tiers.map(t=>esc(t.name)+' '+m0(t.base)+' ('+t.count+')').join(', '):m0(s.ticketBase||0)+'/ticket';
     const costRows=[
       ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>trow(l.desc||'Crew',-((+l.hours||0)*(+l.rate||0)),false,'#a32d2d')),
       ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>trow(l.desc||'Equipment',-(+l.amount),false,'#a32d2d')),
@@ -5450,6 +5395,8 @@ SHOWS.forEach(function(_,i){updateShow(i);});
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
+
+function printShowProposal(pid,sid){
   const p=get(DB.proposals,pid); if(!p) return;
   const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
   const v=get(DB.venues,s.venueId);
@@ -6321,7 +6268,7 @@ function deleteContact(id){
   if(linked.length) warn+=`\n• attached to ${linked.length} event(s)`;
   if(isMgr.length) warn+=`\n• manager on ${isMgr.length} tour(s)`;
   if(isVenueContact.length) warn+=`\n• primary contact for ${isVenueContact.length} venue(s)`;
-  if(!confirm(`Delete contact "${ct.name}"?`+(warn?`\n\nStill linked:${warn}\n\nThe contact will be removed and these links cleared.`:''))) return;
+  if(!confirm('Delete contact "'+ct.name+'"?'+(warn?'\n\nStill linked:'+warn+'\n\nThe contact will be removed and these links cleared.':''))) return;
   logActivity('deleted','Contact',ct.name);
   DB.contacts=DB.contacts.filter(c=>c.id!==id);
   DB.events.forEach(e=>{['talentIds','vendorIds','crewIds'].forEach(k=>{ if(e[k]) e[k]=e[k].filter(x=>x!==id); });});
@@ -6342,7 +6289,7 @@ function deleteVenue(id){
 function deleteTour(id){
   const t=get(DB.tours,id); if(!t) return;
   const linked=DB.events.filter(e=>e.tourId===id);
-  if(!confirm(`Delete tour "${t.name}"?`+(linked.length?`\n\n${linked.length} event(s) will be unassigned from this tour (the events themselves stay).`:''))) return;
+  if(!confirm('Delete tour "'+t.name+'"?'+(linked.length?'\n\n'+linked.length+' event(s) will be unassigned from this tour (the events themselves stay).':''))) return;
   logActivity('deleted','Tour',t.name);
   DB.tours=DB.tours.filter(x=>x.id!==id);
   DB.events.forEach(e=>{ if(e.tourId===id) e.tourId=''; });
