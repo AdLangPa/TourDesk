@@ -696,7 +696,27 @@ function eventHasActuals(e){
   const sv=e.settlementV2; if(!sv) return false;
   return (+sv.venuePayout>0) || sv.settled;
 }
+// Sync salesTracker sold counts into projection.ticketsEst and pricing.tiers counts
+// so all financial calculations use the latest sales numbers
+function syncSalesTracker(e){
+  const st=e.projection?.salesTracker;
+  if(!st || !Object.keys(st.tierSold||{}).length) return;
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  const hasTiers=tiers.length>1;
+  const totalSold=hasTiers
+    ? tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0),0)
+    : (+st.tierSold[0]||0);
+  if(totalSold>0){
+    e.projection.ticketsEst=totalSold;
+    // Also sync individual tier counts so projectionFigures uses them
+    if(hasTiers){
+      tiers.forEach((t,i)=>{ e.pricing.tiers[i].count=+st.tierSold[i]||0; });
+    }
+  }
+}
+
 function eventBest(e){
+  syncSalesTracker(e);
   if(eventHasActuals(e)){
     const f=settlementV2Figures(e);
     const commission=f.payout*(f.mgmtPct/100);
@@ -1183,7 +1203,7 @@ function venueForm(id, prefill){
     </div>
     <div class="row3">
       <div class="field"><label>City</label><input id="vf-city" value="${esc(v.city||'')}"></div>
-      <div class="field"><label>Province / State</label><input id="vf-prov" value="${esc(v.province||'')}"></div>
+      <div class="field"><label>Province / State</label><input id="vf-prov" value="${esc(v.province||'')}" onblur="vfAutoTaxRate()"></div>
       <div class="field"><label>Country</label><input id="vf-country" value="${esc(v.country||'Canada')}"></div>
       <div class="field"><label>Capacity</label><input id="vf-cap" type="number" value="${v.capacity||''}"></div>
     </div>
@@ -1698,13 +1718,31 @@ function venueFormFromExtracted(d, filename){
 // Infer Canadian tax rate from province abbreviation or name
 function inferProvinceTaxRate(province){
   const p=(province||'').toUpperCase().trim();
-  // HST provinces
-  if(['ON','ONTARIO'].includes(p)) return 13;
-  if(['NB','NEW BRUNSWICK','NL','NEWFOUNDLAND','NS','NOVA SCOTIA','LABRADOR'].some(x=>p.includes(x))) return 15;
-  if(['PE','PEI','PRINCE EDWARD ISLAND'].some(x=>p.includes(x))) return 15;
-  // GST only (5%)
-  if(['AB','ALBERTA','BC','BRITISH COLUMBIA','MB','MANITOBA','SK','SASKATCHEWAN','QC','QUEBEC','YT','YUKON','NT','NORTHWEST','NU','NUNAVUT'].some(x=>p.includes(x))) return 5;
-  return 13; // default Ontario HST
+  // HST provinces (single harmonized tax)
+  if(p==='ON'||p==='ONTARIO') return 13;
+  if(p==='NB'||p.includes('NEW BRUNSWICK')) return 15;
+  if(p==='NL'||p.includes('NEWFOUNDLAND')||p.includes('LABRADOR')) return 15;
+  if(p==='NS'||p.includes('NOVA SCOTIA')) return 15;
+  if(p==='PE'||p==='PEI'||p.includes('PRINCE EDWARD')) return 15;
+  // GST + PST/QST provinces
+  if(p==='BC'||p.includes('BRITISH COLUMBIA')) return 12;  // 5% GST + 7% PST
+  if(p==='MB'||p==='MANITOBA') return 12;                  // 5% GST + 7% RST
+  if(p==='SK'||p==='SASKATCHEWAN') return 11;              // 5% GST + 6% PST
+  if(p==='QC'||p==='QUEBEC'||p==='QUÉBEC') return 15;     // 5% GST + 9.975% QST ≈ 15%
+  // GST only
+  if(p==='AB'||p==='ALBERTA') return 5;
+  if(p==='YT'||p==='YUKON') return 5;
+  if(p==='NT'||p.includes('NORTHWEST')) return 5;
+  if(p==='NU'||p==='NUNAVUT') return 5;
+  return 5; // default GST only for unknown provinces
+}
+
+function vfAutoTaxRate(){
+  const prov=document.getElementById('vf-prov')?.value||'';
+  if(!prov) return;
+  const rate=inferProvinceTaxRate(prov);
+  const taxEl=document.getElementById('vf-taxrate');
+  if(taxEl) taxEl.value=rate;
 }
 
 // Repair truncated or malformed JSON from AI responses
@@ -1764,7 +1802,7 @@ VIEWS.tours={
   },
   detail(c,a,id){
     const t=get(DB.tours,id); if(!t){go('tours');return;}
-    const evts=DB.events.filter(e=>e.tourId===id);
+    const evts=DB.events.filter(e=>e.tourId===id).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
     const {firm,routing}=splitTotals(evts);
     a.innerHTML=canDo('admin')
       ? '<button class="btn sm" onclick="tourFormEdit(\''+id+'\')">' + 'Edit</button>'
@@ -2190,13 +2228,7 @@ function eventOverview(host,e,v,t){
   e.projection = e.projection || {ticketsEst: defaultEstimate(e), expenses:[]};
   e.settlementV2 = e.settlementV2 || {venuePayout:'', depositCredits:[], expenses:[], settled:false, notes:''};
   // Sync ticketsEst from salesTracker so overview reflects current sold counts
-  const _st=e.projection.salesTracker;
-  if(_st && Object.keys(_st.tierSold||{}).length){
-    const _tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
-    const _hasTiers=_tiers.length>1;
-    const _totalSold=_hasTiers?_tiers.reduce((s,t,i)=>s+(+_st.tierSold[i]||0),0):(+_st.tierSold[0]||0);
-    if(_totalSold>0) e.projection.ticketsEst=_totalSold;
-  }
+  syncSalesTracker(e);
   const pf=projectionFigures(e);
   const sf=settlementV2Figures(e);
   const hasActuals = (+e.settlementV2.venuePayout>0) || e.settlementV2.settled;
