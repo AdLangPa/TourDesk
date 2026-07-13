@@ -1860,8 +1860,8 @@ function proposalShowFromVenue(venueId, ticketBase, proposal){
   // Apply tour-level tiers if proposal has them
   const tiers=proposal?.tourTiers?.length ? applyTourTiers(proposal.tourTiers,capacity) : [];
 
-  // Apply per-show expenses from proposal
-  const perShowExps=(proposal?.perShowExpenses||[]).map(x=>({...x}));
+  // Apply per-show expenses from proposal — tagged so they can be updated later
+  const perShowExps=(proposal?.perShowExpenses||[]).map(x=>({...x,_perShow:true}));
   // Auto-add VIP merch expense if tour has merch cost set
   if(proposal?.vipMerchCost>0){
     const vipTier=tiers.find(t=>t.fixed);
@@ -4681,7 +4681,7 @@ function psRenderScenarioTiers(pid,sid){
   // Render waterfall
   const wf=document.getElementById('ps-sc-waterfall')||document.getElementById('ps-waterfall');
   const sm=document.getElementById('ps-summary');
-  if(wf) psRenderWaterfallFromFigures(f,wf,sm,fakeS.expenses||[]);
+  if(wf) psRenderWaterfallFromFigures(f,wf,sm,fakeS.expenses||[],tcps);
 }
 
 function propShowToFakeEvent(p,s){
@@ -4770,7 +4770,7 @@ function psSaveSettlement(pid,sid){
   const btn=document.querySelector('#prop-show-tab .btn.primary.sm');
   if(btn){const orig=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=orig,1500);}
 }
-function psRenderWaterfallFromFigures(f,wf,sm,expenses){
+function psRenderWaterfallFromFigures(f,wf,sm,expenses,tcps){
   if(!wf) return;
   const max=Math.max(f.payout,f.grossBoxOffice,1);
   const bar=(label,val,color,bold)=>{
@@ -4783,8 +4783,11 @@ function psRenderWaterfallFromFigures(f,wf,sm,expenses){
   };
   const tierRows=(f.tierLines&&f.tierLines.length>1)?f.tierLines.map(t=>
     bar(esc(t.name)+' ('+t.count+'×'+money0(t.base)+')',t.base*t.count,'#85b7eb',false)):[];
-  const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist'&&+x.amount>0)
+  // Show stored artist expenses (excluding tour costs — those shown separately)
+  const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist'&&+x.amount>0&&!x._tourCostLine)
     .map(x=>bar('Less: '+esc(x.desc||'expense'),-(+x.amount),'#c98a3f',false));
+  // Tour-wide cost line (pro-rated share)
+  const tourCostRow=tcps>0?[bar('Less: tour costs (pro-rated)',-(+tcps),'#c98a3f',false)]:[];
   const rows=[
     bar('Gross box office',f.grossBoxOffice,'var(--blue)',true),
     ...(tierRows.length?tierRows:[bar('Base ticket revenue',f.baseRevenue,'#85b7eb',false)]),
@@ -4793,7 +4796,8 @@ function psRenderWaterfallFromFigures(f,wf,sm,expenses){
     '<div style="height:6px"></div>',
     bar('Artist gross',f.artistGross,'#97c459',true),
     ...artistExpRows,
-    ...(artistExpRows.length?[bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true)]:[])
+    ...tourCostRow,
+    ...((artistExpRows.length||tourCostRow.length)?[bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true)]:[])
   ].join('');
   wf.innerHTML=`<div style="max-width:650px">${rows}</div>`;
   if(sm) sm.innerHTML=`<div class="stats">
@@ -4810,7 +4814,7 @@ function psRenderWaterfall(p,s){
   psRenderWaterfallFromFigures(f,
     document.getElementById('ps-waterfall'),
     document.getElementById('ps-summary'),
-    s.expenses||[]);
+    s.expenses||[], tcps);
 }
 
 // Tier-aware scenario table for proposals
@@ -4835,7 +4839,7 @@ function psRenderScenarioTable(pid,sid,tcpsOverride){
   // Waterfall at current slider values
   const currS={...s,tiers:sliderTiers,ticketsEst:totalSold};
   const currF=proposalShowFigures(currS,null,tcps);
-  psRenderWaterfallFromFigures(currF,document.getElementById('ps-sc-waterfall'),null,s.expenses||[]);
+  psRenderWaterfallFromFigures(currF,document.getElementById('ps-sc-waterfall'),null,s.expenses||[],tcps);
   // Scenarios table at 10% increments
   const pcts=[10,25,40,50,60,70,80,90,100];
   const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
