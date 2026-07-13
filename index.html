@@ -3819,7 +3819,7 @@ function saveEvent(id){
     projection:{ticketsEst:(()=>{
       const tiers=efReadTiers();
       return tiers.reduce((t,r)=>t+(+r.count||0),0)||fvn('ef-pre')||0;
-    })(), expenses:(e.projection||{}).expenses||[]},
+    })(), expenses:(id?get(DB.events,id)?.projection?.expenses:[]) || []},
     terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
     showCosts:readShowCosts(),
     depositAmount:fvn('ef-deposit-amt'),
