@@ -4437,7 +4437,7 @@ VIEWS.proposals={
   detail(c,a,id){
     const p=get(DB.proposals,id); if(!p){go('proposals');return;}
     const artist=p.artistId?get(DB.artists,p.artistId):null;
-    const shows=p.shows||[];
+    const shows=(p.shows||[]).slice().sort((a,b)=>(!a.date&&!b.date?0:!a.date?1:!b.date?-1:a.date<b.date?-1:a.date>b.date?1:0));
     let totGross=0,totComm=0,totArtist=0;
     const tcps=proposalTourCostPerShow(p);
     shows.forEach(s=>{const f=proposalShowFigures(s,undefined,tcps);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;});
