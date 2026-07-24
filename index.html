@@ -696,10 +696,26 @@ function projectionFigures(ev, ticketsOverride){
     netBoxOffice:baseRevenue, venueDeductions:showCostTotal+dealVenueTotal};
 }
 
+// Binary search for the smallest ticket count where a monotonically non-decreasing
+// financial function crosses zero (breakeven). Used instead of a linear O(capacity)
+// scan since that was running on every single slider drag event and could involve
+// hundreds to thousands of full financial recalculations per gesture — severe lag
+// on larger venues. fn(n) must be monotonically non-decreasing in n.
+function _binarySearchBreakeven(cap, fn){
+  if(cap<=0) return fn(0)>=0?0:null;
+  if(fn(0)>=0) return 0;
+  if(fn(cap)<0) return null;
+  let lo=0, hi=cap;
+  while(lo<hi){
+    const mid=Math.floor((lo+hi)/2);
+    if(fn(mid)>=0) hi=mid; else lo=mid+1;
+  }
+  return lo;
+}
+
 function projectionBreakeven(ev){
   const cap=+ev.capacityAlloc||1;
-  for(let i=0;i<=cap;i++){ if(projectionFigures(ev,i).artistNet>=0) return i; }
-  return null;
+  return _binarySearchBreakeven(cap, i=>projectionFigures(ev,i).artistNet);
 }
 
 function eventHasActuals(e){
@@ -2963,13 +2979,11 @@ function renderScenario(id){
   if(hasTiers){
     // Scale tier counts proportionally for each fill %
     const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
-    let be=null;
-    for(let fill=0;fill<=cap;fill++){
+    const be=_binarySearchBreakeven(cap, fill=>{
       const scale=fill/baseTotals;
       const scaledTiers=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
-      const fm=projectionFigures({...e,pricing:{...e.pricing,tiers:scaledTiers},projection:{ticketsEst:fill,expenses:projExps}},null);
-      if(fm.artistNet>=0&&be===null) be=fill;
-    }
+      return projectionFigures({...e,pricing:{...e.pricing,tiers:scaledTiers},projection:{ticketsEst:fill,expenses:projExps}},null).artistNet;
+    });
     tbl.innerHTML=`<table class="tbl"><thead><tr>
       <th>Fill</th>${tiers.map(t=>`<th class="num">${esc(t.name)}</th>`).join('')}
       <th class="num">Total</th><th class="num">Gross</th>
@@ -5061,13 +5075,12 @@ function psRenderScenarioTable(pid,sid,tcpsOverride){
   // Scenarios table at fixed capacity fill % (independent of slider position)
   const pcts=[10,25,40,50,60,70,80,90,100];
   const baseTotals=tiers.reduce((sum,t)=>sum+(+t.count||0),0)||1;
-  let be=null;
-  for(let fill=0;fill<=cap;fill++){
+  const be=_binarySearchBreakeven(cap, fill=>{
     const scale=fill/baseTotals;
     const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
     const testShow=tiers.length>1?{...s,tiers:sc,ticketsEst:fill}:{...s,ticketsEst:fill};
-    if(proposalShowFigures(testShow,tiers.length>1?null:fill,tcps).artistNet>=0&&be===null) be=fill;
-  }
+    return proposalShowFigures(testShow,tiers.length>1?null:fill,tcps).artistNet;
+  });
   if(tiers.length>1){
     tbl.innerHTML=`<table class="tbl"><thead><tr>
       <th>Fill</th>${tiers.map(t=>`<th class="num">${esc(t.name)}</th>`).join('')}
@@ -5131,12 +5144,11 @@ function psRenderScenario(pid,sid,tcpsOverride){
     <div class="stat"><div class="stat-val">${money0(f.payout)}</div><div class="stat-lbl">Venue payout</div></div>
   </div>`;
   const pcts=[10,25,40,50,60,70,80,90,100];
-  // Breakeven
-  let be=null;
-  for(let i=0;i<=cap;i++){ if(proposalShowFigures(s,i,tcps).artistNet>=0){be=i;break;} }
-  const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
   const tbl=document.getElementById('ps-sc-table');
-  if(tbl) tbl.innerHTML=`<table class="tbl"><thead><tr>
+  if(tbl){
+    const be=_binarySearchBreakeven(cap, i=>proposalShowFigures(s,i,tcps).artistNet);
+    const beStep=be!=null?pcts.find(p=>Math.round(cap*p/100)>=be):null;
+    tbl.innerHTML=`<table class="tbl"><thead><tr>
     <th>Tickets</th><th class="num">% cap</th><th class="num">Gross</th>
     <th class="num">Venue payout</th><th class="num">Commission</th>
     <th class="num">Artist gross</th><th class="num">Artist net</th></tr></thead><tbody>
@@ -5154,6 +5166,7 @@ function psRenderScenario(pid,sid,tcpsOverride){
       </tr>`;
     }).join('')}</tbody></table>
     ${be!=null?`<p class="muted" style="font-size:12px;margin-top:8px">Breakeven at ${be} tickets (${Math.round(be/cap*100)}% capacity).</p>`:''}`;
+  }
 }
 
 
