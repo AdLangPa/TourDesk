@@ -1997,13 +1997,14 @@ VIEWS.events={
         <span class="detail-title">${esc(e.name)}</span>
         <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span></div>
       <div class="tabs">
-        ${[['overview','Overview'],['projections','Projections'],['settlement','Settlement'],['logistics','Logistics'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
+        ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}',null,'${refProp||''}')">${lbl}</div>`).join('')}
       </div>
       <div id="ev-tab"></div>`;
     const host=document.getElementById('ev-tab');
     if(tab==='overview') eventOverview(host,e,v,t);
     else if(tab==='projections') eventProjections(host,e);
+    else if(tab==='expenses') eventExpenses(host,e);
     else if(tab==='settlement') eventSettlementV2(host,e);
     else if(tab==='logistics') eventLogistics(host,e,v);
     else if(tab==='people') eventPeople(host,e);
@@ -2452,6 +2453,7 @@ function recalcEvent(id){
 }
 
 function renderProjWaterfall(host,f,expenses){
+  if(!host) return;
   const max=Math.max(f.grossBoxOffice,f.payout,1);
   const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist').map(x=>(
     {label:'Less: '+(x.desc||'artist expense'),val:-(+x.amount||0),c:'#c98a3f'}
@@ -2709,12 +2711,13 @@ function eventProjections(host,e){
 
   host.innerHTML=`
     <div class="sec-label">Live ticket sales</div>
-    <p class="muted" style="font-size:12px;margin-bottom:14px">Update sold counts as the venue reports in. Changes save automatically.${st.lastUpdated?` Last updated: ${new Date(st.lastUpdated).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:''}</p>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Update sold counts as the venue reports in, then click Confirm to log a dated snapshot for tracking sales velocity over time.${st.lastUpdated?` Last updated: ${new Date(st.lastUpdated).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`:''}</p>
     ${tierTrackerRows}
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px;margin-bottom:8px">
       <label style="font-size:12px;color:var(--txt2)">Comps:</label>
       <input type="number" id="st-comps" min="0" value="${+st.comps||0}" onchange="updateComps('${e.id}',this.value)"
         style="width:70px;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:13px;text-align:right">
+      <button class="btn primary sm" style="margin-left:auto" onclick="confirmSalesSnapshot('${e.id}')">✓ Confirm today's numbers</button>
     </div>
     <div class="stats" style="margin-top:12px;margin-bottom:4px">
       <div class="stat"><div class="stat-val">${totalSold}</div><div class="stat-lbl">Sold</div></div>
@@ -2725,13 +2728,10 @@ function eventProjections(host,e){
 
     <div class="divider" style="margin:20px 0"></div>
 
-    <div class="sec-label">Expenses</div>
-    <div id="pr-expenses"></div>
-    <button class="btn sm" style="margin-top:8px" onclick="addProjExpense('${e.id}')">+ Add expense</button>
-    ${exps.length?`<div class="stats" style="margin-top:12px">
-      <div class="stat"><div class="stat-val neg">${money0(prodTotal)}</div><div class="stat-lbl">Producer committed</div></div>
-      <div class="stat"><div class="stat-val neg">${money0(artistTotal)}</div><div class="stat-lbl">Artist committed</div></div>
-    </div>`:''}
+    <div class="sec-label">Sales history</div>
+    <div id="sh-controls" style="margin-bottom:12px"></div>
+    <div id="sh-chart" style="margin-bottom:16px"></div>
+    <div id="sh-table" style="overflow-x:auto"></div>
 
     <div class="divider" style="margin:20px 0"></div>
 
@@ -2740,8 +2740,27 @@ function eventProjections(host,e){
     <div style="overflow-x:auto;margin-top:18px"><div id="sc-table"></div></div>
     <div style="margin-top:18px"><button class="btn primary sm" onclick="saveProjection('${e.id}')">Save</button></div>`;
 
-  renderProjExpenses(e);
   renderScenario(e.id);
+  renderSalesHistory(e.id);
+}
+
+function eventExpenses(host,e){
+  e.projection = e.projection || {ticketsEst:0, expenses:[]};
+  const exps=e.projection.expenses||[];
+  const prodExps=exps.filter(x=>x.payer==='producer');
+  const artistExps=exps.filter(x=>x.payer==='artist');
+  const prodTotal=prodExps.reduce((s,x)=>s+((+x.amount||0)*(1+(+x.markupPct||0)/100)),0);
+  const artistTotal=artistExps.reduce((s,x)=>s+(+x.amount||0),0);
+  host.innerHTML=`
+    <div class="sec-label">Expenses</div>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Producer-fronted costs bill back to the artist with an optional markup; artist-direct costs are tracked for reference and reduce artist net.</p>
+    <div id="pr-expenses"></div>
+    <button class="btn sm" style="margin-top:8px" onclick="addProjExpense('${e.id}')">+ Add expense</button>
+    ${exps.length?`<div class="stats" style="margin-top:16px">
+      <div class="stat"><div class="stat-val neg">${money0(prodTotal)}</div><div class="stat-lbl">Producer committed (bills to artist)</div></div>
+      <div class="stat"><div class="stat-val neg">${money0(artistTotal)}</div><div class="stat-lbl">Artist committed (direct)</div></div>
+    </div>`:''}`;
+  renderProjExpenses(e);
 }
 
 function updateTierSold(id,tierIndex,val){
@@ -2794,6 +2813,105 @@ function _refreshTrackerTotals(e){
     if(divs[2]){divs[2].querySelector('.stat-val').textContent=remaining;divs[2].querySelector('.stat-val').className='stat-val'+(remaining<0?' neg':'');}
     if(divs[3]) divs[3].querySelector('.stat-val').textContent=money0(totalRevenue);
   }
+}
+
+// ─── Live ticket sales history — confirm a dated snapshot, view by day/week/month ───
+function confirmSalesSnapshot(id){
+  const e=get(DB.events,id);
+  const st=e.projection.salesTracker=e.projection.salesTracker||{tierSold:{},comps:0,history:[]};
+  st.history=st.history||[];
+  const tiers=(e.pricing?.tiers||[]).filter(t=>t.name&&t.base>0);
+  const hasTiers=tiers.length>1;
+  const totalSold=hasTiers?tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0),0):(+st.tierSold[0]||0);
+  const totalRevenue=hasTiers?tiers.reduce((s,t,i)=>s+(+st.tierSold[i]||0)*(+t.base||0),0):(+st.tierSold[0]||0)*(+e.pricing?.base||0);
+  const today=new Date().toISOString().slice(0,10);
+  // Upsert today's entry — confirming again the same day updates it rather than duplicating
+  const existingIdx=st.history.findIndex(h=>h.date===today);
+  const entry={date:today,tierSold:{...st.tierSold},comps:+st.comps||0,totalSold,totalRevenue};
+  if(existingIdx>=0) st.history[existingIdx]=entry;
+  else st.history.push(entry);
+  st.history.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  persist();
+  renderSalesHistory(id);
+  const btn=[...document.querySelectorAll('#ev-tab .btn.primary.sm')].find(b=>b.textContent.includes('Confirm'));
+  if(btn){const o=btn.textContent;btn.textContent='✓ Confirmed';setTimeout(()=>{btn.textContent=o;},1500);}
+}
+
+let _shGrouping={};
+function setSalesHistoryGrouping(id,mode){ _shGrouping[id]=mode; renderSalesHistory(id); }
+
+// Group raw daily snapshots into day/week/month buckets.
+// Uses the LATEST snapshot within each bucket (cumulative sold-to-date), not a sum,
+// since tierSold values are running totals, not per-period deltas.
+function _groupSalesHistory(history,mode){
+  if(!history.length) return [];
+  if(mode==='day') return history.map(h=>({label:h.date.slice(5),date:h.date,sold:h.totalSold,revenue:h.totalRevenue}));
+  const buckets={};
+  history.forEach(h=>{
+    const d=new Date(h.date+'T00:00:00');
+    let key,label;
+    if(mode==='week'){
+      const weekStart=new Date(d); weekStart.setDate(d.getDate()-d.getDay());
+      key=weekStart.toISOString().slice(0,10);
+      label='Wk of '+key.slice(5);
+    } else { // month
+      key=h.date.slice(0,7);
+      label=new Date(h.date+'T00:00:00').toLocaleDateString('en-CA',{month:'short',year:'2-digit'});
+    }
+    // Keep the latest snapshot in each bucket (cumulative totals as of period end)
+    if(!buckets[key]||h.date>buckets[key].date) buckets[key]={date:h.date,label,sold:h.totalSold,revenue:h.totalRevenue};
+  });
+  return Object.keys(buckets).sort().map(k=>buckets[k]);
+}
+
+function renderSalesHistory(id){
+  const e=get(DB.events,id);
+  const history=e.projection?.salesTracker?.history||[];
+  const controlsHost=document.getElementById('sh-controls');
+  const chartHost=document.getElementById('sh-chart');
+  const tableHost=document.getElementById('sh-table');
+  if(!controlsHost) return;
+  if(!history.length){
+    controlsHost.innerHTML='';
+    chartHost.innerHTML='';
+    tableHost.innerHTML='<p class="muted" style="font-size:13px">No confirmed snapshots yet. Click "Confirm today\'s numbers" above to start tracking sales velocity over time.</p>';
+    return;
+  }
+  const mode=_shGrouping[id]||'day';
+  controlsHost.innerHTML=`<div style="display:flex;gap:6px">
+    ${['day','week','month'].map(m=>`<button class="btn sm ${mode===m?'primary':''}" onclick="setSalesHistoryGrouping('${id}','${m}')">${m[0].toUpperCase()+m.slice(1)}</button>`).join('')}
+  </div>`;
+  const points=_groupSalesHistory(history,mode);
+  // Inline SVG bar chart — sold tickets per period
+  const W=Math.max(360,points.length*56), H=140, padL=36, padB=24, padT=10;
+  const maxV=Math.max(...points.map(p=>p.sold),1);
+  const barW=Math.min(40,(W-padL-10)/points.length-8);
+  const bars=points.map((p,i)=>{
+    const x=padL+i*((W-padL-10)/points.length)+4;
+    const h=Math.round((p.sold/maxV)*(H-padT-padB));
+    const y=H-padB-h;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="var(--blue)"/>
+      <text x="${x+barW/2}" y="${y-4}" font-size="10" text-anchor="middle" fill="var(--txt2)">${p.sold}</text>
+      <text x="${x+barW/2}" y="${H-8}" font-size="9" text-anchor="middle" fill="var(--txt3)">${esc(p.label)}</text>`;
+  }).join('');
+  chartHost.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:${H}px">
+    <line x1="${padL}" y1="${H-padB}" x2="${W-6}" y2="${H-padB}" stroke="var(--bord2)"/>
+    ${bars}
+  </svg>`;
+  // Table (most recent first) with day-over-day / period-over-period delta
+  const rows=points.slice().reverse().map((p,i)=>{
+    const prev=points[points.length-1-i-1];
+    const delta=prev?p.sold-prev.sold:null;
+    return `<tr>
+      <td>${esc(p.label)}</td>
+      <td class="num">${p.sold}</td>
+      <td class="num">${money0(p.revenue)}</td>
+      <td class="num ${delta>0?'pos':delta<0?'neg':''}">${delta==null?'—':(delta>0?'+':'')+delta}</td>
+    </tr>`;
+  }).join('');
+  tableHost.innerHTML=`<table class="tbl"><thead><tr>
+    <th>${mode==='day'?'Date':mode==='week'?'Week':'Month'}</th><th class="num">Sold (cum.)</th><th class="num">Revenue</th><th class="num">Δ vs prior</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderScenario(id){
@@ -3114,8 +3232,8 @@ function renderSettlementV2Waterfall(e){
     const w=Math.max(2,Math.min(100,Math.round(Math.abs(val)/max*100)));
     return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0${bold?';font-weight:600;color:var(--txt)':''}">${label}</div>
-      <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
-      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':val>0&&color==='var(--green)'?'var(--green)':'var(--txt)'}">${val<0?'−':val>0&&(label.includes('reimburse')||label.includes('Plus'))?'+':''}${money0(Math.abs(val))}</div>
+      <div style="flex:1;height:20px;background:var(--surf2);border-radius:3px;overflow:hidden${bold?';outline:2px solid var(--bord2)':''}"><div style="height:100%;width:${w}%;background:${color};min-width:2px"></div></div>
+      <div style="width:90px;flex-shrink:0;text-align:right;font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':val>0&&color==='var(--green)'?'var(--green)':'var(--txt)'}">${val<0?'−':val>0&&(label.includes('reimburse')||label.includes('Plus'))?'+':''}${money0(Math.abs(val))}</div>
     </div>`;
   };
   const depositLines=f.deposits.filter(d=>+d.amount>0).map(d=>{
@@ -3250,21 +3368,44 @@ function eventPeople(host,e){
   };
   host.innerHTML=grp(e.talentIds,'Talent','talentIds')+grp(e.vendorIds,'Vendors','vendorIds')+grp(e.crewIds,'Crew','crewIds');
 }
+const ASSIGN_ROLE_MAP={
+  talentIds:['Talent'],
+  vendorIds:['Vendor','Sound','Lighting','Transport','Hospitality'],
+  crewIds:['Crew']
+};
 function assignPeople(eid,field){
   const e=get(DB.events,eid);
-  const sel=e[field]||[];
+  const roleLabel=field==='talentIds'?'Talent':field==='vendorIds'?'Vendor-type':'Crew';
   const body=`<p class="muted" style="font-size:12px;margin-bottom:12px">Select contacts to attach to this event.</p>
-    ${DB.contacts.map(c=>`<label style="display:flex;align-items:center;gap:9px;padding:8px;border-bottom:1px solid var(--bord);cursor:pointer">
-      <input type="checkbox" value="${c.id}" ${sel.includes(c.id)?'checked':''} style="width:auto">
-      <span><strong style="font-weight:500">${esc(c.name)}</strong> <span class="muted">${esc(c.role)}${c.company?' · '+esc(c.company):''}</span></span></label>`).join('')}
+    <div id="assign-list">${assignRenderFiltered(eid,field)}</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--txt2);cursor:pointer">
+      <input type="checkbox" id="assign-show-all" style="width:auto" onchange="document.getElementById('assign-list').innerHTML=this.checked?assignRenderAll('${eid}','${field}'):assignRenderFiltered('${eid}','${field}')">
+      Show all contacts (not just ${roleLabel.toLowerCase()})
+    </label>
     <button class="btn sm" style="margin-top:12px" onclick="closeModal();contactForm()">+ New contact</button>`;
-  openModal('Assign people',body,
+  openModal('Assign '+roleLabel.toLowerCase(),body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveAssign('${eid}','${field}')">Save</button>`);
 }
+function assignRenderFiltered(eid,field){
+  const e=get(DB.events,eid); const sel=e[field]||[];
+  const relevantRoles=ASSIGN_ROLE_MAP[field]||[];
+  const roleLabel=field==='talentIds'?'Talent':field==='vendorIds'?'Vendor-type':'Crew';
+  const list=DB.contacts.filter(c=>relevantRoles.includes(c.role));
+  return list.length?list.map(c=>`<label style="display:flex;align-items:center;gap:9px;padding:8px;border-bottom:1px solid var(--bord);cursor:pointer">
+    <input type="checkbox" value="${c.id}" ${sel.includes(c.id)?'checked':''} style="width:auto">
+    <span><strong style="font-weight:500">${esc(c.name)}</strong> <span class="muted">${esc(c.role)}${c.company?' · '+esc(c.company):''}</span></span></label>`).join('')
+    :'<p class="muted" style="font-size:13px;padding:8px 0">No contacts with a '+roleLabel+' role yet. Check "Show all contacts" below, or add one.</p>';
+}
+function assignRenderAll(eid,field){
+  const e=get(DB.events,eid); const sel=e[field]||[];
+  return DB.contacts.map(c=>`<label style="display:flex;align-items:center;gap:9px;padding:8px;border-bottom:1px solid var(--bord);cursor:pointer">
+    <input type="checkbox" value="${c.id}" ${sel.includes(c.id)?'checked':''} style="width:auto">
+    <span><strong style="font-weight:500">${esc(c.name)}</strong> <span class="muted">${esc(c.role)}${c.company?' · '+esc(c.company):''}</span></span></label>`).join('');
+}
 function saveAssign(eid,field){
   const e=get(DB.events,eid);
-  e[field]=[...document.querySelectorAll('.modal-body input:checked')].map(i=>i.value);
+  e[field]=[...document.querySelectorAll('.modal-body input[type=checkbox]:checked')].filter(i=>i.id!=='assign-show-all').map(i=>i.value);
   persist();closeModal();render();
 }
 
@@ -4481,7 +4622,7 @@ VIEWS.proposals={
       ${isAdmin&&!isAccepted?`<button class="btn primary" onclick="acceptProposal('${id}')">✓ Accept</button>`:''}
       ${!isAdmin&&isOwner&&!isAccepted?`<button class="btn ${isReady?'':'primary'} sm" onclick="markProposalReady('${id}')">${isReady?'✓ Ready for review':'Mark ready for review'}</button>`:''}
       ${(isAdmin||isOwner)&&!isAccepted?`<button class="btn sm danger" onclick="deleteProposal('${id}')">Delete</button>`:''}`;
-    const _tabs=[['overview','Overview'],['projections','Projections']].map(([tb,lbl])=>
+    const _tabs=[['overview','Overview'],['projections','Projections'],['expenses','Expenses']].map(([tb,lbl])=>
       '<div class="tab '+(tab===tb?'active':'')+'" onclick="proposalMainTab(\''+id+'\',\''+tb+'\')">'+lbl+'</div>').join('');
     c.innerHTML=`
       <div class="detail-head">
@@ -4500,6 +4641,8 @@ VIEWS.proposals={
     const host=document.getElementById('prop-main-tab');
     if(tab==='projections'){
       proposalTourProjections(host,p,shows,tcps);
+    } else if(tab==='expenses'){
+      proposalExpensesTab(host,p,shows,isAccepted);
     } else {
       host.innerHTML=`
       <div class="sec"><div class="sec-label">Info</div>
@@ -4516,11 +4659,8 @@ VIEWS.proposals={
       <div class="sec"><div class="sec-label">Shows — click a row for full detail</div>
         ${shows.length?proposalShowsTable(p,shows,isAccepted):'<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> to build the show list.</p>'}
       </div>
-      ${p.kind==='tour'?('<div class="sec"><div class="sec-label">Tour-level costs</div><p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, transport, accommodation — divided by number of shows.</p><div id="prop-tour-costs"></div>'+(isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="addTourCost(\''+id+'\')" >+ Add tour cost</button>')+'</div>'):''}
       ${isAccepted&&p.createdTourId?('<div class="sec"><div class="sec-label">Created records</div><p style="font-size:13px;color:var(--txt2)">Accepted and converted. <a onclick="go(\'tours\',\''+p.createdTourId+'\')" style="cursor:pointer">View tour →</a></p></div>'):''}
       ${isAccepted&&p.createdEventIds&&!p.createdTourId?('<div class="sec"><div class="sec-label">Created records</div><p style="font-size:13px;color:var(--txt2)">'+p.createdEventIds.length+' event'+(p.createdEventIds.length!==1?'s':'')+' created.</p></div>'):''}`;
-      // Render tour costs if applicable
-      if(p.kind==='tour') renderTourCosts(p);
     }
   },
   showDetail(c,a,pid,sid){
@@ -4574,11 +4714,11 @@ function propShowOverview(host,p,s,f,v,sliderVal){
   const max=Math.max(f.grossBoxOffice,f.baseRevenue,Math.abs(f.payout),1);
   const bar=(label,val,color,bold)=>{
     if(val===null) return `<div style="height:8px"></div>`;
-    const w=Math.max(2,Math.round(Math.abs(val)/max*100));
+    const w=Math.max(2,Math.min(100,Math.round(Math.abs(val)/max*100)));
     return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <div style="width:180px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0">${label}</div>
-      <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
-      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}\$${Math.abs(val).toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+      <div style="flex:1;height:20px;background:var(--surf2);border-radius:3px;overflow:hidden${bold?';outline:2px solid var(--bord2)':''}"><div style="height:100%;width:${w}%;background:${color};min-width:2px"></div></div>
+      <div style="width:90px;flex-shrink:0;text-align:right;font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}\$${Math.abs(val).toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
     </div>`;
   };
   const rows=[
@@ -4751,7 +4891,10 @@ function propShowToFakeEvent(p,s){
 }
 
 function psRenderExpenses(p,s){
-  const host=document.getElementById('ps-expenses'); if(!host) return;
+  // Context-aware host: per-show Projections tab uses 'ps-expenses',
+  // the tour-wide Expenses tab uses 'ps-expenses-{sid}' (one card per show)
+  const hostId=document.getElementById('ps-expenses')?'ps-expenses':'ps-expenses-'+s._sid;
+  const host=document.getElementById(hostId); if(!host) return;
   const exps=s.expenses||[];
   if(!exps.length){
     host.innerHTML='<p class="muted" style="font-size:13px">No expenses yet. Add marketing, insurance, travel, etc. — mark who pays and add a % markup for producer-fronted costs.</p>';
@@ -4779,7 +4922,7 @@ function psRenderExpenses(p,s){
 function psAddExpense(pid,sid){
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
   s.expenses=s.expenses||[];
-  s.expenses.push({desc:'',amount:0,payer:'artist',markupPct:0});
+  s.expenses.push({desc:'',amount:0,payer:'producer',markupPct:0});
   psRenderExpenses(p,s); psRefreshShowWaterfall(p,s); persist();
 }
 function psSetExp(pid,sid,i,field,val){
@@ -4844,12 +4987,18 @@ function psRenderWaterfallFromFigures(f,wf,sm,expenses,tcps){
     const w=Math.max(2,Math.min(100,Math.round(Math.abs(val)/max*100)));
     return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
       <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0${bold?';font-weight:600;color:var(--txt)':''}">${label}</div>
-      <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
-      <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}${money0(Math.abs(val))}</div>
+      <div style="flex:1;height:20px;background:var(--surf2);border-radius:3px;overflow:hidden${bold?';outline:2px solid var(--bord2)':''}"><div style="height:100%;width:${w}%;background:${color};min-width:2px"></div></div>
+      <div style="width:90px;flex-shrink:0;text-align:right;font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}${money0(Math.abs(val))}</div>
     </div>`;
   };
   const tierRows=(f.tierLines&&f.tierLines.length>1)?f.tierLines.map(t=>
     bar(esc(t.name)+' ('+t.count+'×'+money0(t.base)+')',t.base*t.count,'#85b7eb',false)):[];
+  // Show stored producer expenses (billed at cost + markup) — deducted before artist gross
+  const producerExpRows=(expenses||[]).filter(x=>x.payer==='producer'&&+x.amount>0)
+    .map(x=>{
+      const billed=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+      return bar('Less: '+esc(x.desc||'expense')+' — LPA'+((+x.markupPct||0)>0?' (+'+x.markupPct+'% markup)':''),-billed,'var(--red)',false);
+    });
   // Show stored artist expenses (excluding tour costs — those shown separately)
   const artistExpRows=(expenses||[]).filter(x=>x.payer==='artist'&&+x.amount>0&&!x._tourCostLine)
     .map(x=>bar('Less: '+esc(x.desc||'expense'),-(+x.amount),'#c98a3f',false));
@@ -4860,11 +5009,12 @@ function psRenderWaterfallFromFigures(f,wf,sm,expenses,tcps){
     ...(tierRows.length?tierRows:[bar('Base ticket revenue',f.baseRevenue,'#85b7eb',false)]),
     bar('Venue payout',f.payout,'var(--green)',true),
     bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
+    ...producerExpRows,
     '<div style="height:6px"></div>',
     bar('Artist gross',f.artistGross,'#97c459',true),
     ...artistExpRows,
     ...tourCostRow,
-    ...((artistExpRows.length||tourCostRow.length)?[bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true)]:[])
+    ...((artistExpRows.length||tourCostRow.length||producerExpRows.length)?[bar('Artist net',f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true)]:[])
   ].join('');
   wf.innerHTML=`<div style="max-width:650px">${rows}</div>`;
   if(sm) sm.innerHTML=`<div class="stats">
@@ -4886,6 +5036,8 @@ function psRenderWaterfall(p,s){
 
 // Tier-aware scenario table for proposals
 function psRenderScenarioTable(pid,sid,tcpsOverride){
+  const tbl=document.getElementById('ps-sc-table');
+  if(!tbl) return;
   const p=get(DB.proposals,pid); const s=(p?.shows||[]).find(x=>x._sid===sid); if(!s) return;
   const cap=+s.capacity||1;
   const tiers=(s.tiers||[]).filter(t=>t.base>0);
@@ -4912,8 +5064,6 @@ function psRenderScenarioTable(pid,sid,tcpsOverride){
     const testShow=tiers.length>1?{...s,tiers:sc,ticketsEst:fill}:{...s,ticketsEst:fill};
     if(proposalShowFigures(testShow,tiers.length>1?null:fill,tcps).artistNet>=0&&be===null) be=fill;
   }
-  const tbl=document.getElementById('ps-sc-table');
-  if(!tbl) return;
   if(tiers.length>1){
     tbl.innerHTML=`<table class="tbl"><thead><tr>
       <th>Fill</th>${tiers.map(t=>`<th class="num">${esc(t.name)}</th>`).join('')}
@@ -5003,6 +5153,31 @@ function psRenderScenario(pid,sid,tcpsOverride){
 }
 
 
+
+// ─── Expenses tab: tour-wide costs + per-show expenses, all in one place ───
+function proposalExpensesTab(host,p,shows,isAccepted){
+  host.innerHTML=`
+    <div class="sec">
+      <div class="sec-label">Tour-wide costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(spread evenly across all shows, deducted from each show's artist net)</span></div>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, van rental, group accommodation across the run.</p>
+      <div id="prop-tour-costs"></div>
+      ${isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="addTourCost(\''+p.id+'\')">+ Add tour cost</button>'}
+    </div>
+    <div class="sec">
+      <div class="sec-label">Per-show expenses</div>
+      <p class="muted" style="font-size:12px;margin-bottom:14px">Costs specific to one show — mark who pays and any producer markup.</p>
+      ${shows.length?shows.map(s=>{
+        const v=get(DB.venues,s.venueId);
+        return `<div style="margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--bord2)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">${v?esc(v.name):'Venue TBD'} <span style="font-weight:400;color:var(--txt3)">— ${esc(s.date||'Date TBD')}</span></div>
+          <div id="ps-expenses-${s._sid}"></div>
+          ${isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="psAddExpense(\''+p.id+'\',\''+s._sid+'\')">+ Add expense</button>'}
+        </div>`;
+      }).join(''):'<p class="muted" style="font-size:13px">No shows yet.</p>'}
+    </div>`;
+  renderTourCosts(p);
+  shows.forEach(s=>psRenderExpenses(p,s));
+}
 
 function renderTourCosts(p){
   const host=document.getElementById('prop-tour-costs'); if(!host) return;
@@ -5191,8 +5366,8 @@ function renderTourProjection(pid){
       const w=Math.max(2,Math.min(100,Math.round(Math.abs(val)/max*100)));
       return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
         <div style="width:200px;text-align:right;font-size:12px;color:var(--txt2);flex-shrink:0${bold?';font-weight:600;color:var(--txt)':''}">${label}</div>
-        <div style="height:20px;width:${w}%;background:${color};border-radius:3px;min-width:2px${bold?';outline:2px solid var(--bord2)':''}"></div>
-        <div style="font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}${money0(Math.abs(val))}</div>
+        <div style="flex:1;height:20px;background:var(--surf2);border-radius:3px;overflow:hidden${bold?';outline:2px solid var(--bord2)':''}"><div style="height:100%;width:${w}%;background:${color};min-width:2px"></div></div>
+        <div style="width:90px;flex-shrink:0;text-align:right;font-size:12px;font-weight:${bold?600:400};color:${val<0?'var(--red)':'var(--txt)'}">${val<0?'−':''}${money0(Math.abs(val))}</div>
       </div>`;
     };
     const rows=[
@@ -5398,7 +5573,11 @@ function printProposalDoc(id){
       ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>trow(l.desc||'Fee',-(+l.amount),false,'#a32d2d')),
     ].join('');
     const artistExpRows=(s.expenses||[]).filter(x=>x.payer==='artist').map(x=>trow('  '+esc(x.desc||'Expense'),-(+x.amount),false,'#c98a3f')).join('');
-    const prodExpRows=(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>trow('  LPA: '+esc(x.desc||'Expense'),-(+x.amount),false,'#854f0b')).join('');
+    const prodExpRows=(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>{
+      const billed=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+      const markupNote=(+x.markupPct||0)>0?' (+'+x.markupPct+'%)':'';
+      return trow('  LPA: '+esc(x.desc||'Expense')+markupNote,-billed,false,'#854f0b');
+    }).join('');
     const tcpsRow=tcps>0?trow('  Tour costs (pro-rated)',-tcps,false,'#854f0b'):'';
     return `<div style="margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid #e4e2da;page-break-inside:avoid">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
@@ -5415,7 +5594,7 @@ function printProposalDoc(id){
           ${f.dealRentalPct>0?trow('Box office % ('+(s.terms?.doorSplit||0)+'%)',-f.dealRentalPct,false,'#a32d2d'):''}
           <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
           ${trow('Venue payout',f.payout,true,'#3b6d11')}
-          ${trow('Commission ('+DB.settings.mgmtPct+'%)',-f.commission,false,'#854f0b')}
+          ${trow('Commission ('+f.mgmtPct+'%)',-f.commission,false,'#854f0b')}
           ${prodExpRows}${tcpsRow}
           <tr><td colspan="2" style="border-top:1px solid #e4e2da;padding:2px 0"></td></tr>
           ${trow('Artist gross',f.artistGross,true)}
@@ -5551,7 +5730,7 @@ function exportProposalHTML(id){
 "  var tourCostShare=sd.tcps||0;",
 "  var artistGross=payout-commission-prodExps;",
 "  var artistNet=artistGross-artistExps-tourCostShare;",
-"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
+"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,prodExps:prodExps,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
 "}",
 "function updateShow(si){",
 "  var sd=SHOWS[si];",
@@ -5566,6 +5745,7 @@ function exportProposalHTML(id){
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Gross box office</span><strong>'+m0(f.gross)+'</strong></div>'+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Venue payout</span><strong style=\"color:#3b6d11\">'+m0(f.payout)+'</strong></div>'+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Commission (LPA)</span><span style=\"color:#854f0b\">-'+m0(f.commission)+'</span></div>'+",
+"      (f.prodExps>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Producer-fronted costs (billed)</span><span style=\"color:#854f0b\">-'+m0(f.prodExps)+'</span></div>':'')+",
 "      (f.tourCostShare>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Tour costs (shared)</span><span style=\"color:#854f0b\">-'+m0(f.tourCostShare)+'</span></div>':'')+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Artist gross</span><strong>'+m0(f.artistGross)+'</strong></div>'+",
 "      (f.artistExps>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Artist expenses</span><span style=\"color:#c98a3f\">-'+m0(f.artistExps)+'</span></div>':'')+",
@@ -5664,20 +5844,34 @@ var SHOWS=${JSON.stringify(showData)};
 ${financialEngine}
 // Initialize all shows
 SHOWS.forEach(function(_,i){updateShow(i);});
+function _savePage(){
+  var htmlOut='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;
+  var blob=new Blob([htmlOut],{type:'text/html'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download=document.title.replace(/[^a-z0-9]/gi,'_')+'.html';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},2000);
+}
 </scr`+'ipt>'+`
+<button onclick="_savePage()" style="position:fixed;top:16px;right:16px;padding:10px 18px;background:#1c1c1a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15);font-family:inherit">⬇ Save this file</button>
 </body>
 </html>`;
 
-  // Trigger download
+  // Open in a new tab so the artist (or you) can preview before saving.
   const blob=new Blob([html],{type:'text/html'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=(p.title||'proposal').replace(/[^a-z0-9]/gi,'_')+'_projection.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  const win=window.open(url,'_blank');
+  if(!win){
+    // Popup blocked — fall back to a direct download so the user still gets the file
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=(p.title||'proposal').replace(/[^a-z0-9]/gi,'_')+'_projection.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 
 function printShowProposal(pid,sid){
@@ -5840,7 +6034,7 @@ function pnAddExp(which){
   if(which==='pershow') _pnPershowExps=cur;
   else _pnTourwideExps=cur;
   const arr=which==='pershow'?_pnPershowExps:_pnTourwideExps;
-  arr.push({desc:'',amount:0,payer:'artist',markupPct:0});
+  arr.push({desc:'',amount:0,payer:'producer',markupPct:0});
   pnRenderExps(which);
 }
 function pnRenderExps(which){
@@ -6011,7 +6205,7 @@ function pemAddExp(which){
   const cur=pemReadExps(which);
   if(which==='pershow') _pemPershowExps=cur; else _pemTourwideExps=cur;
   const arr=which==='pershow'?_pemPershowExps:_pemTourwideExps;
-  arr.push({desc:'',amount:0,payer:'artist',markupPct:0});
+  arr.push({desc:'',amount:0,payer:'producer',markupPct:0});
   pemRenderExps(which);
 }
 function pemRemoveExp(which,i){
