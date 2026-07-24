@@ -1916,7 +1916,11 @@ function proposalShowFigures(s, ticketsOverride, tourCostPerShow){
     projection:{ticketsEst:tickets, expenses:[...baseExps,...tourExps]},
     settlement:{ticketsSold:0,grossOverride:'',expenses:[],settled:false}
   };
-  return projectionFigures(fakeEvent, pricingTiers.length>0?null:tickets);
+  // Always pass an explicit override through to projectionFigures, regardless of how
+  // many tiers this show has (0, 1, or many) — projectionFigures' tier-scaling block
+  // handles proportional rescaling correctly for any tier count. Only fall back to
+  // "use stored tier counts as-is" when no override was requested at all.
+  return projectionFigures(fakeEvent, ticketsOverride!=null?ticketsOverride:(pricingTiers.length>0?null:tickets));
 }
 
 function tourFormEdit(id){
@@ -5155,28 +5159,90 @@ function psRenderScenario(pid,sid,tcpsOverride){
 
 
 // ─── Expenses tab: tour-wide costs + per-show expenses, all in one place ───
+// Apply the proposal's perShowExpenses template to every show — removes old
+// template-tagged entries (keeping VIP merch and any other custom entries) and
+// pushes fresh copies of the current template into each show, tagged _perShow:true.
+function applyPerShowExpensesToShows(p){
+  const tmpl=p.perShowExpenses||[];
+  (p.shows||[]).forEach(s=>{
+    s.expenses=(s.expenses||[]).filter(x=>x._tourMerch||!x._perShow);
+    tmpl.forEach(x=>s.expenses.push({...x,_perShow:true}));
+  });
+}
+
 function proposalExpensesTab(host,p,shows,isAccepted){
   host.innerHTML=`
     <div class="sec">
-      <div class="sec-label">Tour-wide costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(spread evenly across all shows, deducted from each show's artist net)</span></div>
-      <p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, van rental, group accommodation across the run.</p>
+      <div class="sec-label">Tour-wide costs <span style="font-weight:400;font-size:11px;color:var(--txt3)">(divided equally across all shows)</span></div>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">e.g. tour manager, van rental, group accommodation. Total divided by number of shows.</p>
       <div id="prop-tour-costs"></div>
       ${isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="addTourCost(\''+p.id+'\')">+ Add tour cost</button>'}
     </div>
     <div class="sec">
-      <div class="sec-label">Per-show expenses</div>
-      <p class="muted" style="font-size:12px;margin-bottom:14px">Costs specific to one show — mark who pays and any producer markup.</p>
-      ${shows.length?shows.map(s=>{
-        const v=get(DB.venues,s.venueId);
-        return `<div style="margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--bord2)">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">${v?esc(v.name):'Venue TBD'} <span style="font-weight:400;color:var(--txt3)">— ${esc(s.date||'Date TBD')}</span></div>
-          <div id="ps-expenses-${s._sid}"></div>
-          ${isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="psAddExpense(\''+p.id+'\',\''+s._sid+'\')">+ Add expense</button>'}
-        </div>`;
-      }).join(''):'<p class="muted" style="font-size:13px">No shows yet.</p>'}
+      <div class="sec-label">Per-show expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to each show individually)</span></div>
+      <p class="muted" style="font-size:12px;margin-bottom:10px">e.g. $500 social marketing per show — this exact expense is added to every show in the tour (not divided). Editing here updates all ${shows.length} show${shows.length!==1?'s':''} at once.</p>
+      <div id="prop-pershow-exps"></div>
+      ${isAccepted?'':'<button class="btn sm" style="margin-top:8px" onclick="addProposalPerShowExp(\''+p.id+'\')">+ Add per-show expense</button>'}
     </div>`;
   renderTourCosts(p);
-  shows.forEach(s=>psRenderExpenses(p,s));
+  renderProposalPerShowExps(p);
+}
+
+function renderProposalPerShowExps(p){
+  const host=document.getElementById('prop-pershow-exps'); if(!host) return;
+  const exps=p.perShowExpenses||[];
+  if(!exps.length){
+    host.innerHTML='<p class="muted" style="font-size:13px">No per-show expenses yet.</p>';
+    return;
+  }
+  const hdr='<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px"><span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span></div>';
+  const rows=exps.map((x,i)=>{
+    const isProd=x.payer==='producer';
+    const billsOut=isProd?(+x.amount||0)*(1+(+x.markupPct||0)/100):0;
+    const opts=EXPENSE_PAYERS.map(([v,l])=>'<option value="'+v+'"'+(x.payer===v?' selected':'')+'>'+l+'</option>').join('');
+    return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
+      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Social marketing" oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'desc\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'amount\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="setProposalPerShowExp(\''+p.id+'\','+i+',\'payer\',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
+      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'markupPct\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<span id="pse-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'">'+(isProd?money0(billsOut):'—')+'</span>'
+      +'<button class="btn ghost sm" style="padding:3px 6px" onclick="removeProposalPerShowExp(\''+p.id+'\','+i+')">×</button>'
+      +'</div>';
+  }).join('');
+  host.innerHTML=hdr+rows;
+}
+
+function addProposalPerShowExp(pid){
+  const p=get(DB.proposals,pid); if(!p) return;
+  p.perShowExpenses=p.perShowExpenses||[];
+  p.perShowExpenses.push({desc:'',amount:0,payer:'producer',markupPct:0});
+  applyPerShowExpensesToShows(p);
+  renderProposalPerShowExps(p);
+  persist();
+}
+
+function setProposalPerShowExp(pid,i,field,val){
+  const p=get(DB.proposals,pid); if(!p||!p.perShowExpenses||!p.perShowExpenses[i]) return;
+  p.perShowExpenses[i][field]=(field==='desc'||field==='payer')?val:(+val||0);
+  applyPerShowExpensesToShows(p);
+  if(field==='payer'){
+    renderProposalPerShowExps(p);
+  } else {
+    const x=p.perShowExpenses[i];
+    const isProd=x.payer==='producer';
+    const billsOut=isProd?(+x.amount||0)*(1+(+x.markupPct||0)/100):0;
+    const span=document.getElementById('pse-bills-'+i);
+    if(span) span.textContent=isProd?money0(billsOut):'—';
+  }
+  persistDebounced();
+}
+
+function removeProposalPerShowExp(pid,i){
+  const p=get(DB.proposals,pid); if(!p||!p.perShowExpenses) return;
+  p.perShowExpenses.splice(i,1);
+  applyPerShowExpensesToShows(p);
+  renderProposalPerShowExps(p);
+  persist();
 }
 
 function renderTourCosts(p){
@@ -5300,14 +5366,6 @@ function proposalTourCostPerShow(p){
 function _tourShowAtPct(s,tcps,pct){
   const cap=+s.capacity||1;
   const fill=Math.round(cap*pct/100);
-  const tiers=(s.tiers||[]).filter(t=>t.base>0);
-  const hasTiers=tiers.length>1;
-  if(hasTiers){
-    const baseTotals=tiers.reduce((sum,t)=>sum+(+t.count||0),0)||1;
-    const scale=fill/baseTotals;
-    const scaledTiers=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
-    return {f:proposalShowFigures({...s,tiers:scaledTiers,ticketsEst:fill},null,tcps),fill,cap};
-  }
   return {f:proposalShowFigures(s,fill,tcps),fill,cap};
 }
 
@@ -5514,17 +5572,10 @@ function proposalCard(p){
 
 function _proposalScenarioTable(p,s,tcps){
   const cap=+s.capacity||1;
-  const tiers=(s.tiers||[]).filter(t=>t.base>0);
-  const hasTiers=tiers.length>1;
   const pcts=[25,50,60,70,75,80,90,100];
-  const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
   const rows=pcts.map(pct=>{
     const fill=Math.round(cap*pct/100);
-    const ff=hasTiers?(()=>{
-      const scale=fill/baseTotals;
-      const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
-      return proposalShowFigures({...s,tiers:sc,ticketsEst:fill},null,tcps);
-    })():proposalShowFigures(s,fill,tcps);
+    const ff=proposalShowFigures(s,fill,tcps);
     return `<tr style="${pct===75?'background:#f0fce8':''}">
       <td style="padding:4px 6px">${pct}%</td>
       <td style="padding:4px 6px;text-align:right">${fill}</td>
@@ -5614,14 +5665,7 @@ function printProposalDoc(id){
     shows.forEach(s=>{
       const cap=+s.capacity||1;
       const fill=Math.round(cap*pct/100);
-      const tiers=(s.tiers||[]).filter(t=>t.base>0);
-      const hasTiers=tiers.length>1;
-      const baseTotals=tiers.reduce((s,t)=>s+(+t.count||0),0)||1;
-      const f=hasTiers?(()=>{
-        const scale=fill/baseTotals;
-        const sc=tiers.map(t=>({...t,count:Math.round((+t.count||0)*scale)}));
-        return proposalShowFigures({...s,tiers:sc,ticketsEst:fill},null,tcps);
-      })():proposalShowFigures(s,fill,tcps);
+      const f=proposalShowFigures(s,fill,tcps);
       g+=f.grossBoxOffice;c+=f.commission;a+=f.artistNet;pay+=f.payout;
     });
     return `<tr style="${pct===75?'background:#f0fce8':''}">
