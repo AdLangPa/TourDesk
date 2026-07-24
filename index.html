@@ -2401,13 +2401,13 @@ function renderProjExpenses(e){
     const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
     const billsOut=isProd?(+x.amount||0)+markup:0;
     return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
-      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Travel" oninput="setProjExp(\''+e.id+'\','+i+',\'desc\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
-      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProjExp(\''+e.id+'\','+i+',\'amount\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
-      +'<select onchange="setProjExp(\''+e.id+'\','+i+',\'payer\',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Travel" oninput="setProjExp(\''+e.id+'\','+i+',\'desc\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProjExp(\''+e.id+'\','+i+',\'amount\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="setProjExp(\''+e.id+'\','+i+',\'payer\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
       +'<option value="producer"'+(x.payer==='producer'?' selected':'')+'>Producer (you front)</option>'
       +'<option value="artist"'+(x.payer==='artist'?' selected':'')+'>Artist (direct)</option>'
       +'</select>'
-      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProjExp(\''+e.id+'\','+i+',\'markupPct\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProjExp(\''+e.id+'\','+i+',\'markupPct\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
       +'<span id="pe-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'\">'+(isProd?money0(billsOut):'—')+'</span>'
       +'<button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp(\''+e.id+'\','+i+')">×</button>'
       +'</div>';
@@ -4912,10 +4912,10 @@ function psRenderExpenses(p,s){
     const pid=p.id, sid=s._sid;
     const opts=EXPENSE_PAYERS.map(([v,l])=>'<option value="'+v+'"'+(x.payer===v?' selected':'')+'>'+l+'</option>').join('');
     return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
-      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Marketing" oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'desc\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
-      +'<input type="number" value="'+(x.amount||0)+'" oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'amount\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
-      +'<select onchange="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'payer\',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
-      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'markupPct\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Marketing" oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'desc\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(x.amount||0)+'" oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'amount\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'payer\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
+      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="psSetExp(\''+pid+'\',\''+sid+'\','+i+',\'markupPct\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
       +'<span id="ps-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'\">'+(isProd?money0(billsOut):'—')+'</span>'
       +'<button class="btn ghost sm" style="padding:3px 6px" onclick="psRemoveExp(\''+pid+'\',\''+sid+'\','+i+')">×</button>'
       +'</div>';
@@ -5201,10 +5201,10 @@ function renderProposalPerShowExps(p){
     const billsOut=isProd?(+x.amount||0)*(1+(+x.markupPct||0)/100):0;
     const opts=EXPENSE_PAYERS.map(([v,l])=>'<option value="'+v+'"'+(x.payer===v?' selected':'')+'>'+l+'</option>').join('');
     return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
-      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Social marketing" oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'desc\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
-      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'amount\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
-      +'<select onchange="setProposalPerShowExp(\''+p.id+'\','+i+',\'payer\',this.value)" style="padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
-      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'markupPct\',this.value)" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Social marketing" oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'desc\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'amount\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="setProposalPerShowExp(\''+p.id+'\','+i+',\'payer\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
+      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProposalPerShowExp(\''+p.id+'\','+i+',\'markupPct\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
       +'<span id="pse-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'">'+(isProd?money0(billsOut):'—')+'</span>'
       +'<button class="btn ghost sm" style="padding:3px 6px" onclick="removeProposalPerShowExp(\''+p.id+'\','+i+')">×</button>'
       +'</div>';
@@ -5250,112 +5250,76 @@ function renderTourCosts(p){
   const costs=p.tourCosts||[];
   const nShows=(p.shows||[]).length||1;
   if(!costs.length){ host.innerHTML='<p class="muted" style="font-size:13px">No tour costs yet.</p>'; return; }
-  host.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px">
-      <span>Description</span><span style="text-align:right">Total</span><span style="text-align:right">Per show</span><span></span>
-    </div>
-    ${costs.map((c,i)=>`<div style="display:grid;grid-template-columns:1fr 100px 100px 28px;gap:8px;align-items:center;margin-bottom:6px" id="tcr-${i}">
-      <input type="text" value="${esc(c.desc||'')}" placeholder="e.g. Tour manager"
-        onblur="saveTourCostRow('${p.id}',${i})"
-        style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px" id="tc-desc-${i}">
-      <input type="number" value="${c.amount||0}"
-        oninput="updateTourCostSummary('${p.id}')"
-        onblur="saveTourCostRow('${p.id}',${i})"
-        style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right" id="tc-amt-${i}">
-      <span style="text-align:right;font-size:12px;color:var(--txt2)" id="tc-per-${i}">${money0((+c.amount||0)/nShows)}</span>
-      <button class="btn ghost sm" style="padding:3px 6px" onclick="removeTourCost('${p.id}',${i})">×</button>
-    </div>`).join('')}
-    <div id="tc-summary" style="font-size:12px;color:var(--txt2);padding-top:8px;border-top:1px solid var(--bord2)">${tourCostSummaryHtml(p)}</div>
-    <button class="btn primary sm" style="margin-top:10px" onclick="saveTourCosts('${p.id}')">Save tour costs</button>`;
+  const hdr='<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px"><span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span></div>';
+  const rows=costs.map((c,i)=>{
+    const isProd=c.payer==='producer';
+    const billsOut=isProd?(+c.amount||0)*(1+(+c.markupPct||0)/100):0;
+    const opts=EXPENSE_PAYERS.filter(([v])=>v!=='venue').map(([v,l])=>'<option value="'+v+'"'+(c.payer===v?' selected':'')+'>'+l+'</option>').join('');
+    return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
+      +'<input type="text" value="'+esc(c.desc||'')+'" placeholder="e.g. Tour manager" oninput="setTourCost(\''+p.id+'\','+i+',\'desc\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+      +'<input type="number" value="'+(c.amount||0)+'" oninput="setTourCost(\''+p.id+'\','+i+',\'amount\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
+      +'<select onchange="setTourCost(\''+p.id+'\','+i+',\'payer\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'+opts+'</select>'
+      +'<input type="number" value="'+(c.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setTourCost(\''+p.id+'\','+i+',\'markupPct\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
+      +'<span id="tc-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'">'+(isProd?money0(billsOut):'—')+'</span>'
+      +'<button class="btn ghost sm" style="padding:3px 6px" onclick="removeTourCost(\''+p.id+'\','+i+')">×</button>'
+      +'</div>';
+  }).join('');
+  host.innerHTML=hdr+rows
+    +'<div id="tc-summary" style="font-size:12px;color:var(--txt2);padding-top:8px;margin-top:4px;border-top:1px solid var(--bord2)">'+tourCostSummaryHtml(p)+'</div>';
 }
 
 function tourCostSummaryHtml(p){
   const costs=p.tourCosts||[];
   const nShows=(p.shows||[]).length||1;
-  const total=costs.reduce((t,c)=>t+(+c.amount||0),0);
+  const total=costs.reduce((t,c)=>{
+    const amt=+c.amount||0;
+    return t+(c.payer==='producer'?amt*(1+(+c.markupPct||0)/100):amt);
+  },0);
   const perShow=total/nShows;
-  return `Total: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(perShow)}/show</strong> from artist net`;
+  return `Total billed: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(perShow)}/show</strong> from artist net`;
 }
 
-function updateTourCostSummary(pid){
-  // Update just the per-show column and summary without re-rendering the whole list
-  const p=get(DB.proposals,pid); if(!p) return;
-  const nShows=(p.shows||[]).length||1;
-  let total=0;
-  (p.tourCosts||[]).forEach((c,i)=>{
-    const amtEl=document.getElementById('tc-amt-'+i);
-    const perEl=document.getElementById('tc-per-'+i);
-    const amt=amtEl?+amtEl.value||0:+c.amount||0;
-    total+=amt;
-    if(perEl) perEl.textContent=money0(amt/nShows);
-  });
-  const sumEl=document.getElementById('tc-summary');
-  if(sumEl) sumEl.innerHTML=`Total: <strong>${money0(total)}</strong> across ${nShows} show${nShows!==1?'s':''} = <strong>${money0(total/nShows)}/show</strong> from artist net`;
-}
-
-function saveTourCostRow(pid,i){
-  // Read from DOM and save to data model without re-rendering
-  const p=get(DB.proposals,pid); if(!p) return;
-  if(!p.tourCosts||!p.tourCosts[i]) return;
-  const desc=document.getElementById('tc-desc-'+i)?.value||'';
-  const amount=+document.getElementById('tc-amt-'+i)?.value||0;
-  p.tourCosts[i].desc=desc;
-  p.tourCosts[i].amount=amount;
-  // Don't re-render — just persist quietly
-}
-
-function saveTourCosts(pid){
-  const p=get(DB.proposals,pid); if(!p) return;
-  // Read all rows from DOM
-  (p.tourCosts||[]).forEach((_,i)=>{
-    const desc=document.getElementById('tc-desc-'+i)?.value||'';
-    const amount=+document.getElementById('tc-amt-'+i)?.value||0;
-    p.tourCosts[i].desc=desc;
-    p.tourCosts[i].amount=amount;
-  });
-  logActivity('edited','Proposal',p.title+' (tour costs saved)');
-  persist();
-  const btn=document.querySelector('#prop-tour-costs .btn.primary.sm');
-  if(btn){const o=btn.textContent;btn.textContent='✓ Saved';setTimeout(()=>btn.textContent=o,1500);}
+function setTourCost(pid,i,field,val){
+  const p=get(DB.proposals,pid); if(!p||!p.tourCosts||!p.tourCosts[i]) return;
+  p.tourCosts[i][field]=(field==='desc'||field==='payer')?val:(+val||0);
+  if(field==='payer'){
+    renderTourCosts(p);
+  } else {
+    const c=p.tourCosts[i];
+    const isProd=c.payer==='producer';
+    const billsOut=isProd?(+c.amount||0)*(1+(+c.markupPct||0)/100):0;
+    const span=document.getElementById('tc-bills-'+i);
+    if(span) span.textContent=isProd?money0(billsOut):'—';
+    const sumEl=document.getElementById('tc-summary');
+    if(sumEl) sumEl.innerHTML=tourCostSummaryHtml(p);
+  }
+  persistDebounced();
 }
 
 function addTourCost(pid){
   const p=get(DB.proposals,pid); if(!p) return;
-  // Read current values from DOM before re-rendering
-  (p.tourCosts||[]).forEach((_,i)=>{
-    const desc=document.getElementById('tc-desc-'+i)?.value;
-    const amount=document.getElementById('tc-amt-'+i)?.value;
-    if(desc!==undefined) p.tourCosts[i].desc=desc;
-    if(amount!==undefined) p.tourCosts[i].amount=+amount||0;
-  });
   p.tourCosts=p.tourCosts||[];
-  p.tourCosts.push({desc:'',amount:0});
+  p.tourCosts.push({desc:'',amount:0,payer:'producer',markupPct:0});
   persist(); renderTourCosts(p);
 }
 
-function setTourCost(pid,i,field,val){
-  const p=get(DB.proposals,pid); if(!p) return;
-  p.tourCosts[i][field]=field==='desc'?val:(+val||0);
-  // Don't re-render — handled by updateTourCostSummary and saveTourCostRow
-}
-
 function removeTourCost(pid,i){
-  const p=get(DB.proposals,pid); if(!p) return;
-  // Read current values from DOM before splicing
-  (p.tourCosts||[]).forEach((_,j)=>{
-    const desc=document.getElementById('tc-desc-'+j)?.value;
-    const amount=document.getElementById('tc-amt-'+j)?.value;
-    if(desc!==undefined) p.tourCosts[j].desc=desc;
-    if(amount!==undefined) p.tourCosts[j].amount=+amount||0;
-  });
+  const p=get(DB.proposals,pid); if(!p||!p.tourCosts) return;
   p.tourCosts.splice(i,1);
   persist(); renderTourCosts(p);
 }
 
 // Get per-show share of tour costs for a proposal
 function proposalTourCostPerShow(p){
+  // Producer-fronted tour costs bill back to the artist with markup applied;
+  // artist-direct tour costs pass through at face value. Both reduce artist net
+  // equally once pro-rated — the payer/markup only affects the billed amount.
   const costs=p?.tourCosts||[];
-  const total=costs.reduce((t,c)=>t+(+c.amount||0),0);
+  const total=costs.reduce((t,c)=>{
+    const amt=+c.amount||0;
+    const billed=c.payer==='producer'?amt*(1+(+c.markupPct||0)/100):amt;
+    return t+billed;
+  },0);
   const nShows=(p?.shows||[]).length||1;
   return nShows>0?total/nShows:0;
 }
@@ -6091,14 +6055,14 @@ function pnRenderExps(which){
     const isProd=x.payer==='producer';
     const billsOut=isProd?(+x.amount||0)*(1+(+x.markupPct||0)/100):0;
     return `<div style="display:grid;grid-template-columns:1fr 90px 130px 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
-      <input placeholder="e.g. Social marketing" value="${esc(x.desc||'')}" id="pn-exp-${which}-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pn-exp-${which}-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-      <select id="pn-exp-${which}-payer-${i}" onchange="pnRenderExps('${which}')" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input placeholder="e.g. Social marketing" value="${esc(x.desc||'')}" id="pn-exp-${which}-desc-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pn-exp-${which}-amt-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="pn-exp-${which}-payer-${i}" onchange="pnRenderExps('${which}')" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
         <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
         <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (LPA)</option>
       </select>
       <input type="number" step="0.5" value="${x.markupPct||0}" id="pn-exp-${which}-markup-${i}" ${isProd?'':'disabled'}
-        style="padding:5px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
+        style="width:100%;min-width:0;box-sizing:border-box;padding:5px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
       <span id="pn-exp-${which}-bills-${i}" style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
       <button class="btn ghost sm" style="padding:2px 6px" onclick="pnRemoveExp('${which}',${i})">×</button>
     </div>`;
@@ -6116,7 +6080,9 @@ function pnRemoveExp(which,i){
 }
 function pnReadExps(which){
   const prefix=`pn-exp-${which}`;
-  const rows=[...document.querySelectorAll(`#pn-${which}-exps > div`)];
+  // Count actual expense rows via their description-input IDs, not raw child divs
+  // (the header row is also a <div>, so counting all direct children overcounts by one).
+  const rows=[...document.querySelectorAll(`[id^="${prefix}-desc-"]`)];
   return rows.map((_,i)=>({
     desc:document.getElementById(`${prefix}-desc-${i}`)?.value||'',
     amount:+document.getElementById(`${prefix}-amt-${i}`)?.value||0,
@@ -6268,14 +6234,14 @@ function pemRenderExps(which){
     const isProd=x.payer==='producer';
     const billsOut=isProd?(+x.amount||0)*(1+(+x.markupPct||0)/100):0;
     return `<div style="display:grid;grid-template-columns:1fr 90px 130px 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
-      <input placeholder="Description" value="${esc(x.desc||'')}" id="pem-exp-${which}-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pem-exp-${which}-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-      <select id="pem-exp-${which}-payer-${i}" onchange="pemRenderExps('${which}')" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input placeholder="Description" value="${esc(x.desc||'')}" id="pem-exp-${which}-desc-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pem-exp-${which}-amt-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="pem-exp-${which}-payer-${i}" onchange="pemRenderExps('${which}')" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
         <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
         <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (LPA)</option>
       </select>
       <input type="number" step="0.5" value="${x.markupPct||0}" id="pem-exp-${which}-markup-${i}" ${isProd?'':'disabled'}
-        style="padding:5px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
+        style="width:100%;min-width:0;box-sizing:border-box;padding:5px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
       <span id="pem-exp-${which}-bills-${i}" style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
       <button class="btn ghost sm" style="padding:2px 6px" onclick="pemRemoveExp('${which}',${i})">×</button>
     </div>`;
@@ -6284,7 +6250,7 @@ function pemRenderExps(which){
 }
 function pemReadExps(which){
   const prefix=`pem-exp-${which}`;
-  const rows=[...document.querySelectorAll(`#pem-${which}-exps > div`)];
+  const rows=[...document.querySelectorAll(`[id^="${prefix}-desc-"]`)];
   return rows.map((_,i)=>({
     desc:document.getElementById(`${prefix}-desc-${i}`)?.value||'',
     amount:+document.getElementById(`${prefix}-amt-${i}`)?.value||0,
