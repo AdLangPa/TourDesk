@@ -626,8 +626,6 @@ function projectionFigures(ev, ticketsOverride){
     const ptFeeLines=pricing.perTicketFees||[];
     tiers.forEach(t=>{
       const base=+t.base||0;
-      const count=ticketsOverride!=null ? Math.round((+t.count||0)/(totalSold||1)*ticketsOverride) : (+t.count||0);
-      // use proportional counts when overriding total
       const tax=base*taxRate;
       const ptFees=ptFeeLines.reduce((s,f)=>{
         return s+(f.feeType==='pct'?base*((+f.amount||0)/100):(+f.amount||0));
@@ -639,10 +637,12 @@ function projectionFigures(ev, ticketsOverride){
       totalSold+=(+t.count||0);
       tierLines.push({name:t.name,base,count:+t.count||0,tax,ptFees,allIn});
     });
-    // If ticketsOverride given, scale proportionally
+    // If ticketsOverride given, scale everything proportionally (revenue AND per-tier counts)
     if(ticketsOverride!=null && totalSold>0){
       const scale=ticketsOverride/totalSold;
-      grossBoxOffice*=scale; baseRevenue*=scale; taxTotal*=scale; totalSold=ticketsOverride;
+      grossBoxOffice*=scale; baseRevenue*=scale; taxTotal*=scale;
+      tierLines.forEach(l=>{ l.count=Math.round(l.count*scale); });
+      totalSold=ticketsOverride;
     }
   } else {
     const pb = priceBreakdown(pricing);
@@ -719,8 +719,7 @@ function eventBest(e){
   syncSalesTracker(e);
   if(eventHasActuals(e)){
     const f=settlementV2Figures(e);
-    const commission=f.payout*(f.mgmtPct/100);
-    return {gross:f.payout,payout:f.payout,commission,yourTotal:commission,artistNet:f.artistNet,actual:true};
+    return {gross:f.payout,payout:f.payout,commission:f.commission,yourTotal:f.yourTotal,artistNet:f.artistNet,actual:true};
   }
   const f=projectionFigures(e);
   return {gross:f.grossBoxOffice,payout:f.payout,commission:f.commission,yourTotal:f.yourTotal,artistNet:f.artistNet,actual:false};
@@ -1888,7 +1887,8 @@ function proposalShowFromVenue(venueId, ticketBase, proposal){
 
 // Compute projected financials for a proposal show
 function proposalShowFigures(s, ticketsOverride, tourCostPerShow){
-  const tickets = ticketsOverride!==undefined ? ticketsOverride : (+s.ticketsEst||0);
+  // null and undefined both mean "use the show's own estimate"
+  const tickets = ticketsOverride!=null ? ticketsOverride : (+s.ticketsEst||0);
   const baseExps=(s.expenses||[]).map(x=>({...x,payer:x.payer||'producer'}));
   const tourExps=tourCostPerShow>0?[{desc:'Tour costs (pro-rated)',amount:tourCostPerShow,payer:'artist',markupPct:0}]:[];
   // Use per-show tiers if set, otherwise single price
@@ -3008,10 +3008,10 @@ function settlementV2Figures(ev){
 
   // Waterfall:
   // commissionable pot - commission - producer expenses = artist gross
-  // artist gross - artist direct expenses = artist net
-  // (deposits are returned separately off the top — tracked in toArtist/toProducer)
+  // artist gross + deposit returned to artist - artist direct expenses = artist net
+  // (this keeps the printed statement arithmetically consistent top to bottom)
   const artistGross=commissionablePot-commission-producerExpTotal;
-  const artistNet=artistGross-artistExpTotal;
+  const artistNet=artistGross+toArtist-artistExpTotal;
   const yourTotal=commission+producerExpTotal+toProducer;
 
   return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,
@@ -3123,6 +3123,7 @@ function renderSettlementV2Waterfall(e){
     ...producerExpLines,
     '<div style="height:8px"></div>',
     bar('Artist gross — '+esc(artistName),f.artistGross,'#97c459',true),
+    ...(f.toArtist>0?[bar('Plus: deposit returned to '+esc(artistName),f.toArtist,'var(--green)',false)]:[]),
     ...f.exps.filter(x=>+x.amount>0).map(x=>bar('Less: '+esc(x.desc||'Expense')+' — '+esc(artistName),-(+x.amount),'#c98a3f',false)),
     '<div style="height:8px"></div>',
     bar('Artist net — '+esc(artistName),f.artistNet,f.artistNet>=0?'var(--green)':'var(--red)',true),
@@ -3212,7 +3213,7 @@ function printSettlementV2(id){
       ${row('Artist net — '+esc(artistName), f.artistNet, {b:1, pos:f.artistNet>=0})}
     </table>
     <div style="margin-top:18px;padding:12px 14px;background:#f4f3ef;border-radius:6px;font-size:11px;color:#5f5e58;line-height:1.6">
-      <strong>Summary:</strong> Venue payout ${money0(f.payout)} − LPA Inc. total ${money0(totalLpaDeductions)} (commission ${money0(f.commission)}${f.producerExpTotal>0?' + expenses '+money0(f.producerExpTotal):''}) = artist gross ${money0(f.artistGross)}${f.expenseTotal>0?' − artist expenses '+money0(f.expenseTotal)+' = artist net '+money0(f.artistNet):''}.<br>
+      <strong>Summary:</strong> Venue payout ${money0(f.payout)}${f.depositTotal>0?' − deposits '+money0(f.depositTotal)+' = commissionable pot '+money0(f.commissionablePot):''} − LPA Inc. total ${money0(totalLpaDeductions)} (commission ${money0(f.commission)}${f.producerExpTotal>0?' + expenses '+money0(f.producerExpTotal):''}) = artist gross ${money0(f.artistGross)}${f.toArtist>0?' + deposit returned '+money0(f.toArtist):''}${f.expenseTotal>0?' − artist expenses '+money0(f.expenseTotal):''} = artist net ${money0(f.artistNet)}.<br>
       ${f.toProducer>0?`LPA Inc. is also owed ${money0(f.toProducer)} deposit reimbursement. Total due to LPA Inc.: ${money0(f.yourTotal)}.<br>`:''}
       <em>Figures do not include applicable taxes. This document is not an invoice.</em>
     </div>
@@ -5277,7 +5278,7 @@ function exportProposalHTML(id){
       sid:s._sid, si,
       venueName:v?.name||'Venue TBD', city:v?.city||'', date:s.date||'',
       capacity:+s.capacity||0,
-      tiers:tiers.length>1?tiers:[{name:'Tickets',base:+s.ticketBase||0,count:+s.ticketsEst||Math.round((+s.capacity||0)*0.6)}],
+      tiers:tiers.length>1?tiers:[{name:'Tickets',base:+s.ticketBase||0,count:+s.capacity||0}],
       hasTiers:tiers.length>1,
       terms:s.terms||{},
       showCosts:s.showCosts||{crew:[],equipment:[],fees:[]},
@@ -5299,16 +5300,18 @@ function exportProposalHTML(id){
 "  (sc.crew||[]).forEach(function(l){costs+=(+l.hours||0)*(+l.rate||0);});",
 "  (sc.equipment||[]).forEach(function(l){costs+=(+l.amount||0);});",
 "  (sc.fees||[]).forEach(function(l){costs+=(+l.amount||0);});",
-"  var ct=terms.contractType||'rental', g=+terms.guarantee||0, r=+terms.rental||0, sp=+terms.doorSplit/100||0;",
-"  var payout=base;",
-"  if(ct==='guarantee') payout=Math.max(g,base*sp);",
-"  else if(ct==='door') payout=base*sp;",
+"  var ct=terms.contractType||'rental', g=+terms.guarantee||0, r=+terms.rental||0, sp=(+terms.doorSplit||0)/100;",
+"  var payout;",
+"  if(ct==='guarantee') payout=g-costs;",
+"  else if(ct==='door') payout=base*(1-sp)-costs;",
+"  else if(ct==='guarantee_plus') payout=Math.max(g,base*sp)-costs;",
 "  else if(ct==='rental') payout=base-r-costs;",
-"  else if(ct==='rental_plus_pct') payout=base-r-costs-(base*sp);",
-"  else if(ct==='rental_greater_of') payout=Math.max(r,base*sp)-costs;",
+"  else if(ct==='rental_plus_pct') payout=base-r-(base*sp)-costs;",
+"  else if(ct==='rental_greater_of') payout=base-Math.max(r,base*sp)-costs;",
+"  else payout=base-costs;",
 "  payout=Math.max(0,payout);",
 "  var commission=payout*mgmtPct;",
-"  var prodExps=expenses.filter(function(x){return x.payer==='producer';}).reduce(function(s,x){return s+(+x.amount||0);},0);",
+"  var prodExps=expenses.filter(function(x){return x.payer==='producer';}).reduce(function(s,x){return s+((+x.amount||0)*(1+((+x.markupPct||0)/100)));},0);",
 "  var artistExps=expenses.filter(function(x){return x.payer==='artist';}).reduce(function(s,x){return s+(+x.amount||0);},0);",
 "  var tourCostShare=sd.tcps||0;",
 "  var artistGross=payout-commission-prodExps;",
