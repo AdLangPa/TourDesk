@@ -5723,7 +5723,7 @@ function exportProposalHTML(id){
     <div><div style="font-size:18px;font-weight:600">${m0static(totGross0)}</div><div style="font-size:11px;color:#908e85">Total gross</div></div>
     <div><div style="font-size:18px;font-weight:600">${m0static(totPayout0)}</div><div style="font-size:11px;color:#908e85">Total payout</div></div>
     <div><div style="font-size:18px;font-weight:600;color:#854f0b">${m0static(totComm0)}</div><div style="font-size:11px;color:#908e85">Total commission</div></div>
-    <div><div style="font-size:18px;font-weight:600;color:${totArtistNet0>=0?'#3b6d11':'#a32d2d'}">${m0static(totArtistNet0)}</div><div style="font-size:11px;color:#908e85">Artist net</div></div>
+    <div><div style="font-size:18px;font-weight:600;color:${totArtistNet0>=0?'#3b6d11':'#a32d2d'}">${totArtistNet0<0?'−':''}${m0static(totArtistNet0)}</div><div style="font-size:11px;color:#908e85">Artist net</div></div>
   </div>`;
   const staticWaterfallHtml=(f)=>{
     // f.artistTracked internally includes the synthetic pro-rated tour-cost line that
@@ -5742,7 +5742,7 @@ function exportProposalHTML(id){
     return rows.map(([label,val,bold,color])=>
       `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#5f5e58">${label}</span><${bold?'strong':'span'} style="color:${color}">${val}</${bold?'strong':'span'}></div>`
     ).join('')
-    +`<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:14px;border-top:2px solid #1c1c1a;margin-top:4px"><strong>Artist net</strong><strong style="color:${f.artistNet>=0?'#3b6d11':'#a32d2d'}">${m0static(f.artistNet)}</strong></div>`;
+    +`<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:14px;border-top:2px solid #1c1c1a;margin-top:4px"><strong>Artist net</strong><strong style="color:${f.artistNet>=0?'#3b6d11':'#a32d2d'}">${f.artistNet<0?'−':''}${m0static(f.artistNet)}</strong></div>`;
   };
   // Static "tour totals at fill %" scenario table — always visible, JS-independent
   const scenarioPcts=[25,50,75,100];
@@ -5826,7 +5826,7 @@ function exportProposalHTML(id){
 "      (f.tourCostShare>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Tour costs (shared)</span><span style=\"color:#854f0b\">-'+m0(f.tourCostShare)+'</span></div>':'')+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Artist gross</span><strong>'+m0(f.artistGross)+'</strong></div>'+",
 "      (f.artistExps>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#5f5e58\">Artist expenses</span><span style=\"color:#c98a3f\">-'+m0(f.artistExps)+'</span></div>':'')+",
-"      '<div style=\"display:flex;justify-content:space-between;padding:8px 0 4px;font-size:14px;border-top:2px solid #1c1c1a;margin-top:4px\"><strong>Artist net</strong><strong style=\"color:'+(f.artistNet>=0?'#3b6d11':'#a32d2d')+'\">'+m0(f.artistNet)+'</strong></div>'+",
+"      '<div style=\"display:flex;justify-content:space-between;padding:8px 0 4px;font-size:14px;border-top:2px solid #1c1c1a;margin-top:4px\"><strong>Artist net</strong><strong style=\"color:'+(f.artistNet>=0?'#3b6d11':'#a32d2d')+'\">'+(f.artistNet<0?'−':'')+m0(f.artistNet)+'</strong></div>'+",
 "      '<div style=\"font-size:11px;color:#908e85;margin-top:4px\">'+f.totalSold+' tickets sold ('+pct+'% of '+sd.capacity+')</div>';",
 "  }",
 "  updateTourTotal();",
@@ -5843,8 +5843,24 @@ function exportProposalHTML(id){
 "    '<div><div style=\"font-size:18px;font-weight:600\">'+m0(totG)+'</div><div style=\"font-size:11px;color:#908e85\">Total gross</div></div>'+",
 "    '<div><div style=\"font-size:18px;font-weight:600\">'+m0(totP)+'</div><div style=\"font-size:11px;color:#908e85\">Total payout</div></div>'+",
 "    '<div><div style=\"font-size:18px;font-weight:600;color:#854f0b\">'+m0(totC)+'</div><div style=\"font-size:11px;color:#908e85\">Total commission</div></div>'+",
-"    '<div><div style=\"font-size:18px;font-weight:600;color:'+(totAN>=0?'#3b6d11':'#a32d2d')+'\">'+m0(totAN)+'</div><div style=\"font-size:11px;color:#908e85\">Artist net</div></div>'+",
+"    '<div><div style=\"font-size:18px;font-weight:600;color:'+(totAN>=0?'#3b6d11':'#a32d2d')+'\">'+(totAN<0?'−':'')+m0(totAN)+'</div><div style=\"font-size:11px;color:#908e85\">Artist net</div></div>'+",
 "    '</div>';",
+"}",
+"function setTourPct(pct){",
+"  SHOWS.forEach(function(sd,si){",
+"    var cap=sd.capacity||1;",
+"    var fill=Math.round(cap*pct/100);",
+"    var baseTotal=sd.tiers.reduce(function(s,t){return s+(t.count||0);},0)||1;",
+"    var scale=fill/baseTotal;",
+"    sd.tiers.forEach(function(t,i){",
+"      var newCount=Math.round((t.count||0)*scale);",
+"      var sl=document.getElementById('sl-'+si+'-'+i);",
+"      var sn=document.getElementById('sn-'+si+'-'+i);",
+"      if(sl) sl.value=newCount;",
+"      if(sn) sn.value=newCount;",
+"    });",
+"    updateShow(si);",
+"  });",
 "}",
 ].join("\n");
 
@@ -5911,6 +5927,24 @@ function exportProposalHTML(id){
   <div style="background:#f4f3ef;border-radius:10px;padding:18px 20px;margin-bottom:28px">
     <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:#1c1c1a">Tour total</div>
     <div id="tour-total">${staticTourTotalHtml}</div>
+
+    <div style="margin-top:18px;padding-top:18px;border-top:1px solid #e4e2da">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <strong style="font-size:13px">Tour overall — adjust every show at once</strong>
+        <span id="tour-pct-label" style="font-size:12px;color:#5f5e58">100% of capacity</span>
+      </div>
+      <p style="font-size:11px;color:#908e85;margin-bottom:10px">Drag to model the whole tour at a given fill level. Each show scales proportionally from its own capacity and tier mix — individual sliders below still let you fine-tune one show at a time.</p>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="tour-pct-slider" min="0" max="100" value="100"
+          oninput="document.getElementById('tour-pct-num').value=this.value;document.getElementById('tour-pct-label').textContent=this.value+'% of capacity';setTourPct(+this.value)"
+          style="flex:1;accent-color:#1c1c1a">
+        <input type="number" id="tour-pct-num" min="0" max="100" value="100"
+          onchange="document.getElementById('tour-pct-slider').value=this.value;document.getElementById('tour-pct-label').textContent=this.value+'% of capacity';setTourPct(+this.value)"
+          style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:right">
+        <span style="font-size:12px;color:#908e85">%</span>
+      </div>
+    </div>
+
     <div style="font-size:11px;font-weight:600;color:#908e85;text-transform:uppercase;letter-spacing:.3px;margin-top:18px">Tour totals at fill %</div>
     ${staticScenarioTable}
   </div>
