@@ -5705,6 +5705,62 @@ function exportProposalHTML(id){
   const tcps=proposalTourCostPerShow(p);
   const twTotal=(p.tourCosts||[]).reduce((t,c)=>t+(+c.amount||0),0);
 
+  // Compute static baseline figures at FULL CAPACITY — matching exactly what the
+  // interactive sliders initialize to (showData below always starts sliders at full
+  // tier allocation / full capacity, never at the show's ticketsEst). Baking these
+  // directly into the HTML means the page shows correct numbers immediately on load,
+  // even if the embedded <script> never runs (some email/Drive/Slack preview panes
+  // strip inline scripts from HTML attachments for security).
+  let totGross0=0,totPayout0=0,totComm0=0,totArtistNet0=0;
+  const staticFigures=shows.map(s=>{
+    const cap=+s.capacity||0;
+    const f=proposalShowFigures(s,cap,tcps);
+    totGross0+=f.grossBoxOffice; totPayout0+=f.payout; totComm0+=f.commission; totArtistNet0+=f.artistNet;
+    return f;
+  });
+  const m0static=v=>'$'+Math.round(Math.abs(v)).toLocaleString('en-CA');
+  const staticTourTotalHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center">
+    <div><div style="font-size:18px;font-weight:600">${m0static(totGross0)}</div><div style="font-size:11px;color:#908e85">Total gross</div></div>
+    <div><div style="font-size:18px;font-weight:600">${m0static(totPayout0)}</div><div style="font-size:11px;color:#908e85">Total payout</div></div>
+    <div><div style="font-size:18px;font-weight:600;color:#854f0b">${m0static(totComm0)}</div><div style="font-size:11px;color:#908e85">Total commission</div></div>
+    <div><div style="font-size:18px;font-weight:600;color:${totArtistNet0>=0?'#3b6d11':'#a32d2d'}">${m0static(totArtistNet0)}</div><div style="font-size:11px;color:#908e85">Artist net</div></div>
+  </div>`;
+  const staticWaterfallHtml=(f)=>{
+    // f.artistTracked internally includes the synthetic pro-rated tour-cost line that
+    // proposalShowFigures bakes into the expense array — subtract it back out here so
+    // "Tour costs (shared)" (shown separately below) and "Artist expenses" don't double-count.
+    const rawArtistExps=f.artistTracked-tcps;
+    const rows=[
+      ['Gross box office',m0static(f.grossBoxOffice),false,'#1c1c1a'],
+      ['Venue payout',m0static(f.payout),true,'#3b6d11'],
+      ['Commission (LPA)','-'+m0static(f.commission),false,'#854f0b'],
+    ];
+    if(f.producerCost>0) rows.push(['Producer-fronted costs (billed)','-'+m0static(f.producerTotal),false,'#854f0b']);
+    if(tcps>0) rows.push(['Tour costs (shared)','-'+m0static(tcps),false,'#854f0b']);
+    rows.push(['Artist gross',m0static(f.artistGross),true,'#1c1c1a']);
+    if(rawArtistExps>0) rows.push(['Artist expenses','-'+m0static(rawArtistExps),false,'#c98a3f']);
+    return rows.map(([label,val,bold,color])=>
+      `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#5f5e58">${label}</span><${bold?'strong':'span'} style="color:${color}">${val}</${bold?'strong':'span'}></div>`
+    ).join('')
+    +`<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:14px;border-top:2px solid #1c1c1a;margin-top:4px"><strong>Artist net</strong><strong style="color:${f.artistNet>=0?'#3b6d11':'#a32d2d'}">${m0static(f.artistNet)}</strong></div>`;
+  };
+  // Static "tour totals at fill %" scenario table — always visible, JS-independent
+  const scenarioPcts=[25,50,75,100];
+  const staticScenarioRows=scenarioPcts.map(pct=>{
+    let g=0,pay=0,c=0,an=0;
+    shows.forEach(s=>{
+      const cap=+s.capacity||1;
+      const fill=Math.round(cap*pct/100);
+      const f=proposalShowFigures(s,fill,tcps);
+      g+=f.grossBoxOffice; pay+=f.payout; c+=f.commission; an+=f.artistNet;
+    });
+    return `<tr${pct===75?' style="background:#f0fce8"':''}><td style="padding:4px 8px">${pct}%</td><td style="padding:4px 8px;text-align:right">${m0static(g)}</td><td style="padding:4px 8px;text-align:right">${m0static(pay)}</td><td style="padding:4px 8px;text-align:right;color:#854f0b">${m0static(c)}</td><td style="padding:4px 8px;text-align:right;font-weight:600;color:${an>=0?'#3b6d11':'#a32d2d'}">${an>=0?'+':'−'}${m0static(Math.abs(an))}</td></tr>`;
+  }).join('');
+  const staticScenarioTable=`<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:14px">
+    <thead><tr style="color:#908e85;font-size:10px;text-transform:uppercase"><th style="padding:4px 8px;text-align:left">Fill</th><th style="padding:4px 8px;text-align:right">Gross</th><th style="padding:4px 8px;text-align:right">Payout</th><th style="padding:4px 8px;text-align:right">Commission</th><th style="padding:4px 8px;text-align:right">Artist net</th></tr></thead>
+    <tbody>${staticScenarioRows}</tbody>
+  </table>`;
+
   // Bake all show data into the HTML as JSON
   const showData=shows.map((s,si)=>{
     const v=get(DB.venues,s.venueId);
@@ -5823,7 +5879,7 @@ function exportProposalHTML(id){
           </div>
           <div>
             <div style="font-size:11px;font-weight:600;color:#908e85;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Projection</div>
-            <div id="wf-${si}"></div>
+            <div id="wf-${si}">${staticWaterfallHtml(staticFigures[si])}</div>
           </div>
         </div>
       </div>`;
@@ -5844,6 +5900,7 @@ function exportProposalHTML(id){
 </style>
 </head>
 <body>
+<noscript><div style="max-width:860px;margin:16px auto;padding:14px 18px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;font-size:13px;color:#5c4a00">JavaScript is disabled or blocked in this viewer, so the ticket-sales sliders won't respond — but all figures below are accurate as shown. For the interactive version, download this file and open it directly in a browser.</div></noscript>
 <div class="container">
   <div style="text-align:center;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #1c1c1a">
     <div style="font-size:24px;font-weight:700">${esc(p.title)}</div>
@@ -5853,7 +5910,9 @@ function exportProposalHTML(id){
 
   <div style="background:#f4f3ef;border-radius:10px;padding:18px 20px;margin-bottom:28px">
     <div style="font-size:13px;font-weight:600;margin-bottom:14px;color:#1c1c1a">Tour total</div>
-    <div id="tour-total"></div>
+    <div id="tour-total">${staticTourTotalHtml}</div>
+    <div style="font-size:11px;font-weight:600;color:#908e85;text-transform:uppercase;letter-spacing:.3px;margin-top:18px">Tour totals at fill %</div>
+    ${staticScenarioTable}
   </div>
 
   ${showSections}
