@@ -5,8 +5,8 @@
 <title>TourDesk — Event &amp; Tour Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#faf8f4;--surf:#ffffff;--surf2:#f4f0e8;--surf3:#ece3d0;
@@ -195,28 +195,97 @@ a{color:var(--blue);text-decoration:none}
       <div style="display:flex;align-items:center;gap:12px">
         <div id="artist-view-bar" style="display: flex; align-items: center; gap: 8px;"></div><div id="user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2)"><span>Adam Langer</span></div>
         <div class="topbar-actions" id="page-actions"></div>
-        <button class="btn sm" onclick="logout()" style="margin-left:8px">Logout</button>
+        <button class="btn sm" onclick="logout()" style="margin-left:8px" fdprocessedid="7f5tj">Logout</button>
       </div>
     </div>
     <div class="content" id="content">
       <div class="sec" style="max-width:560px">
         <div class="sec-label">Defaults</div>
         <div class="row2">
-          <div class="field"><label>Management commission %</label><input type="number" id="set-mgmt" value="15"></div>
-          <div class="field"><label>Default tax rate %</label><input type="number" id="set-tax" value="13"></div>
+          <div class="field"><label>Management commission %</label><input type="number" id="set-mgmt" value="15" fdprocessedid="kdc8a"></div>
+          <div class="field"><label>Default tax rate %</label><input type="number" id="set-tax" value="13" fdprocessedid="7rzdsd"></div>
         </div>
-        <div class="field"><label>Default service fee % (on booked items)</label><input type="number" id="set-svc" value="5"></div>
-        <button class="btn sm" onclick="saveSettings()">Save defaults</button>
+        <div class="field"><label>Default service fee % (on booked items)</label><input type="number" id="set-svc" value="5" fdprocessedid="gc1d3f"></div>
+        <button class="btn sm" onclick="saveSettings()" fdprocessedid="qbh1x9">Save defaults</button>
       </div>
+      <div class="sec" style="max-width:640px">
+        <div class="sec-label">Logo</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">Shown on the Proposals pages and on the PDF and pitch deck cover. PNG with a transparent background works best.</p>
+        <div style="display:flex;align-items:center;gap:16px">
+          <img src="data:image/png;base64,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" alt="Logo preview" style="height:48px;width:auto;max-width:140px;object-fit:contain;background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:6px">
+          <div>
+            <button class="btn sm" onclick="document.getElementById('logo-upload').click()" fdprocessedid="7qfcep">Upload logo</button>
+            <input type="file" id="logo-upload" accept="image/*" class="hidden" onchange="uploadLogo(this.files[0])">
+            
+          </div>
+        </div>
+      </div>
+      <div class="sec" style="max-width:640px">
+        <div class="sec-label">Pitch deck — cover &amp; contact info</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">Used on the cover slide and anywhere a contact slide references you. The rest of the deck is built from the slides below — add, edit, reorder, or remove as many as you like.</p>
+        <div class="row2">
+          <div class="field"><label>Company name</label><input id="set-co-name" placeholder="e.g. Langer Performing Arts" value="Langer Performing Arts" fdprocessedid="cgfl6n"></div>
+          <div class="field"><label>Tagline</label><input id="set-co-tagline" placeholder="e.g. You've built the audience. We'll handle the rest." value="You've built the audience. We'll handle the rest." fdprocessedid="53mufd"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Contact email</label><input id="set-co-email" type="email" placeholder="you@company.com" value="adam@langerpa.com" fdprocessedid="hjblo"></div>
+          <div class="field"><label>Contact phone</label><input id="set-co-phone" placeholder="555 123 4567" value="902 430 8126" fdprocessedid="iyf8q"></div>
+        </div>
+        <button class="btn sm" onclick="saveBranding()" fdprocessedid="6gls9q">Save cover &amp; contact info</button>
+      </div>
+      <div class="sec" style="max-width:640px">
+        <div class="sec-label">Pitch deck — slides</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">These render between the cover slide and the tour projection every time you export a pitch deck. Reorder with the arrows, or edit/remove any slide.</p>
+        <div id="pitch-slides-list">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bord);border-radius:8px;margin-bottom:8px;background:var(--surf)">
+      <span class="badge amber" style="flex-shrink:0">Text</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Your show, on more stages.</div>
+        <div style="font-size:11px;color:var(--txt3)">What we do</div>
+      </div>
+      <button class="btn ghost sm" title="Move up" disabled="" style="opacity:.3" onclick="pitchSlideMove('sl_intro',-1)">↑</button>
+      <button class="btn ghost sm" title="Move down" onclick="pitchSlideMove('sl_intro',1)" fdprocessedid="x0chxd">↓</button>
+      <button class="btn sm" onclick="pitchSlideEdit('sl_intro')" fdprocessedid="a1b706r">Edit</button>
+      <button class="btn ghost sm" onclick="pitchSlideDelete('sl_intro')" fdprocessedid="oeqtgm">×</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bord);border-radius:8px;margin-bottom:8px;background:var(--surf)">
+      <span class="badge gray" style="flex-shrink:0">Feature grid</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Everything around the performance.</div>
+        <div style="font-size:11px;color:var(--txt3)">How we help</div>
+      </div>
+      <button class="btn ghost sm" title="Move up" onclick="pitchSlideMove('sl_services',-1)" fdprocessedid="7p5p7">↑</button>
+      <button class="btn ghost sm" title="Move down" onclick="pitchSlideMove('sl_services',1)" fdprocessedid="l5y0m">↓</button>
+      <button class="btn sm" onclick="pitchSlideEdit('sl_services')" fdprocessedid="3n5dj6">Edit</button>
+      <button class="btn ghost sm" onclick="pitchSlideDelete('sl_services')" fdprocessedid="avr1s">×</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bord);border-radius:8px;margin-bottom:8px;background:var(--surf)">
+      <span class="badge gray" style="flex-shrink:0">Contact</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Let's work together.</div>
+        <div style="font-size:11px;color:var(--txt3)">Start the conversation</div>
+      </div>
+      <button class="btn ghost sm" title="Move up" onclick="pitchSlideMove('sl_contact',-1)" fdprocessedid="1o0okp">↑</button>
+      <button class="btn ghost sm" title="Move down" disabled="" style="opacity:.3" onclick="pitchSlideMove('sl_contact',1)">↓</button>
+      <button class="btn sm" onclick="pitchSlideEdit('sl_contact')" fdprocessedid="tpdvkf">Edit</button>
+      <button class="btn ghost sm" onclick="pitchSlideDelete('sl_contact')" fdprocessedid="g33yu">×</button>
+    </div></div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn sm" onclick="pitchSlideAdd('text')" fdprocessedid="bqq745">+ Text slide</button>
+          <button class="btn sm" onclick="pitchSlideAdd('services')" fdprocessedid="ejhdid">+ Feature grid</button>
+          <button class="btn sm" onclick="pitchSlideAdd('contact')" fdprocessedid="a7i5cmm">+ Contact slide</button>
+        </div>
+      </div>
+
       <div class="sec" style="max-width:560px">
         <div class="sec-label">AI — Contract import</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
           Used for the <strong>Import from contract</strong> feature on the Venues page. Uses your Anthropic API key — get one at <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a>. Costs ~$0.01–0.02 per contract. Stored only in this browser, never synced.</p>
         <div class="field"><label>Anthropic API key</label>
-          <input id="set-anthropic" type="password" placeholder="sk-ant-…" value="••••••••••••••••••••" onfocus="if(this.value.startsWith('•'))this.value=''" style="font-family:ui-monospace,monospace;font-size:12px">
+          <input id="set-anthropic" type="password" placeholder="sk-ant-…" value="••••••••••••••••••••" onfocus="if(this.value.startsWith('•'))this.value=''" style="font-family:ui-monospace,monospace;font-size:12px" fdprocessedid="f0fu1v">
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <button class="btn sm" onclick="saveAnthropicKey()">Save key</button>
+          <button class="btn sm" onclick="saveAnthropicKey()" fdprocessedid="52nr9w">Save key</button>
           <span style="font-size:12px;color:var(--green)">✓ Key saved — contract import ready</span>
         </div>
       </div>
@@ -225,28 +294,28 @@ a{color:var(--blue);text-decoration:none}
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
           Paste your Google Drive folder URL below. Files in each event's Files tab will link directly to Drive — no login required.</p>
         <div class="field"><label>Drive folder URL</label>
-          <input id="set-drive" placeholder="https://drive.google.com/drive/folders/…" value="">
+          <input id="set-drive" placeholder="https://drive.google.com/drive/folders/…" value="" fdprocessedid="zvyphg">
           <p class="muted" style="font-size:11px;margin-top:4px">In Google Drive: right-click your TourDesk folder → Share → Copy link</p>
         </div>
-        <button class="btn sm" onclick="saveDriveFolder()">Save folder link</button>
+        <button class="btn sm" onclick="saveDriveFolder()" fdprocessedid="1p6el">Save folder link</button>
         
       </div>
       <div class="sec" style="max-width:560px">
         <div class="sec-label">Supabase (cloud sync)</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
           Connect to Supabase for real-time sync across all your devices. Free account at <a href="https://supabase.com" target="_blank">supabase.com</a>.</p>
-        <div class="field"><label>Project URL</label><input id="set-sb-url" placeholder="https://yourproject.supabase.co" value=""></div>
-        <div class="field"><label>API Key (anon/public)</label><input id="set-sb-key" placeholder="Paste your anon key" value=""></div>
-        <button class="btn sm" onclick="connectSupabase()">Connect Supabase</button>
+        <div class="field"><label>Project URL</label><input id="set-sb-url" placeholder="https://yourproject.supabase.co" value="" fdprocessedid="5mgxhw"></div>
+        <div class="field"><label>API Key (anon/public)</label><input id="set-sb-key" placeholder="Paste your anon key" value="" fdprocessedid="cr17j9"></div>
+        <button class="btn sm" onclick="connectSupabase()" fdprocessedid="5uva5o">Connect Supabase</button>
         <p class="muted" style="font-size:12px;margin-top:8px">Status: <span class="pos">Connected &amp; syncing</span></p>
       </div>
       <div class="sec" style="max-width:560px">
         <div class="sec-label">Data</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn sm" onclick="exportData()">Export backup (data + app)</button>
-          <button class="btn sm" onclick="document.getElementById('import-file').click()">Import backup</button>
+          <button class="btn sm" onclick="exportData()" fdprocessedid="9n5n9m">Export backup (data + app)</button>
+          <button class="btn sm" onclick="document.getElementById('import-file').click()" fdprocessedid="f703ep">Import backup</button>
           <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(this.files[0])">
-          <button class="btn sm danger" onclick="resetData()">Reset to sample data</button>
+          <button class="btn sm danger" onclick="resetData()" fdprocessedid="ql0ne">Reset to sample data</button>
         </div>
       </div></div>
   </main>
@@ -2337,9 +2406,35 @@ function eventOverview(host,e,v,t){
           <th style="text-align:right;padding:0 12px 6px">Actual</th>
           <th style="text-align:right;padding-bottom:6px">Δ</th></tr></thead>
         <tbody>
+          <tr>
+            <td style="padding:7px 0;color:var(--txt2)">Gross box office (incl. tax/fees)</td>
+            <td style="text-align:right;padding:7px 12px">${money0(pf.grossBoxOffice)}</td>
+            <td style="text-align:right;padding:7px 12px"><span class="muted">—</span></td>
+            <td style="text-align:right;padding:7px 0"></td>
+          </tr>
+          <tr>
+            <td style="padding:7px 0;color:var(--txt2)">Base ticket revenue (pre-tax)</td>
+            <td style="text-align:right;padding:7px 12px">${money0(pf.baseRevenue)}</td>
+            <td style="text-align:right;padding:7px 12px"><span class="muted">—</span></td>
+            <td style="text-align:right;padding:7px 0"></td>
+          </tr>
+          ${pf.dealVenueTotal>0?`<tr>
+            <td style="padding:7px 0;color:var(--txt2)">Venue fee (rental/door split)</td>
+            <td style="text-align:right;padding:7px 12px">${money0(pf.dealVenueTotal)}</td>
+            <td style="text-align:right;padding:7px 12px"><span class="muted">—</span></td>
+            <td style="text-align:right;padding:7px 0"></td>
+          </tr>`:''}
+          ${pf.showCostTotal>0?`<tr>
+            <td style="padding:7px 0;color:var(--txt2)">Show costs (crew, equipment, fees)</td>
+            <td style="text-align:right;padding:7px 12px">${money0(pf.showCostTotal)}</td>
+            <td style="text-align:right;padding:7px 12px"><span class="muted">—</span></td>
+            <td style="text-align:right;padding:7px 0"></td>
+          </tr>`:''}
           ${cmpRow('Venue payout', pf.payout, sf.payout, {b:1})}
           ${cmpRow('Mgmt commission', pf.commission, sf.commission)}
+          ${(pf.producerTotal>0||sf.producerExpTotal>0)?cmpRow('Producer expenses (billed)', pf.producerTotal, sf.producerExpTotal):''}
           ${cmpRow('Artist gross', pf.artistGross, sf.artistGross, {b:1})}
+          ${(pf.artistTracked>0||sf.expenseTotal>0)?cmpRow('Artist expenses', pf.artistTracked, sf.expenseTotal):''}
           ${cmpRow('Artist net', pf.artistNet, sf.artistNet, {b:1})}
         </tbody>
       </table>
@@ -2520,6 +2615,8 @@ function renderProjWaterfall(host,f,expenses){
   const rows=[
     {label:'Gross box office',val:f.grossBoxOffice,c:'var(--blue)'},
     ...(tierRows.length>0?tierRows:[{label:'Base ticket revenue',val:f.baseRevenue,c:'#85b7eb'}]),
+    ...(f.dealVenueTotal>0?[{label:'Less: venue fee (rental/door split)',val:-f.dealVenueTotal,c:'var(--red)'}]:[]),
+    ...(f.showCostTotal>0?[{label:'Less: show costs (crew, equip, fees)',val:-f.showCostTotal,c:'var(--red)'}]:[]),
     null,
     {label:'Venue payout (pot)',val:f.payout,c:'var(--green)',b:1},
     {label:'Less: mgmt commission ('+f.mgmtPct+'%)',val:-f.commission,c:'var(--amber)'},
@@ -5066,6 +5163,8 @@ function psRenderWaterfallFromFigures(f,wf,sm,expenses,tcps){
   const rows=[
     bar('Gross box office',f.grossBoxOffice,'var(--blue)',true),
     ...(tierRows.length?tierRows:[bar('Base ticket revenue',f.baseRevenue,'#85b7eb',false)]),
+    ...(f.dealVenueTotal>0?[bar('Less: venue fee (rental/door split)',-f.dealVenueTotal,'var(--red)',false)]:[]),
+    ...(f.showCostTotal>0?[bar('Less: show costs (crew, equip, fees)',-f.showCostTotal,'var(--red)',false)]:[]),
     bar('Venue payout',f.payout,'var(--green)',true),
     bar('Less: mgmt commission ('+f.mgmtPct+'%)',-f.commission,'var(--amber)',false),
     ...producerExpRows,
@@ -5426,10 +5525,11 @@ function renderTourProjection(pid){
   const pct=+document.getElementById('tp-num')?.value||75;
 
   // ── Aggregate waterfall at current slider % ──
-  let totGross=0,totPayout=0,totComm=0,totProdExp=0,totArtistGross=0,totArtistExp=0,totTourCost=0,totArtistNet=0,totSold=0,totCap=0;
+  let totGross=0,totPayout=0,totComm=0,totVenueFee=0,totShowCosts=0,totProdExp=0,totArtistGross=0,totArtistExp=0,totTourCost=0,totArtistNet=0,totSold=0,totCap=0;
   const perShow=shows.map(s=>{
     const {f,fill,cap}=_tourShowAtPct(s,tcps,pct);
     totGross+=f.grossBoxOffice; totPayout+=f.payout; totComm+=f.commission;
+    totVenueFee+=(f.dealVenueTotal||0); totShowCosts+=(f.showCostTotal||0); totProdExp+=(f.producerTotal||0); totArtistExp+=(f.artistTracked||0);
     totArtistGross+=f.artistGross; totArtistNet+=f.artistNet; totSold+=fill; totCap+=cap;
     totTourCost+=(tcps>0?tcps:0);
     return {s,f,fill,cap};
@@ -5448,10 +5548,14 @@ function renderTourProjection(pid){
     };
     const rows=[
       bar('Gross box office (all shows)',totGross,'var(--blue)',true),
+      ...(totVenueFee>0?[bar('Less: venue fees (rental/door split)',-totVenueFee,'var(--red)',false)]:[]),
+      ...(totShowCosts>0?[bar('Less: show costs (crew, equip, fees)',-totShowCosts,'var(--red)',false)]:[]),
       bar('Total venue payouts',totPayout,'var(--green)',true),
       bar('Less: your commission',-totComm,'var(--amber)',false),
+      ...(totProdExp>0?[bar('Less: producer expenses (billed)',-totProdExp,'var(--red)',false)]:[]),
       '<div style="height:6px"></div>',
       bar('Artist gross (all shows)',totArtistGross,'#97c459',true),
+      ...(totArtistExp>0?[bar('Less: artist expenses',-totArtistExp,'#c98a3f',false)]:[]),
       ...(totTourCost>0?[bar('Less: tour-wide costs',-totTourCost,'#c98a3f',false)]:[]),
       '<div style="height:6px"></div>',
       bar('Artist net (all shows)',totArtistNet,totArtistNet>=0?'var(--green)':'var(--red)',true),
@@ -7563,4 +7667,4 @@ function updateSyncBadge(){
 </script>
 
 
-</body></html>
+<span id="PING_IFRAME_FORM_DETECTION" style="display: none;"></span></body></html>
