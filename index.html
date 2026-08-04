@@ -365,6 +365,38 @@ function defaultPitchSlides(){
 }
 
 function uid(kind){ return kind + (DB._seq[kind]++); }
+
+// Build <optgroup>-sorted venue <option> HTML, grouped by Country → Province/State
+// and ordered alphabetically by city within each group, so long venue lists are
+// actually scannable instead of one flat unsorted list.
+function venueOptionsGrouped(venues, selectedId, opts){
+  opts = opts || {};
+  const sorted = venues.slice().sort((a,b)=>{
+    const ca=(a.country||'Canada'), cb=(b.country||'Canada');
+    if(ca!==cb) return ca.localeCompare(cb);
+    const pa=(a.province||''), pb=(b.province||'');
+    if(pa!==pb) return pa.localeCompare(pb);
+    const cta=(a.city||''), ctb=(b.city||'');
+    if(cta!==ctb) return cta.localeCompare(ctb);
+    return (a.name||'').localeCompare(b.name||'');
+  });
+  const groups=[];
+  sorted.forEach(v=>{
+    const country=v.country||'Canada', province=v.province||'—';
+    const key=country+'||'+province;
+    let g=groups.find(x=>x.key===key);
+    if(!g){ g={key,country,province,venues:[]}; groups.push(g); }
+    g.venues.push(v);
+  });
+  return groups.map(g=>{
+    const label=g.country+' — '+g.province;
+    const optsHtml=g.venues.map(v=>{
+      const extra=opts.showCity!==false&&v.city?' ('+esc(v.city)+')':'';
+      return `<option value="${v.id}" ${v.id===selectedId?'selected':''}>${esc(v.name)}${extra}</option>`;
+    }).join('');
+    return `<optgroup label="${esc(label)}">${optsHtml}</optgroup>`;
+  }).join('');
+}
 function currentLogoUrl(){ return DB.settings.logoDataUrl || DEFAULT_LOGO_DATA_URL; }
 
 /* ---------- AUDIT LOG ---------- */
@@ -2090,7 +2122,7 @@ VIEWS.events={
         </select>
         <select id="ev-filter-venue" onchange="filterEventsList()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
           <option value="">All venues</option>
-          ${DB.venues.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('')}
+          ${venueOptionsGrouped(DB.venues, null)}
         </select>
         <select id="ev-sort" onchange="filterEventsList()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
           <option value="asc">Date: closest first</option>
@@ -3712,7 +3744,7 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
       <div class="field"><label>Tour</label><select id="ef-tour"><option value="">—</option>
         ${DB.tours.map(x=>`<option value="${x.id}" ${e.tourId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
       <div class="field"><label>Venue</label><select id="ef-venue" onchange="prefillVenueTerms()"><option value="">—</option>
-        ${DB.venues.map(x=>`<option value="${x.id}" ${e.venueId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+        ${venueOptionsGrouped(DB.venues, e.venueId)}</select></div>
     </div>
     <div class="row3">
       <div class="field"><label>Date</label><input id="ef-date" type="date" value="${e.date||''}"></div>
@@ -4235,7 +4267,7 @@ function contactForm(id){
       <div class="field"><label>Phone</label><input id="cf-phone" value="${esc(ct.phone||'')}"></div>
     </div>
     <div class="field"><label>Linked venue (optional)</label><select id="cf-venue"><option value="">—</option>
-      ${DB.venues.map(v=>`<option value="${v.id}" ${ct.venueId===v.id?'selected':''}>${esc(v.name)}</option>`).join('')}</select></div>
+      ${venueOptionsGrouped(DB.venues, ct.venueId)}</select></div>
     <div class="field"><label>Notes</label><textarea id="cf-notes">${esc(ct.notes||'')}</textarea></div>`;
   openModal(id?'Edit contact':'Add contact',body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
@@ -7022,7 +7054,7 @@ function proposalAddVenue(pid){
     <div class="field"><label>Venue</label>
       <select id="pav-venue" onchange="pavPreview('${pid}')">
         <option value="">— select venue —</option>
-        ${DB.venues.filter(v=>!existingVids.has(v.id)).map(v=>`<option value="${v.id}">${esc(v.name)}${v.city?' — '+esc(v.city):''}</option>`).join('')}
+        ${venueOptionsGrouped(DB.venues.filter(v=>!existingVids.has(v.id)), null)}
       </select></div>
     <div id="pav-preview"></div>
     <div class="row2" style="margin-top:12px">
@@ -7650,6 +7682,12 @@ document.getElementById('nav').addEventListener('click',e=>{
 
 /* ---------- BOOT ---------- */
 initAuth();
+// Apply theme immediately from local cache so there's no flash of the wrong
+// theme while load() is still fetching — toggleTheme() previously only ever
+// ran after a click, so the very first click just brought the *attribute*
+// in line with state that was already stale, requiring a second click to
+// actually flip anything visible.
+document.documentElement.setAttribute('data-theme', localStorage.getItem('tourdesk_theme')==='dark'?'dark':'light');
 if(AUTH_USER) {
   (async()=>{
     const c=document.getElementById('content');
@@ -7657,6 +7695,7 @@ if(AUTH_USER) {
     await load();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
+    applyTheme(); // reconcile with the authoritative (possibly Supabase-synced) setting
     const savedAV=localStorage.getItem('tourdesk_artistview');
     if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
     applyArtistViewChrome();
