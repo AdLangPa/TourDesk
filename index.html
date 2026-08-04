@@ -4131,7 +4131,13 @@ function saveEvent(id){
     projection:{ticketsEst:(()=>{
       const tiers=efReadTiers();
       return tiers.reduce((t,r)=>t+(+r.count||0),0)||fvn('ef-pre')||0;
-    })(), expenses:(id?get(DB.events,id)?.projection?.expenses:[]) || []},
+    })(),
+    expenses:(id?get(DB.events,id)?.projection?.expenses:[]) || [],
+    // Preserve live ticket sales tracking (tierSold, comps, and the dated
+    // history log from "Confirm today's numbers") — this was previously
+    // being silently dropped on every edit since projection was rebuilt
+    // from scratch here and then wholesale-overwritten via Object.assign below.
+    salesTracker:(id?get(DB.events,id)?.projection?.salesTracker:undefined)},
     terms:{contractType:fv('ef-ct'),doorSplit:fvn('ef-split'),guarantee:fvn('ef-guar'),rental:fvn('ef-rental')},
     showCosts:readShowCosts(),
     depositAmount:fvn('ef-deposit-amt'),
