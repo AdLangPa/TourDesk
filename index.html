@@ -5783,7 +5783,7 @@ function printProposalDoc(id){
   const artistName=artist?.name||p.artistName||'Artist';
   const shows=(p.shows||[]).sort((a,b)=>(!a.date?1:!b.date?-1:a.date<b.date?-1:1));
   const tcps=proposalTourCostPerShow(p);
-  const twTotal=(p.tourCosts||[]).reduce((t,c)=>t+(+c.amount||0),0);
+  const twTotal=(p.tourCosts||[]).reduce((t,c)=>{const amt=+c.amount||0;return t+(c.payer==='producer'?amt*(1+(+c.markupPct||0)/100):amt);},0);
 
   let totGross=0,totComm=0,totArtist=0,totPayout=0;
   shows.forEach(s=>{const f=proposalShowFigures(s,null,tcps);totGross+=f.grossBoxOffice;totComm+=f.commission;totArtist+=f.artistNet;totPayout+=f.payout;});
@@ -5931,7 +5931,7 @@ function exportProposalHTML(id){
   const artistName=artist?.name||p.artistName||'Artist';
   const shows=(p.shows||[]).sort((a,b)=>(!a.date?1:!b.date?-1:a.date<b.date?-1:1));
   const tcps=proposalTourCostPerShow(p);
-  const twTotal=(p.tourCosts||[]).reduce((t,c)=>t+(+c.amount||0),0);
+  const twTotal=(p.tourCosts||[]).reduce((t,c)=>{const amt=+c.amount||0;return t+(c.payer==='producer'?amt*(1+(+c.markupPct||0)/100):amt);},0);
 
   // Compute static baseline figures at FULL CAPACITY — matching exactly what the
   // interactive sliders initialize to (showData below always starts sliders at full
