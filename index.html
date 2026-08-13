@@ -4921,14 +4921,20 @@ function propShowOverview(host,p,s,f,v,sliderVal){
     ...(sc.crew||[]).filter(l=>(+l.hours||0)*(+l.rate||0)>0).map(l=>bar('Less: '+(l.desc||'Crew'),(+l.hours||0)*(+l.rate||0)*-1,'var(--red)',false)),
     ...(sc.equipment||[]).filter(l=>+l.amount>0).map(l=>bar('Less: '+(l.desc||'Equipment'),-(+l.amount),'var(--red)',false)),
     ...(sc.fees||[]).filter(l=>+l.amount>0).map(l=>bar('Less: '+(l.desc||'Fee'),-(+l.amount),'var(--red)',false)),
-    ...(s.expenses||[]).filter(x=>x.payer==='producer').map(x=>bar('Less: '+(x.desc||'Expense'),-(+x.amount),'var(--red)',false)),
     ...(f.dealRentalFlat>0&&ct!=='rental'?[bar('Less: rental flat fee',-f.dealRentalFlat,'var(--red)',false)]:[]),
     ...(f.dealRentalPct>0?[bar('Less: box office % ('+(+s.terms?.doorSplit||0)+'%)',-f.dealRentalPct,'var(--red)',false)]:[]),
     bar(null,null,null,false),
     bar('Net box office',f.netBoxOffice,'#6fa8dc',true),
     bar('Venue payout ('+ctLabel(ct)+')',f.payout,'var(--green)',true),
     bar('Less: mgmt commission ('+(s.mgmtPct||DB.settings.mgmtPct)+'%)',-f.commission,'var(--amber)',false),
-    ...(f.producerCost>0?[bar('Less: producer expenses',-f.producerCost,'var(--red)',false)]:[]),
+    // Show each producer-fronted expense at its full BILLED amount (cost + markup),
+    // with the markup % called out, rather than the raw cost — otherwise the
+    // markup silently disappears into artistGross with nothing visible explaining it.
+    ...(s.expenses||[]).filter(x=>x.payer==='producer'&&+x.amount>0).map(x=>{
+      const billed=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+      const markupNote=(+x.markupPct||0)>0?' (+'+x.markupPct+'% markup)':'';
+      return bar('Less: '+(x.desc||'Expense')+markupNote,-billed,'var(--red)',false);
+    }),
     bar(null,null,null,false),
     bar('Artist gross',f.artistGross,'#97c459',true),
     ...(s.expenses||[]).filter(x=>x.payer==='artist').map(x=>bar('Less: '+(x.desc||'Artist expense'),-(+x.amount),'#c98a3f',false)),
@@ -5909,7 +5915,7 @@ function exportProposalHTML(id){
     <div><div style="font-size:20px;font-weight:700;color:#f5b544">${m0static(totComm0)}</div><div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:2px">Total commission</div></div>
     <div><div style="font-size:20px;font-weight:700;color:${totArtistNet0>=0?'#a8dfa2':'#e37f8e'}">${totArtistNet0<0?'−':''}${m0static(totArtistNet0)}</div><div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:2px">Artist net</div></div>
   </div>`;
-  const staticWaterfallHtml=(f)=>{
+  const staticWaterfallHtml=(s,f)=>{
     // f.artistTracked internally includes the synthetic pro-rated tour-cost line that
     // proposalShowFigures bakes into the expense array — subtract it back out here so
     // "Tour costs (shared)" (shown separately below) and "Artist expenses" don't double-count.
@@ -5919,7 +5925,13 @@ function exportProposalHTML(id){
       ['Venue payout',m0static(f.payout),true,'#397044'],
       ['Commission (LPA)','-'+m0static(f.commission),false,'#a8721c'],
     ];
-    if(f.producerCost>0) rows.push(['Producer-fronted costs (billed)','-'+m0static(f.producerTotal),false,'#a8721c']);
+    // Itemize each producer-fronted expense individually with its markup %, matching
+    // the level of detail shown in the printed PDF — not just a lump sum.
+    (s.expenses||[]).filter(x=>x.payer==='producer'&&+x.amount>0).forEach(x=>{
+      const billed=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+      const markupNote=(+x.markupPct||0)>0?' (+'+x.markupPct+'% markup)':'';
+      rows.push([esc(x.desc||'Producer expense')+markupNote,'-'+m0static(billed),false,'#a8721c']);
+    });
     if(tcps>0) rows.push(['Tour costs (shared)','-'+m0static(tcps),false,'#a8721c']);
     rows.push(['Artist gross',m0static(f.artistGross),true,'#243f56']);
     if(rawArtistExps>0) rows.push(['Artist expenses','-'+m0static(rawArtistExps),false,'#a8721c']);
@@ -5987,11 +5999,12 @@ function exportProposalHTML(id){
 "  payout=Math.max(0,payout);",
 "  var commission=payout*mgmtPct;",
 "  var prodExps=expenses.filter(function(x){return x.payer==='producer';}).reduce(function(s,x){return s+((+x.amount||0)*(1+((+x.markupPct||0)/100)));},0);",
+"  var prodExpLines=expenses.filter(function(x){return x.payer==='producer'&&(+x.amount||0)>0;}).map(function(x){return {desc:x.desc||'Producer expense',billed:(+x.amount||0)*(1+((+x.markupPct||0)/100)),markupPct:+x.markupPct||0};});",
 "  var artistExps=expenses.filter(function(x){return x.payer==='artist';}).reduce(function(s,x){return s+(+x.amount||0);},0);",
 "  var tourCostShare=sd.tcps||0;",
 "  var artistGross=payout-commission-prodExps;",
 "  var artistNet=artistGross-artistExps-tourCostShare;",
-"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,prodExps:prodExps,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
+"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,prodExps:prodExps,prodExpLines:prodExpLines,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
 "}",
 "function updateShow(si){",
 "  var sd=SHOWS[si];",
@@ -6002,11 +6015,15 @@ function exportProposalHTML(id){
 "  var wf=document.getElementById('wf-'+si);",
 "  if(wf){",
 "    var pct=sd.capacity>0?Math.round(f.totalSold/sd.capacity*100):0;",
+"    var prodLinesHtml=f.prodExpLines.map(function(x){",
+"      var note=x.markupPct>0?' (+'+x.markupPct+'% markup)':'';",
+"      return '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">'+x.desc+note+'</span><span style=\"color:#a8721c\">-'+m0(x.billed)+'</span></div>';",
+"    }).join('');",
 "    wf.innerHTML=",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Gross box office</span><strong>'+m0(f.gross)+'</strong></div>'+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Venue payout</span><strong style=\"color:#397044\">'+m0(f.payout)+'</strong></div>'+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Commission (LPA)</span><span style=\"color:#a8721c\">-'+m0(f.commission)+'</span></div>'+",
-"      (f.prodExps>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Producer-fronted costs (billed)</span><span style=\"color:#a8721c\">-'+m0(f.prodExps)+'</span></div>':'')+",
+"      prodLinesHtml+",
 "      (f.tourCostShare>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Tour costs (shared)</span><span style=\"color:#a8721c\">-'+m0(f.tourCostShare)+'</span></div>':'')+",
 "      '<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Artist gross</span><strong>'+m0(f.artistGross)+'</strong></div>'+",
 "      (f.artistExps>0?'<div style=\"display:flex;justify-content:space-between;padding:4px 0;font-size:13px\"><span style=\"color:#607080\">Artist expenses</span><span style=\"color:#a8721c\">-'+m0(f.artistExps)+'</span></div>':'')+",
@@ -6079,7 +6096,7 @@ function exportProposalHTML(id){
           </div>
           <div>
             <p class="eyebrow" style="margin-bottom:12px">Projection</p>
-            <div id="wf-${si}">${staticWaterfallHtml(staticFigures[si])}</div>
+            <div id="wf-${si}">${staticWaterfallHtml(sd,staticFigures[si])}</div>
           </div>
         </div>
       </div>`;
@@ -6226,10 +6243,16 @@ function exportPitchDeck(id){
     };
   });
 
-  const staticWaterfallRows=(f)=>{
+  const staticWaterfallRows=(s,f)=>{
     const rawArtistExps=f.artistTracked-tcps;
     const rows=[['Gross box office',m0(f.grossBoxOffice),false],['Venue payout',m0(f.payout),true],['Commission',(f.commission?'-':'')+m0(f.commission),false]];
-    if(f.producerCost>0) rows.push(['Producer-fronted costs (billed)','-'+m0(f.producerTotal),false]);
+    // Itemize each producer-fronted expense individually with its markup %, matching
+    // the level of detail shown in the printed PDF — not just a lump sum.
+    (s.expenses||[]).filter(x=>x.payer==='producer'&&+x.amount>0).forEach(x=>{
+      const billed=(+x.amount||0)*(1+(+x.markupPct||0)/100);
+      const markupNote=(+x.markupPct||0)>0?' (+'+x.markupPct+'% markup)':'';
+      rows.push([esc(x.desc||'Producer expense')+markupNote,'-'+m0(billed),false]);
+    });
     if(tcps>0) rows.push(['Tour costs (shared)','-'+m0(tcps),false]);
     rows.push(['Artist gross',m0(f.artistGross),true]);
     if(rawArtistExps>0) rows.push(['Artist expenses','-'+m0(rawArtistExps),false]);
@@ -6259,11 +6282,12 @@ function exportPitchDeck(id){
 "  payout=Math.max(0,payout);",
 "  var commission=payout*mgmtPct;",
 "  var prodExps=expenses.filter(function(x){return x.payer==='producer';}).reduce(function(s,x){return s+((+x.amount||0)*(1+((+x.markupPct||0)/100)));},0);",
+"  var prodExpLines=expenses.filter(function(x){return x.payer==='producer'&&(+x.amount||0)>0;}).map(function(x){return {desc:x.desc||'Producer expense',billed:(+x.amount||0)*(1+((+x.markupPct||0)/100)),markupPct:+x.markupPct||0};});",
 "  var artistExps=expenses.filter(function(x){return x.payer==='artist';}).reduce(function(s,x){return s+(+x.amount||0);},0);",
 "  var tourCostShare=sd.tcps||0;",
 "  var artistGross=payout-commission-prodExps;",
 "  var artistNet=artistGross-artistExps-tourCostShare;",
-"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,prodExps:prodExps,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
+"  return {gross:gross,base:base,payout:payout,commission:commission,artistGross:artistGross,prodExps:prodExps,prodExpLines:prodExpLines,artistExps:artistExps,tourCostShare:tourCostShare,artistNet:artistNet,totalSold:soldPerTier.reduce(function(a,b){return a+b;},0)};",
 "}",
 "function projRow(label,val,bold){ return '<div class=\"projection-row\"'+(bold?' style=\"font-weight:700\"':'')+'><span>'+label+'</span><span>'+val+'</span></div>'; }",
 "function updateShow(si){",
@@ -6274,7 +6298,10 @@ function exportPitchDeck(id){
 "  if(wf){",
 "    var pct=sd.capacity>0?Math.round(f.totalSold/sd.capacity*100):0;",
 "    var html=projRow('Gross box office',m0(f.gross),false)+projRow('Venue payout',m0(f.payout),true)+projRow('Commission',(f.commission?'-':'')+m0(f.commission),false);",
-"    if(f.prodExps>0) html+=projRow('Producer-fronted costs (billed)','-'+m0(f.prodExps),false);",
+"    f.prodExpLines.forEach(function(x){",
+"      var note=x.markupPct>0?' (+'+x.markupPct+'% markup)':'';",
+"      html+=projRow(x.desc+note,'-'+m0(x.billed),false);",
+"    });",
 "    if(f.tourCostShare>0) html+=projRow('Tour costs (shared)','-'+m0(f.tourCostShare),false);",
 "    html+=projRow('Artist gross',m0(f.artistGross),true);",
 "    if(f.artistExps>0) html+=projRow('Artist expenses','-'+m0(f.artistExps),false);",
@@ -6333,7 +6360,7 @@ function exportPitchDeck(id){
         </header>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px" class="show-grid">
           <div><p class="eyebrow" style="margin-bottom:16px">Ticket sales</p>${tierControls}</div>
-          <div><p class="eyebrow" style="margin-bottom:16px">Projection</p><div id="wf-${si}">${staticWaterfallRows(staticFigures[si])}</div></div>
+          <div><p class="eyebrow" style="margin-bottom:16px">Projection</p><div id="wf-${si}">${staticWaterfallRows(sd,staticFigures[si])}</div></div>
         </div>
       </article>`;
   }).join('');
@@ -6829,6 +6856,12 @@ function proposalEditMeta(id){
     <div class="field"><label>Intro / pitch note</label>
       <textarea id="pf-intro">${esc(p.intro||'')}</textarea></div>
 
+    <div id="pf-single-fields" style="display:${p.kind==='single'?'block':'none'}">
+      <div class="field"><label>Ticket price ($)</label>
+        <input type="number" step="0.01" id="pf-single-price" value="${p.shows?.[0]?.ticketBase||''}" placeholder="e.g. 45.00"></div>
+      <p class="muted" style="font-size:11px;margin:-6px 0 10px">Changing this re-pushes to the show. Tax rate is set per venue based on their location.</p>
+    </div>
+
     <div id="pf-tour-fields" style="display:${p.kind==='tour'?'block':'none'}">
       <div class="form-section">Ticket tiers — tour defaults</div>
       <p class="muted" style="font-size:11px;margin:-4px 0 10px">Set once for the whole tour. Each show inherits these — VIP is a fixed seat count per show, others split the remaining capacity by the % you set. Changing these here re-pushes to all shows.</p>
@@ -6926,6 +6959,8 @@ function ptToggleTourFields(){
   const kind=document.getElementById('pf-kind')?.value;
   const host=document.getElementById('pf-tour-fields');
   if(host) host.style.display=kind==='tour'?'block':'none';
+  const singleHost=document.getElementById('pf-single-fields');
+  if(singleHost) singleHost.style.display=kind==='single'?'block':'none';
 }
 
 function ptReadTiers(){
@@ -7041,6 +7076,11 @@ function saveProposalMeta(id){
         newPerShowExpenses.forEach(x=>s.expenses.push({...x,_perShow:true}));
       }
     });
+  } else if(newKind==='single'){
+    // Single-show proposals have no tier editor — just a flat ticket price —
+    // push it straight to the (one) show's ticketBase so it actually takes effect.
+    const newPrice=+document.getElementById('pf-single-price')?.value||0;
+    (p.shows||[]).forEach(s=>{ s.ticketBase=newPrice; });
   }
 
   logActivity('edited','Proposal',p.title);
