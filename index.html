@@ -7049,13 +7049,23 @@ function saveProposalMeta(id){
 
 function proposalAddVenue(pid){
   const p=get(DB.proposals,pid); if(!p) return;
-  const existingVids=new Set((p.shows||[]).map(s=>s.venueId));
+  // No longer excludes venues already used in this proposal — a tour can
+  // legitimately play the same venue more than once (e.g. a return date).
+  const lastShow=(p.shows||[])[((p.shows||[]).length||1)-1];
+  const lastVenue=lastShow?get(DB.venues,lastShow.venueId):null;
+  const defCountry=lastVenue?.country||'';
+  const defProvince=lastVenue?.province||'';
+  const defCity=lastVenue?.city||'';
   openModal('Add show',`
-    <div class="field"><label>Venue</label>
-      <select id="pav-venue" onchange="pavPreview('${pid}')">
-        <option value="">— select venue —</option>
-        ${venueOptionsGrouped(DB.venues.filter(v=>!existingVids.has(v.id)), null)}
-      </select></div>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">Narrow down by location, then pick the venue. You can add the same venue more than once if the tour returns to it.</p>
+    <div class="row2">
+      <div class="field"><label>Country</label><select id="pav-country" onchange="pavFilterChanged('${pid}','country')"></select></div>
+      <div class="field"><label>Province / State</label><select id="pav-province" onchange="pavFilterChanged('${pid}','province')"></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>City</label><select id="pav-city" onchange="pavFilterChanged('${pid}','city')"></select></div>
+      <div class="field"><label>Venue</label><select id="pav-venue" onchange="pavPreview('${pid}')"></select></div>
+    </div>
     <div id="pav-preview"></div>
     <div class="row2" style="margin-top:12px">
       <div class="field"><label>Date (optional)</label><input id="pav-date" type="date"></div>
@@ -7064,17 +7074,69 @@ function proposalAddVenue(pid){
     <p class="muted" style="font-size:11px;margin-top:4px">Ticket tiers and prices are set at the tour level. Tax rate comes from the venue's location.</p>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="pavSave('${pid}')">Add to proposal</button>`);
+  pavPopulateFilters(defCountry, defProvince, defCity);
+  pavPopulateVenues(pid);
+}
+
+// Rebuild the Country/Province/City select OPTIONS themselves (called on open,
+// and whenever a higher-level filter changes so downstream lists narrow).
+// Pass explicit values to pre-select (used once, on initial open); afterwards
+// the selects' own current values are read directly.
+function pavPopulateFilters(selCountry,selProvince,selCity){
+  const countrySel=document.getElementById('pav-country');
+  const provinceSel=document.getElementById('pav-province');
+  const citySel=document.getElementById('pav-city');
+  if(!countrySel) return;
+  const curCountry=selCountry!==undefined?selCountry:countrySel.value;
+  const countries=[...new Set(DB.venues.map(v=>v.country||'Canada'))].sort();
+  countrySel.innerHTML='<option value="">All countries</option>'+countries.map(c=>`<option value="${esc(c)}" ${c===curCountry?'selected':''}>${esc(c)}</option>`).join('');
+
+  const curProvince=selProvince!==undefined?selProvince:provinceSel.value;
+  const provPool=DB.venues.filter(v=>!curCountry||(v.country||'Canada')===curCountry);
+  const provinces=[...new Set(provPool.map(v=>v.province).filter(Boolean))].sort();
+  provinceSel.innerHTML='<option value="">All provinces/states</option>'+provinces.map(pr=>`<option value="${esc(pr)}" ${pr===curProvince?'selected':''}>${esc(pr)}</option>`).join('');
+
+  const curCity=selCity!==undefined?selCity:citySel.value;
+  const cityPool=provPool.filter(v=>!curProvince||v.province===curProvince);
+  const cities=[...new Set(cityPool.map(v=>v.city).filter(Boolean))].sort();
+  citySel.innerHTML='<option value="">All cities</option>'+cities.map(ci=>`<option value="${esc(ci)}" ${ci===curCity?'selected':''}>${esc(ci)}</option>`).join('');
+}
+
+// Rebuild the Venue select from the current Country/Province/City filter values.
+function pavPopulateVenues(pid){
+  const venueSel=document.getElementById('pav-venue'); if(!venueSel) return;
+  const country=fv('pav-country'), province=fv('pav-province'), city=fv('pav-city');
+  const filtered=DB.venues.filter(v=>
+    (!country||(v.country||'Canada')===country) &&
+    (!province||v.province===province) &&
+    (!city||v.city===city)
+  );
+  const prevSelected=venueSel.value;
+  venueSel.innerHTML='<option value="">— select venue —</option>'+
+    filtered.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(v=>
+      `<option value="${v.id}" ${v.id===prevSelected?'selected':''}>${esc(v.name)}${v.city?' ('+esc(v.city)+')':''}</option>`
+    ).join('');
+  pavPreview(pid);
+}
+
+// A change to Country re-narrows Province+City; a change to Province re-narrows
+// City; either way the Venue list is rebuilt from whatever filters are now set.
+function pavFilterChanged(pid,level){
+  if(level==='country') pavPopulateFilters(undefined,'','');
+  else if(level==='province') pavPopulateFilters(undefined,undefined,'');
+  pavPopulateVenues(pid);
 }
 
 function pavPreview(pid){
-  const vid=fv('pav-venue'); if(!vid) return;
+  const vid=fv('pav-venue');
+  const host=document.getElementById('pav-preview'); if(!host) return;
+  if(!vid){ host.innerHTML=''; return; }
   const p=get(DB.proposals,pid);
   const v=get(DB.venues,vid);
   const prev=mostRecentEventAtVenue(vid);
   const cap=v?.capacity||0;
   if(document.getElementById('pav-cap')&&!document.getElementById('pav-cap').value) document.getElementById('pav-cap').value=cap||'';
   const ct=prev?.terms?.contractType||v?.contractType||'—';
-  const host=document.getElementById('pav-preview'); if(!host) return;
   host.innerHTML=`<div style="background:var(--surf2);border-radius:var(--rad);padding:10px 12px;margin-top:8px;font-size:12px">
     <div style="font-weight:600;margin-bottom:4px">${esc(v?.name||'')}</div>
     <div style="color:var(--txt2)">Contract: ${ctLabel(ct)} · ${prev?'costs from: '+esc(prev.name):'using venue defaults'}</div>
