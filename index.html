@@ -47,6 +47,7 @@ a{color:var(--blue);text-decoration:none}
 .logo-sub{font-size:11px;color:var(--txt3);margin-top:2px}
 .nav-section{font-size:10px;font-weight:600;color:var(--txt3);padding:14px 18px 4px;letter-spacing:.7px;text-transform:uppercase}
 .nav-item{display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer;font-size:13px;color:var(--txt2);border-left:2px solid transparent;transition:background .12s,color .12s}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:16px;text-align:center}
 .nav-item:hover{background:var(--surf3);color:var(--txt)}
 .nav-item.active{background:var(--surf3);color:var(--txt);border-left-color:var(--acc);font-weight:500}
 .nav-ico{width:17px;text-align:center;flex-shrink:0;font-size:15px}
@@ -176,6 +177,7 @@ a{color:var(--blue);text-decoration:none}
       <div class="nav-item" data-view="venues"><span class="nav-ico">▣</span>Venues</div>
       <div class="nav-item" data-view="tours"><span class="nav-ico">↝</span>Tours</div>
       <div class="nav-item" data-view="events"><span class="nav-ico">◉</span>Events</div>
+      <div class="nav-item" data-view="tasks"><span class="nav-ico">☑</span>Tasks<span id="tasks-nav-badge" class="nav-badge" style="display:none"></span></div>
       <div class="nav-item" data-view="contacts"><span class="nav-ico">☺</span>Contacts</div>
       <div class="nav-item" data-view="artists"><span class="nav-ico">♪</span>Artists</div>
       <div class="nav-section">Sales</div>
@@ -337,10 +339,27 @@ const DB = {
   activity: [],
   settings: { mgmtPct: 15, taxRate: 13, serviceFeePct: 5, supabaseConfig: null, googleConnected: false, theme: 'light',
     companyName:'', companyTagline:'', contactEmail:'', contactPhone:'', logoDataUrl:null,
-    pitchSlides: null // populated by defaultPitchSlides() on first load if null
+    pitchSlides: null, // populated by defaultPitchSlides() on first load if null
+    todoTemplates: null // populated by defaultTodoTemplates() on first load if null
   },
-  _seq: { v:1, t:1, e:1, c:1, a:1, p:1 }
+  _seq: { v:1, t:1, e:1, c:1, a:1, p:1, td:1 }
 };
+
+// Default to-do templates — selectable at event/tour creation, with a due date
+// computed as (reference date) minus offsetDays. appliesTo controls whether a
+// template shows up for events, tours, or both.
+function defaultTodoTemplates(){
+  return [
+    {id:'td_insurance', name:'Confirm event insurance', offsetDays:30, appliesTo:'event', defaultChecked:true},
+    {id:'td_deposit', name:'Send deposit', offsetDays:30, appliesTo:'event', defaultChecked:true},
+    {id:'td_posters', name:'Order posters', offsetDays:21, appliesTo:'event', defaultChecked:true},
+    {id:'td_rider', name:'Confirm rider / tech specs with venue', offsetDays:14, appliesTo:'event', defaultChecked:true},
+    {id:'td_marketing', name:'Local marketing push', offsetDays:10, appliesTo:'event', defaultChecked:false},
+    {id:'td_settle', name:'Send settlement / final payment', offsetDays:-2, appliesTo:'event', defaultChecked:false},
+    {id:'td_flights', name:'Book flights for the run', offsetDays:45, appliesTo:'tour', defaultChecked:true},
+    {id:'td_routing', name:'Confirm routing / travel days', offsetDays:30, appliesTo:'tour', defaultChecked:true},
+  ];
+}
 
 // Default pitch deck slide set — used to seed a new install, and as the "+ Add slide"
 // starting point for each slide type. Editable/removable/reorderable via Settings.
@@ -365,6 +384,144 @@ function defaultPitchSlides(){
 }
 
 function uid(kind){ return kind + (DB._seq[kind]++); }
+function fmtDate(dateStr){
+  if(!dateStr) return '';
+  const d=new Date(dateStr+'T12:00:00');
+  if(isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+}
+
+/* ---------- TO-DOS ---------- */
+// Compute a due date (YYYY-MM-DD) from a reference date minus offsetDays.
+// A negative offsetDays means "after" the reference date (e.g. -2 = 2 days after).
+function todoDueDate(refDateStr, offsetDays){
+  if(!refDateStr) return '';
+  const d=new Date(refDateStr+'T12:00:00'); // noon avoids timezone rollover
+  if(isNaN(d.getTime())) return '';
+  d.setDate(d.getDate()-(+offsetDays||0));
+  return d.toISOString().slice(0,10);
+}
+// Tours don't have a single "date" — use the earliest scheduled show as the
+// reference point for tour-level to-do due dates.
+function tourRefDate(tourId){
+  const shows=DB.events.filter(e=>e.tourId===tourId && e.date).sort((a,b)=>a.date<b.date?-1:1);
+  return shows[0]?.date || '';
+}
+function getTodoOwner(recordType,recordId){
+  const rec = recordType==='tour' ? get(DB.tours,recordId) : get(DB.events,recordId);
+  if(rec && !Array.isArray(rec.todos)) rec.todos=[];
+  return rec;
+}
+function addTodo(recordType,recordId,title,dueDate,templateId){
+  const rec=getTodoOwner(recordType,recordId); if(!rec||!title) return;
+  rec.todos.push({id:uid('td'),title,dueDate:dueDate||'',done:false,templateId:templateId||null});
+  persist();
+}
+function toggleTodoDone(recordType,recordId,todoId){
+  const rec=getTodoOwner(recordType,recordId); if(!rec) return;
+  const t=rec.todos.find(x=>x.id===todoId); if(!t) return;
+  t.done=!t.done;
+  persist();
+  renderTodoTab(recordType,recordId);
+  refreshTasksBadge();
+}
+function deleteTodo(recordType,recordId,todoId){
+  const rec=getTodoOwner(recordType,recordId); if(!rec) return;
+  rec.todos=rec.todos.filter(x=>x.id!==todoId);
+  persist();
+  renderTodoTab(recordType,recordId);
+  refreshTasksBadge();
+}
+function applyTodoTemplatesToRecord(recordType,recordId,templateIds,refDate){
+  const rec=getTodoOwner(recordType,recordId); if(!rec) return;
+  const templates=DB.settings.todoTemplates||[];
+  templateIds.forEach(tid=>{
+    const tpl=templates.find(x=>x.id===tid); if(!tpl) return;
+    // Don't duplicate if this template was already applied to this record
+    if(rec.todos.some(x=>x.templateId===tid)) return;
+    rec.todos.push({id:uid('td'),title:tpl.name,dueDate:todoDueDate(refDate,tpl.offsetDays),done:false,templateId:tid});
+  });
+  persist();
+}
+
+// Renders the To-dos tab/section for an event or tour: sorted list with
+// due dates (overdue ones flagged), checkboxes, delete, add manual, add from template.
+function renderTodoTab(recordType,recordId){
+  const host=document.getElementById('todo-tab-'+recordType+'-'+recordId); if(!host) return;
+  const rec=getTodoOwner(recordType,recordId); if(!rec) return;
+  const todos=(rec.todos||[]).slice().sort((a,b)=>{
+    if(!!a.done!==!!b.done) return a.done?1:-1; // open items first
+    if(!a.dueDate) return 1; if(!b.dueDate) return -1;
+    return a.dueDate<b.dueDate?-1:1;
+  });
+  const today=new Date().toISOString().slice(0,10);
+  const rows=todos.map(t=>{
+    const overdue=!t.done && t.dueDate && t.dueDate<today;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--bord)">
+      <input type="checkbox" ${t.done?'checked':''} onchange="toggleTodoDone('${recordType}','${recordId}','${t.id}')" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;${t.done?'text-decoration:line-through;color:var(--txt3)':''}">${esc(t.title)}</div>
+      </div>
+      <span style="font-size:11px;flex-shrink:0;color:${overdue?'var(--red)':'var(--txt3)'};font-weight:${overdue?600:400}">${t.dueDate?(overdue?'Overdue · ':'')+fmtDate(t.dueDate):'No due date'}</span>
+      <button class="btn ghost sm" style="padding:2px 6px;flex-shrink:0" onclick="deleteTodo('${recordType}','${recordId}','${t.id}')">×</button>
+    </div>`;
+  }).join('');
+  const availableTemplates=(DB.settings.todoTemplates||[]).filter(tpl=>
+    (tpl.appliesTo===recordType||tpl.appliesTo==='both') && !rec.todos.some(x=>x.templateId===tpl.id)
+  );
+  host.innerHTML=`
+    <div class="sec">
+      <div class="sec-label">To-dos</div>
+      ${todos.length?`<div style="margin-bottom:12px">${rows}</div>`:'<p class="muted" style="font-size:13px;margin-bottom:12px">No to-dos yet.</p>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" onclick="promptAddTodo('${recordType}','${recordId}')">+ Add to-do</button>
+        ${availableTemplates.length?`<button class="btn ghost sm" onclick="openTemplatePicker('${recordType}','${recordId}')">+ Add from template</button>`:''}
+      </div>
+    </div>`;
+}
+
+function promptAddTodo(recordType,recordId){
+  const refDate=recordType==='tour'?tourRefDate(recordId):(get(DB.events,recordId)?.date||'');
+  openModal('Add to-do',
+    `<div class="field"><label>Title</label><input id="adhoc-todo-title" placeholder="e.g. Confirm merch order"></div>
+     <div class="field"><label>Due date (optional)</label><input id="adhoc-todo-date" type="date" value="${refDate||''}"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveAdhocTodo('${recordType}','${recordId}')">Add</button>`);
+}
+function saveAdhocTodo(recordType,recordId){
+  const title=fv('adhoc-todo-title'); if(!title) return;
+  addTodo(recordType,recordId,title,fv('adhoc-todo-date'));
+  closeModal();
+  renderTodoTab(recordType,recordId);
+  refreshTasksBadge();
+}
+
+function openTemplatePicker(recordType,recordId){
+  const refDate=recordType==='tour'?tourRefDate(recordId):(get(DB.events,recordId)?.date||'');
+  const rec=getTodoOwner(recordType,recordId);
+  const available=(DB.settings.todoTemplates||[]).filter(tpl=>
+    (tpl.appliesTo===recordType||tpl.appliesTo==='both') && !rec.todos.some(x=>x.templateId===tpl.id)
+  );
+  const body=`
+    <p class="muted" style="font-size:12px;margin-bottom:10px">${refDate?'Due dates below are calculated from '+fmtDate(refDate)+'.':'Set a date on this '+recordType+' to calculate due dates automatically.'}</p>
+    ${available.map(tpl=>`
+      <label style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer">
+        <input type="checkbox" class="tpl-pick" value="${tpl.id}" ${tpl.defaultChecked?'checked':''} style="width:16px;height:16px">
+        <span style="flex:1;font-size:13px">${esc(tpl.name)}</span>
+        <span style="font-size:11px;color:var(--txt3)">${refDate?fmtDate(todoDueDate(refDate,tpl.offsetDays)):(tpl.offsetDays>=0?tpl.offsetDays+'d before':Math.abs(tpl.offsetDays)+'d after')}</span>
+      </label>`).join('')}`;
+  openModal('Add from template', body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="applyPickedTemplates('${recordType}','${recordId}')">Add selected</button>`);
+}
+function applyPickedTemplates(recordType,recordId){
+  const ids=[...document.querySelectorAll('.tpl-pick:checked')].map(el=>el.value);
+  const refDate=recordType==='tour'?tourRefDate(recordId):(get(DB.events,recordId)?.date||'');
+  applyTodoTemplatesToRecord(recordType,recordId,ids,refDate);
+  closeModal();
+  renderTodoTab(recordType,recordId);
+  refreshTasksBadge();
+}
 
 // Build <optgroup>-sorted venue <option> HTML, grouped by Country → Province/State
 // and ordered alphabetically by city within each group, so long venue lists are
@@ -662,16 +819,24 @@ function priceBreakdown(pricing){
   if(pricing.taxOn==='base') taxBase=base;
   else if(pricing.taxOn==='base_fee') taxBase=base+fee;
   const tax=taxBase*taxRate;
-  // Per-ticket fees: each can be flat $ or % of base
+  // Per-ticket fees: each can be flat $ or % of base, and each is independently
+  // either "passed to customer" (added on top of the ticket price, does not
+  // reduce what the venue pays out) or "deducted from payout" (the venue keeps
+  // it — it comes out of the base ticket revenue before payout/commission math,
+  // and is never added to what the customer pays).
   const ptFeeLines=pricing.perTicketFees||[];
-  const ptFees=ptFeeLines.reduce((t,f)=>{
+  let ptFeesCustomer=0, ptFeesPayout=0;
+  ptFeeLines.forEach(f=>{
     const amt=f.feeType==='pct' ? base*((+f.amount||0)/100) : (+f.amount||0);
-    return t+amt;
-  },0);
+    if(f.mode==='payout') ptFeesPayout+=amt;
+    else ptFeesCustomer+=amt;
+  });
+  const ptFees=ptFeesCustomer+ptFeesPayout; // combined, for any caller that just wants the total fee load
   const sub=base+fee+tax;
   const cc=sub*((+pricing.ccFee||0)/100);
-  const total=sub+cc+ptFees;
-  return {base,fee,tax,cc,ptFees,ptFeeLines,total,allInPrice:total};
+  const total=sub+cc+ptFeesCustomer; // what the customer actually pays — payout-mode fees are never added here
+  const payoutBase=Math.max(0,base-ptFeesPayout); // what venue payout/commission math should be based on
+  return {base,payoutBase,fee,tax,cc,ptFees,ptFeesCustomer,ptFeesPayout,ptFeeLines,total,allInPrice:total};
 }
 
 /* ---------- CORE FINANCIAL MODEL ----------
@@ -772,12 +937,16 @@ function projectionFigures(ev, ticketsOverride){
     tiers.forEach(t=>{
       const base=+t.base||0;
       const tax=base*taxRate;
-      const ptFees=ptFeeLines.reduce((s,f)=>{
-        return s+(f.feeType==='pct'?base*((+f.amount||0)/100):(+f.amount||0));
-      },0);
-      const allIn=base+tax+ptFees;
+      let ptFeesCustomer=0, ptFeesPayout=0;
+      ptFeeLines.forEach(f=>{
+        const amt=f.feeType==='pct'?base*((+f.amount||0)/100):(+f.amount||0);
+        if(f.mode==='payout') ptFeesPayout+=amt; else ptFeesCustomer+=amt;
+      });
+      const ptFees=ptFeesCustomer+ptFeesPayout;
+      const allIn=base+tax+ptFeesCustomer; // payout-mode fees are never charged to the customer
+      const payoutBase=Math.max(0,base-ptFeesPayout); // payout-mode fees come straight out of the venue's payout base
       grossBoxOffice+=allIn*(+t.count||0);
-      baseRevenue+=base*(+t.count||0);
+      baseRevenue+=payoutBase*(+t.count||0);
       taxTotal+=tax*(+t.count||0);
       totalSold+=(+t.count||0);
       tierLines.push({name:t.name,base,count:+t.count||0,tax,ptFees,allIn});
@@ -793,7 +962,7 @@ function projectionFigures(ev, ticketsOverride){
     const pb = priceBreakdown(pricing);
     const sold = ticketsOverride!=null ? ticketsOverride : (+p.ticketsEst||0);
     grossBoxOffice = pb.total * sold;
-    baseRevenue = pb.base * sold;
+    baseRevenue = pb.payoutBase * sold;
     taxTotal = pb.tax * sold;
     totalSold = sold;
   }
@@ -970,7 +1139,7 @@ const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 
 /* ---------- ROUTER ---------- */
 let route={view:'dashboard',id:null,tab:null};
-const NAV_TITLES={dashboard:'Dashboard',venues:'Venues',tours:'Tours',events:'Events',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
+const NAV_TITLES={dashboard:'Dashboard',venues:'Venues',tours:'Tours',events:'Events',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
 
 /* ---------- ARTIST VIEW MODE ---------- */
 let ARTIST_VIEW=null; // artist id when filtering the whole app to one artist
@@ -1466,22 +1635,20 @@ function vfRemovePtfRow(i){
   _vfPtf.splice(i,1);
   vfRenderPtfRows();
 }
-function vfReadPtfRows(){
-  return [...document.querySelectorAll('#vf-ptf-rows .vf-ptf-row')].map((_,i)=>({
-    desc:document.getElementById('vf-ptf-desc-'+i)?.value||'',
-    amount:+document.getElementById('vf-ptf-amt-'+i)?.value||0
-  }));
-}
 function vfRenderPtfRows(){
   const host=document.getElementById('vf-ptf-rows'); if(!host) return;
   host.innerHTML=_vfPtf.map((l,i)=>`
-    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:6px;margin-bottom:6px;align-items:center">
+    <div class="vf-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 150px 28px;gap:6px;margin-bottom:6px;align-items:center">
       <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="vf-ptf-desc-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
       <select id="vf-ptf-type-${i}" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
         <option value="fixed" ${(!l.feeType||l.feeType==='fixed')?'selected':''}>$ / ticket</option>
         <option value="pct" ${l.feeType==='pct'?'selected':''}>% of base</option>
       </select>
       <input type="number" placeholder="amount" value="${l.amount||''}" id="vf-ptf-amt-${i}" style="padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="vf-ptf-mode-${i}" title="Whether this fee is charged to the customer on top of the ticket price, or deducted from the venue payout instead" style="padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        <option value="customer" ${(!l.mode||l.mode==='customer')?'selected':''}>Pass to customer</option>
+        <option value="payout" ${l.mode==='payout'?'selected':''}>Deduct from payout</option>
+      </select>
       <button class="btn ghost sm" style="padding:2px 6px" onclick="vfRemovePtfRow(${i})">×</button>
     </div>`).join('');
 }
@@ -1489,7 +1656,8 @@ function vfReadPtfRows(){
   return [...document.querySelectorAll('#vf-ptf-rows .vf-ptf-row')].map((_,i)=>({
     desc:document.getElementById('vf-ptf-desc-'+i)?.value||'',
     feeType:document.getElementById('vf-ptf-type-'+i)?.value||'fixed',
-    amount:+document.getElementById('vf-ptf-amt-'+i)?.value||0
+    amount:+document.getElementById('vf-ptf-amt-'+i)?.value||0,
+    mode:document.getElementById('vf-ptf-mode-'+i)?.value||'customer'
   }));
 }
 function readVenuePerTicketFees(){
@@ -1987,8 +2155,10 @@ VIEWS.tours={
         </div>
         ${t.notes?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(t.notes)}</p>`:''}
       </div>
+      <div id="todo-tab-tour-${id}"></div>
       <div class="sec"><div class="sec-label">Shows</div>
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No shows yet.</p>'}</div>`;
+    renderTodoTab('tour',id);
   }
 };
 
@@ -2143,6 +2313,7 @@ VIEWS.events={
     if(canDo('admin')){
       a.innerHTML='<button class="btn sm" onclick="eventForm(\''+id+'\',null,null,null,\''+_refP+'\')">' + 'Edit deal</button>'
         +' <button class="btn sm" onclick="duplicateEvent(\''+id+'\')">' + 'Duplicate</button>'
+        +(e.date?' <button class="btn ghost sm" onclick="exportEventToGoogleCalendar(\''+id+'\')">📅 Add to Google Calendar</button>':'')
         +' <button class="btn sm danger" onclick="deleteEvent(\''+id+'\')">' + 'Delete</button>';
     } else {
       a.innerHTML='<span class="badge gray" style="font-size:11px">View only</span>';
@@ -2152,7 +2323,7 @@ VIEWS.events={
         <span class="detail-title">${esc(e.name)}</span>
         <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span></div>
       <div class="tabs">
-        ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
+        ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['todos','To-dos'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}',null,'${refProp||''}')">${lbl}</div>`).join('')}
       </div>
       <div id="ev-tab"></div>`;
@@ -2162,9 +2333,54 @@ VIEWS.events={
     else if(tab==='expenses') eventExpenses(host,e);
     else if(tab==='settlement') eventSettlementV2(host,e);
     else if(tab==='logistics') eventLogistics(host,e,v);
+    else if(tab==='todos'){ host.innerHTML=`<div id="todo-tab-event-${id}"></div>`; renderTodoTab('event',id); }
     else if(tab==='people') eventPeople(host,e);
     else if(tab==='files') eventFiles(host,e);
     else if(tab==='compare') eventVenueHistory(host,e,v);
+  }
+};
+
+VIEWS.tasks={
+  render(c,a){
+    a.innerHTML=canDo('admin')?'<button class="btn sm" onclick="goToTodoTemplateEditor()">✎ Manage templates</button>':'';
+    // Aggregate every to-do across all events and tours into one flat, sortable list.
+    const items=[];
+    DB.events.forEach(e=>(e.todos||[]).forEach(t=>items.push({...t,recordType:'event',recordId:e.id,recordName:e.name,recordDate:e.date})));
+    DB.tours.forEach(t=>(t.todos||[]).forEach(td=>items.push({...td,recordType:'tour',recordId:t.id,recordName:t.name,recordDate:tourRefDate(t.id)})));
+
+    const today=new Date().toISOString().slice(0,10);
+    const filterVal=route.tab||'open'; // open | done | all
+    let filtered=items;
+    if(filterVal==='open') filtered=items.filter(x=>!x.done);
+    else if(filterVal==='done') filtered=items.filter(x=>x.done);
+    filtered=filtered.slice().sort((a,b)=>{
+      if(!!a.done!==!!b.done) return a.done?1:-1;
+      if(!a.dueDate) return 1; if(!b.dueDate) return -1;
+      return a.dueDate<b.dueDate?-1:1;
+    });
+
+    const overdueCount=items.filter(x=>!x.done && x.dueDate && x.dueDate<today).length;
+    const rows=filtered.map(t=>{
+      const overdue=!t.done && t.dueDate && t.dueDate<today;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--bord)">
+        <input type="checkbox" ${t.done?'checked':''} onchange="toggleTodoDone('${t.recordType}','${t.recordId}','${t.id}');go('tasks',null,route.tab)" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;${t.done?'text-decoration:line-through;color:var(--txt3)':''}">${esc(t.title)}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px">
+            <a onclick="go('${t.recordType==='tour'?'tours':'events'}','${t.recordId}'${t.recordType==='event'?",'todos'":''})" style="cursor:pointer;color:var(--txt2)">${esc(t.recordName)}</a>
+            <span class="badge ${t.recordType==='tour'?'blue':'gray'}" style="margin-left:6px;font-size:10px">${t.recordType==='tour'?'Tour':'Event'}</span>
+          </div>
+        </div>
+        <span style="font-size:11px;flex-shrink:0;color:${overdue?'var(--red)':'var(--txt3)'};font-weight:${overdue?600:400}">${t.dueDate?(overdue?'Overdue · ':'')+fmtDate(t.dueDate):'No due date'}</span>
+      </div>`;
+    }).join('');
+
+    c.innerHTML=`
+      <div class="tabs">
+        ${[['open','Open'],['done','Done'],['all','All']].map(([tb,lbl])=>
+          `<div class="tab ${filterVal===tb?'active':''}" onclick="go('tasks',null,'${tb}')">${lbl}${tb==='open'&&overdueCount?' <span class="badge red" style="font-size:10px">'+overdueCount+' overdue</span>':''}</div>`).join('')}
+      </div>
+      ${filtered.length?`<div class="sec">${rows}</div>`:emptyState('☑','Nothing here')}`;
   }
 };
 
@@ -2221,12 +2437,54 @@ function duplicateEvent(id){
   copy.name=(e.name||'Event')+' (copy)';
   copy.date=''; // reset date
   copy.presales=0;
+  copy.todos=[]; // don't carry over to-dos tied to the original event's date
   // reset settlement actuals but keep cost structure and projection
   copy.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''};
   DB.events.push(copy);
   logActivity('created','Event',copy.name+' (duplicated)');
   persist();
   go('events',copy.id,'overview');
+}
+
+// One-way export to Google Calendar via the "quick add" URL scheme — no OAuth
+// or API key needed. Opens a pre-filled new-event screen in a new tab; the
+// user reviews and saves it themselves on Google's side.
+function exportEventToGoogleCalendar(id){
+  const e=get(DB.events,id); if(!e||!e.date) return;
+  const v=get(DB.venues,e.venueId);
+  // Google's quick-add expects UTC-ish basic format: YYYYMMDDTHHMMSS or YYYYMMDD for all-day.
+  const toGCalDate=(dateStr,timeStr)=>{
+    const datePart=dateStr.replace(/-/g,'');
+    if(!timeStr) return datePart;
+    const [h,m]=timeStr.split(':');
+    return datePart+'T'+String(h).padStart(2,'0')+String(m||'0').padStart(2,'0')+'00';
+  };
+  const startTime=e.showTime||e.loadIn||'';
+  const start=toGCalDate(e.date,startTime);
+  // Default to a 3-hour block if we only have a start time; all-day if we have neither time.
+  let end;
+  if(startTime){
+    const d=new Date(e.date+'T'+(startTime.length===5?startTime:startTime+':00')+':00');
+    d.setHours(d.getHours()+3);
+    end=toGCalDate(d.toISOString().slice(0,10),d.toTimeString().slice(0,5));
+  } else {
+    const d=new Date(e.date+'T00:00:00'); d.setDate(d.getDate()+1);
+    end=toGCalDate(d.toISOString().slice(0,10));
+  }
+  const details=[
+    v?('Venue: '+v.name):'',
+    e.loadIn?('Load-in: '+e.loadIn):'',
+    e.showTime?('Show: '+e.showTime):'',
+    'Capacity: '+(e.capacityAlloc||'—'),
+  ].filter(Boolean).join('\n');
+  const params=new URLSearchParams({
+    action:'TEMPLATE',
+    text:e.name||'Event',
+    dates:start+'/'+end,
+    details,
+    location:v?[v.name,v.city,v.province].filter(Boolean).join(', '):''
+  });
+  window.open('https://calendar.google.com/calendar/render?'+params.toString(),'_blank');
 }
 
 /* ============================================================
@@ -3781,23 +4039,13 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
         <option value="none" ${p.taxOn==='none'?'selected':''}>Tax exempt</option></select></div>
       <div class="field"><label>Comps</label><input id="ef-comps" type="number" value="${e.comps||0}"></div>
     </div>
-    <div class="form-section">Per-ticket fees (passed to customer) <span style="font-weight:400;font-size:11px;color:var(--txt3)">(added to all-in price — flows straight to venue)</span></div>
-    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 60px 90px 28px;gap:8px">
-      <span>Fee name</span><span>Type</span><span style="text-align:right">Amount</span><span></span>
+    <div class="form-section">Per-ticket fees</div>
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;display:grid;grid-template-columns:1fr 60px 90px 150px 28px;gap:8px">
+      <span>Fee name</span><span>Type</span><span style="text-align:right">Amount</span><span>How it's handled</span><span></span>
     </div>
-    <div id="ef-ptf-rows">
-      ${(p.perTicketFees||[]).map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
-        <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="ef-ptf-desc-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <select id="ef-ptf-type-${i}" style="padding:6px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-          <option value="fixed" ${(!l.feeType||l.feeType==='fixed')?'selected':''}>$</option>
-          <option value="pct" ${l.feeType==='pct'?'selected':''}>%</option>
-        </select>
-        <input type="number" placeholder="amount" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-        <button class="btn ghost sm" onclick="efRemovePtfRow(${i})" style="padding:5px 7px">×</button>
-      </div>`).join('')}
-    </div>
+    <div id="ef-ptf-rows"></div>
     <button class="btn sm" onclick="efAddPtfRow()" style="margin-bottom:6px">+ Add per-ticket fee</button>
-    <p class="muted" style="font-size:11px;margin-bottom:14px">These inflate the patron's all-in price but don't affect your payout or commission.</p>
+    <p class="muted" style="font-size:11px;margin-bottom:14px">"Pass to customer" adds the fee on top of the ticket price without touching your payout. "Deduct from payout" keeps the ticket price as-is for the customer but comes out of what the venue pays you before commission.</p>
 
     <div class="form-section">Deal terms — negotiated for this show</div>
     <div class="field"><label>Contract type</label>
@@ -3865,10 +4113,22 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
     </div>
     <button class="btn sm" onclick="addCostLine('fees')" style="margin-bottom:14px">+ Add flat fee</button>
 
-    <div class="field"><label>Management commission %</label><input id="ef-mgmt" type="number" value="${e.mgmtPct!=null?e.mgmtPct:DB.settings.mgmtPct}"></div>`;
+    <div class="field"><label>Management commission %</label><input id="ef-mgmt" type="number" value="${e.mgmtPct!=null?e.mgmtPct:DB.settings.mgmtPct}"></div>
+    ${!id&&(DB.settings.todoTemplates||[]).some(x=>x.appliesTo==='event'||x.appliesTo==='both')?`
+    <div class="form-section">To-dos</div>
+    <p class="muted" style="font-size:12px;margin-bottom:8px">Selected items will be added with due dates calculated from the show date above.</p>
+    ${(DB.settings.todoTemplates||[]).filter(x=>x.appliesTo==='event'||x.appliesTo==='both').map(tpl=>`
+      <label style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer">
+        <input type="checkbox" class="ef-tpl-pick" value="${tpl.id}" ${tpl.defaultChecked?'checked':''} style="width:16px;height:16px">
+        <span style="flex:1;font-size:13px">${esc(tpl.name)}</span>
+        <span style="font-size:11px;color:var(--txt3)">${tpl.offsetDays>=0?tpl.offsetDays+'d before':Math.abs(tpl.offsetDays)+'d after'}</span>
+      </label>`).join('')}
+    `:''}`;
   openModal(id?'Edit event deal':'New event', body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveEvent('${id||''}')">Save event</button>`);
+  _efPtf=JSON.parse(JSON.stringify(p.perTicketFees||[]));
+  efRenderPtfRows();
   setTimeout(()=>toggleDealFields({guarantee:t.guarantee||'',doorSplit:t.doorSplit||'',rental:t.rental||''}), 30);
 }
 function prefillVenueTerms(){
@@ -4007,7 +4267,9 @@ function efRemovePtfRow(i){
 function efReadPtfRows(){
   return [...document.querySelectorAll('#ef-ptf-rows .ef-ptf-row')].map((_,i)=>({
     desc:document.getElementById('ef-ptf-desc-'+i)?.value||'',
-    amount:+document.getElementById('ef-ptf-amt-'+i)?.value||0
+    feeType:document.getElementById('ef-ptf-type-'+i)?.value||'fixed',
+    amount:+document.getElementById('ef-ptf-amt-'+i)?.value||0,
+    mode:document.getElementById('ef-ptf-mode-'+i)?.value||'customer'
   }));
 }
 
@@ -4043,9 +4305,17 @@ function efRenderTiers(){
 
 function efRenderPtfRows(){
   const host=document.getElementById('ef-ptf-rows'); if(!host) return;
-  host.innerHTML=_efPtf.map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 90px 28px;gap:8px;margin-bottom:8px;align-items:center">
+  host.innerHTML=_efPtf.map((l,i)=>`<div class="ef-ptf-row" style="display:grid;grid-template-columns:1fr 60px 90px 150px 28px;gap:8px;margin-bottom:8px;align-items:center">
     <input placeholder="e.g. Box Office Surcharge" value="${esc(l.desc||'')}" id="ef-ptf-desc-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-    <input type="number" placeholder="$/ticket" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+    <select id="ef-ptf-type-${i}" style="padding:6px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <option value="fixed" ${(!l.feeType||l.feeType==='fixed')?'selected':''}>$</option>
+      <option value="pct" ${l.feeType==='pct'?'selected':''}>%</option>
+    </select>
+    <input type="number" placeholder="amount" value="${l.amount||''}" id="ef-ptf-amt-${i}" style="padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+    <select id="ef-ptf-mode-${i}" title="Whether this fee is charged to the customer on top of the ticket price, or deducted from the venue payout instead" style="padding:6px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+      <option value="customer" ${(!l.mode||l.mode==='customer')?'selected':''}>Pass to customer</option>
+      <option value="payout" ${l.mode==='payout'?'selected':''}>Deduct from payout</option>
+    </select>
     <button class="btn ghost sm" onclick="efRemovePtfRow(${i})" style="padding:5px 7px">×</button>
   </div>`).join('');
 }
@@ -4198,7 +4468,9 @@ function saveEvent(id){
     return;
   }
   if(id){ const e=get(DB.events,id); Object.assign(e,rec); logActivity('edited','Event',rec.name); }
-  else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
+  else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[];rec.todos=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
+    const pickedTpl=[...document.querySelectorAll('.ef-tpl-pick:checked')].map(el=>el.value);
+    if(pickedTpl.length) applyTodoTemplatesToRecord('event',rec.id,pickedTpl,rec.date);
     if(_curProposalLink){ const p=get(DB.proposals,_curProposalLink); if(p){ p.eventIds=p.eventIds||[]; p.eventIds.push(rec.id);} } }
   const linkedProp=_curProposalLink; _curProposalLink=null;
   const ref=_curEventRef; _curEventRef=null;
@@ -7455,9 +7727,15 @@ function acceptProposal(id){
     const tourRec={id:uid('t'),name:p.title,
       artist:p.artistName||((get(DB.artists,p.artistId)||{}).name||''),
       start:dates[0]||'',end:dates[dates.length-1]||'',
-      status:'Routing',notes:p.intro||'',proposalId:id};
+      status:'Routing',notes:p.intro||'',proposalId:id,todos:[]};
     DB.tours.push(tourRec); tourId=tourRec.id;
     logActivity('created','Tour',tourRec.name+' (from proposal)');
+    // Auto-apply default-checked tour-level to-do templates, dated from the
+    // earliest show. There's no interactive creation form for tours (they're
+    // always created this way, from an accepted proposal), so this applies
+    // the defaults automatically rather than showing a picker.
+    const defaultTourTpls=(DB.settings.todoTemplates||[]).filter(x=>(x.appliesTo==='tour'||x.appliesTo==='both')&&x.defaultChecked).map(x=>x.id);
+    if(defaultTourTpls.length) applyTodoTemplatesToRecord('tour',tourId,defaultTourTpls,tourRec.start);
   }
   shows.forEach(s=>{
     const v=get(DB.venues,s.venueId);
@@ -7477,11 +7755,14 @@ function acceptProposal(id){
         expenses:(s.expenses||[]).map(x=>({...x}))},
       settlementV2:{venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''},
       logistics:DEFAULT_LOGISTICS.map((item,i)=>({id:'lg'+(Date.now()+i),label:item.label,confirmed:false,note:'',confirmedAt:null})),
-      talentIds:[],vendorIds:[],crewIds:[],files:[]
+      talentIds:[],vendorIds:[],crewIds:[],files:[],todos:[]
     };
     DB.events.push(eventRec);
     createdEventIds.push(eventRec.id);
     logActivity('created','Event',eventRec.name+' (from proposal)');
+    // Same auto-apply for event-level default-checked templates.
+    const defaultEventTpls=(DB.settings.todoTemplates||[]).filter(x=>(x.appliesTo==='event'||x.appliesTo==='both')&&x.defaultChecked).map(x=>x.id);
+    if(defaultEventTpls.length) applyTodoTemplatesToRecord('event',eventRec.id,defaultEventTpls,eventRec.date);
   });
   p.status='Accepted';
   p.acceptedAt=new Date().toISOString();
@@ -7541,6 +7822,13 @@ VIEWS.settings={
         </div>
       </div>
 
+      <div class="sec" style="max-width:640px">
+        <div class="sec-label">To-do templates</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">Standard checklist items selectable when creating an event or tour (or from a show's/tour's To-dos tab afterward). Due dates are calculated automatically from the show date (or the tour's earliest show).</p>
+        <div id="todo-templates-list"></div>
+        <button class="btn sm" style="margin-top:8px" onclick="todoTemplateAdd()">+ Add template</button>
+      </div>
+
       <div class="sec" style="max-width:560px">
         <div class="sec-label">AI — Contract import</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
@@ -7586,6 +7874,7 @@ VIEWS.settings={
         </div>
       </div>`;
     renderPitchSlidesList();
+    renderTodoTemplatesList();
   }
 };
 function saveSettings(){ 
@@ -7613,6 +7902,84 @@ function uploadLogo(file){
 function resetLogo(){
   DB.settings.logoDataUrl=null;
   persist(); render();
+}
+
+// ─── To-do template library (Settings) ───
+function renderTodoTemplatesList(){
+  const host=document.getElementById('todo-templates-list'); if(!host) return;
+  const templates=DB.settings.todoTemplates||[];
+  if(!templates.length){ host.innerHTML='<p class="muted" style="font-size:13px">No templates yet — add one below.</p>'; return; }
+  const appliesLabel={event:'Event',tour:'Tour',both:'Event + Tour'};
+  host.innerHTML=templates.map((tpl,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bord);border-radius:8px;margin-bottom:8px;background:var(--surf)">
+      <span class="badge ${tpl.appliesTo==='tour'?'blue':'gray'}" style="flex-shrink:0">${appliesLabel[tpl.appliesTo]||'Event'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${esc(tpl.name)}</div>
+        <div style="font-size:11px;color:var(--txt3)">${tpl.offsetDays>=0?tpl.offsetDays+' day'+(tpl.offsetDays!==1?'s':'')+' before':Math.abs(tpl.offsetDays)+' day'+(tpl.offsetDays!==-1?'s':'')+' after'} · ${tpl.defaultChecked?'checked by default':'unchecked by default'}</div>
+      </div>
+      <button class="btn sm" onclick="todoTemplateEdit('${tpl.id}')">Edit</button>
+      <button class="btn ghost sm" onclick="todoTemplateDelete('${tpl.id}')">×</button>
+    </div>`).join('');
+}
+
+function todoTemplateAdd(){
+  const id='tpl_'+Date.now().toString(36);
+  DB.settings.todoTemplates=DB.settings.todoTemplates||[];
+  DB.settings.todoTemplates.push({id,name:'New to-do',offsetDays:14,appliesTo:'event',defaultChecked:false});
+  persist(); renderTodoTemplatesList();
+  todoTemplateEdit(id);
+}
+
+function todoTemplateEdit(id){
+  const tpl=(DB.settings.todoTemplates||[]).find(x=>x.id===id); if(!tpl) return;
+  const body=`
+    <div class="field"><label>Task name</label><input id="tte-name" value="${esc(tpl.name||'')}"></div>
+    <div class="row2">
+      <div class="field"><label>Days before show date</label><input id="tte-offset" type="number" value="${tpl.offsetDays}">
+        <p class="muted" style="font-size:11px;margin-top:2px">Use a negative number for "days after" (e.g. -2 for a settlement due 2 days after the show).</p></div>
+      <div class="field"><label>Applies to</label><select id="tte-applies">
+        <option value="event" ${tpl.appliesTo==='event'?'selected':''}>Event only</option>
+        <option value="tour" ${tpl.appliesTo==='tour'?'selected':''}>Tour only</option>
+        <option value="both" ${tpl.appliesTo==='both'?'selected':''}>Both</option>
+      </select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
+      <input type="checkbox" id="tte-default" style="width:auto" ${tpl.defaultChecked?'checked':''}> Checked by default when picking templates
+    </label>`;
+  openModal('Edit to-do template', body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="todoTemplateSave('${id}')">Save</button>`);
+}
+
+function todoTemplateSave(id){
+  const tpl=(DB.settings.todoTemplates||[]).find(x=>x.id===id); if(!tpl) return;
+  tpl.name=fv('tte-name');
+  tpl.offsetDays=+document.getElementById('tte-offset')?.value||0;
+  tpl.appliesTo=fv('tte-applies');
+  tpl.defaultChecked=!!document.getElementById('tte-default')?.checked;
+  persist(); closeModal(); renderTodoTemplatesList();
+}
+
+function todoTemplateDelete(id){
+  if(!confirm('Remove this template? Existing to-dos already created from it are unaffected.')) return;
+  DB.settings.todoTemplates=(DB.settings.todoTemplates||[]).filter(x=>x.id!==id);
+  persist(); renderTodoTemplatesList();
+}
+
+// Jump straight to the to-do template editor from anywhere (e.g. the Tasks page).
+function goToTodoTemplateEditor(){
+  go('settings');
+  setTimeout(()=>{
+    const el=document.getElementById('todo-templates-list');
+    if(el && typeof el.scrollIntoView==='function') el.scrollIntoView({behavior:'smooth',block:'start'});
+    const sec=el?.closest('.sec');
+    if(sec){
+      const orig=sec.style.boxShadow;
+      sec.style.transition='box-shadow .3s ease';
+      sec.style.boxShadow='0 0 0 2px var(--acc)';
+      setTimeout(()=>{ sec.style.boxShadow=orig; },1600);
+    }
+  },80);
 }
 
 function saveBranding(){
@@ -7840,8 +8207,9 @@ function resetData(){
     for(const k in DB) delete DB[k];
     Object.assign(DB,{venues:[],tours:[],events:[],contacts:[],artists:[],proposals:[],activity:[],settings:{mgmtPct:15,taxRate:13,serviceFeePct:5,supabaseConfig:null,googleConnected:false,theme:DB.settings.theme||'light',
       companyName:'',companyTagline:'',contactEmail:'',contactPhone:'',logoDataUrl:null,
-      pitchSlides:defaultPitchSlides()
-    },_seq:{v:1,t:1,e:1,c:1,a:1,p:1}});
+      pitchSlides:defaultPitchSlides(),
+      todoTemplates:defaultTodoTemplates()
+    },_seq:{v:1,t:1,e:1,c:1,a:1,p:1,td:1}});
     seed(); go('dashboard');
   }
 }
@@ -7930,12 +8298,16 @@ if(AUTH_USER) {
     await load();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
+    // Migrate: seed default to-do templates, and ensure the id counter exists
+    if(!DB.settings.todoTemplates || !Array.isArray(DB.settings.todoTemplates)) DB.settings.todoTemplates = defaultTodoTemplates();
+    if(!DB._seq.td) DB._seq.td = 1;
     applyTheme(); // reconcile with the authoritative (possibly Supabase-synced) setting
     const savedAV=localStorage.getItem('tourdesk_artistview');
     if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
     applyArtistViewChrome();
     go('dashboard');
     updateSyncBadge();
+    refreshTasksBadge();
   })();
 }
 
@@ -7943,6 +8315,17 @@ function updateSyncBadge(){
   const dot=document.getElementById('sync-dot'), txt=document.getElementById('sync-text');
   if(SBDB){ dot.className='dot ok'; txt.textContent='Syncing to Supabase'; }
   else { dot.className='dot off'; txt.textContent='Local only'; }
+}
+
+// Overdue+due-soon count shown as a red badge on the Tasks nav item.
+function refreshTasksBadge(){
+  const badge=document.getElementById('tasks-nav-badge'); if(!badge) return;
+  const today=new Date().toISOString().slice(0,10);
+  let count=0;
+  DB.events.forEach(e=>(e.todos||[]).forEach(t=>{ if(!t.done && t.dueDate && t.dueDate<=today) count++; }));
+  DB.tours.forEach(t=>(t.todos||[]).forEach(td=>{ if(!td.done && td.dueDate && td.dueDate<=today) count++; }));
+  if(count>0){ badge.textContent=count; badge.style.display='inline-block'; }
+  else badge.style.display='none';
 }
 </script>
 
