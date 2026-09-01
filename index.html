@@ -4,6 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TourDesk — Event &amp; Tour Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
@@ -1357,6 +1358,7 @@ VIEWS.venues={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
     a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueContractImport()">📄 Import from contract</button>
+      <button class="btn sm" onclick="venueBulkImport()">⬆ Bulk import</button>
       <button class="btn primary" onclick="venueForm()">+ Add venue</button>`:'';
     // Collect unique provinces and countries for filters
     const provs=[...new Set(DB.venues.map(v=>v.province).filter(Boolean))].sort();
@@ -8234,6 +8236,166 @@ function deleteContact(id){
   DB.venues.forEach(v=>{ if(v.contactId===id) v.contactId=''; });
   persist(); go('contacts');
 }
+/* ============================================================
+   VENUE BULK IMPORT — CSV/XLSX upload with duplicate detection
+   ============================================================ */
+let _vbiRows=[]; // parsed+mapped rows awaiting confirmation, in file order
+
+function venueBulkImport(){
+  openModal('Bulk import venues',`
+    <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">
+      Upload a CSV or Excel file. Expected columns (any order, close matches are fine):
+      <strong>Venue name, City, Province/State, Country, Type, Capacity, Phone, Email, Website, Notes</strong>.
+      Venues that already exist (matched by name + city) are skipped automatically — the existing record always wins.</p>
+    <input type="file" id="vbi-file" accept=".csv,.xlsx,.xls" onchange="venueBulkFileSelected(this.files[0])">
+    <div id="vbi-preview" style="margin-top:16px"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" id="vbi-confirm-btn" style="display:none" onclick="venueBulkConfirmImport()">Import</button>`);
+}
+
+function venueBulkFileSelected(file){
+  if(!file) return;
+  const preview=document.getElementById('vbi-preview');
+  preview.innerHTML='<p class="muted" style="font-size:13px">Reading file…</p>';
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const sheetName=wb.SheetNames[0];
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
+      venueBulkProcessRows(rows);
+    }catch(err){
+      preview.innerHTML='<p style="color:var(--red);font-size:13px">Could not read this file: '+esc(err.message||String(err))+'</p>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Flexible header matching — looks for the best-fit column for each field
+// rather than requiring exact names, since real-world sheets vary.
+function _vbiFindCol(headers,candidates){
+  const norm=headers.map(h=>String(h||'').toLowerCase().trim());
+  for(const cand of candidates){
+    const idx=norm.findIndex(h=>h===cand);
+    if(idx>=0) return idx;
+  }
+  for(const cand of candidates){
+    const idx=norm.findIndex(h=>h.includes(cand));
+    if(idx>=0) return idx;
+  }
+  return -1;
+}
+
+function _vbiNormalizeKey(name,city){
+  return (String(name||'').toLowerCase().trim()+'|'+String(city||'').toLowerCase().trim()).replace(/\s+/g,' ');
+}
+
+function venueBulkProcessRows(rows){
+  const preview=document.getElementById('vbi-preview');
+  if(!rows.length){ preview.innerHTML='<p style="font-size:13px;color:var(--red)">File appears to be empty.</p>'; return; }
+  const headers=rows[0];
+  const col={
+    name:_vbiFindCol(headers,['venue','venue name','name']),
+    city:_vbiFindCol(headers,['city']),
+    province:_vbiFindCol(headers,['province','state','province / state','province/state']),
+    country:_vbiFindCol(headers,['country']),
+    type:_vbiFindCol(headers,['type']),
+    capacity:_vbiFindCol(headers,['capacity','cap']),
+    phone:_vbiFindCol(headers,['phone','contact phone']),
+    email:_vbiFindCol(headers,['email','contact email']),
+    website:_vbiFindCol(headers,['website','url','web']),
+    rentalInfo:_vbiFindCol(headers,['rental info','rental','rentals']),
+    notes:_vbiFindCol(headers,['notes','note'])
+  };
+  if(col.name<0){
+    preview.innerHTML='<p style="font-size:13px;color:var(--red)">Could not find a venue name column. Make sure the first row has headers.</p>';
+    return;
+  }
+  const typeOptions=['Club','Theatre','Arena','Festival','Bar','Corporate','Other'];
+  const mapType=(raw)=>{
+    const r=String(raw||'').toLowerCase();
+    if(r.includes('theatre')||r.includes('theater')||r.includes('performance')) return 'Theatre';
+    if(r.includes('arena')||r.includes('stadium')) return 'Arena';
+    if(r.includes('club')) return 'Club';
+    if(r.includes('festival')) return 'Festival';
+    if(r.includes('bar')||r.includes('pub')) return 'Bar';
+    if(r.includes('corporate')||r.includes('hotel')||r.includes('conference')) return 'Corporate';
+    return 'Other';
+  };
+  // Existing venues, keyed by normalized name+city, so the original always wins.
+  const existingKeys=new Set(DB.venues.map(v=>_vbiNormalizeKey(v.name,v.city)));
+  const seenInFile=new Set(); // also dedupe against repeats within the uploaded file itself
+
+  const parsed=[]; let skippedExisting=0, skippedDupeInFile=0, skippedNoName=0;
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    if(!r || !r.length) continue;
+    const name=String(r[col.name]||'').trim();
+    if(!name){ skippedNoName++; continue; }
+    const city=col.city>=0?String(r[col.city]||'').trim():'';
+    const key=_vbiNormalizeKey(name,city);
+    if(existingKeys.has(key)){ skippedExisting++; continue; }
+    if(seenInFile.has(key)){ skippedDupeInFile++; continue; }
+    seenInFile.add(key);
+    const notesParts=[];
+    if(col.website>=0 && r[col.website]) notesParts.push('Website: '+String(r[col.website]).trim());
+    if(col.rentalInfo>=0 && r[col.rentalInfo]) notesParts.push('Rental info: '+String(r[col.rentalInfo]).trim());
+    if(col.notes>=0 && r[col.notes]) notesParts.push(String(r[col.notes]).trim());
+    parsed.push({
+      name, city,
+      province:col.province>=0?String(r[col.province]||'').trim():'',
+      country:col.country>=0?(String(r[col.country]||'').trim()||'Canada'):'Canada',
+      type:mapType(col.type>=0?r[col.type]:''),
+      capacity:col.capacity>=0?(+r[col.capacity]||0):0,
+      contactPhone:col.phone>=0?String(r[col.phone]||'').trim():'',
+      contactEmail:col.email>=0?String(r[col.email]||'').trim():'',
+      notes:notesParts.join(' · ')
+    });
+  }
+  _vbiRows=parsed;
+  const skippedTotal=skippedExisting+skippedDupeInFile;
+  preview.innerHTML=`
+    <div style="background:var(--surf2);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:13px">
+      <strong>${parsed.length}</strong> new venue${parsed.length!==1?'s':''} ready to import.
+      ${skippedExisting?`<br><span style="color:var(--txt2)">${skippedExisting} skipped — already in your venue list (existing record kept as-is).</span>`:''}
+      ${skippedDupeInFile?`<br><span style="color:var(--txt2)">${skippedDupeInFile} skipped — duplicate rows within the file itself.</span>`:''}
+      ${skippedNoName?`<br><span style="color:var(--txt2)">${skippedNoName} row(s) skipped — no venue name.</span>`:''}
+    </div>
+    ${parsed.length?`<div style="max-height:280px;overflow-y:auto;border:1px solid var(--bord);border-radius:8px">
+      <table class="tbl" style="border:none;border-radius:0">
+        <thead><tr><th>Venue</th><th>City</th><th>Prov/State</th><th>Type</th><th class="num">Cap</th></tr></thead>
+        <tbody>${parsed.slice(0,200).map(v=>`<tr><td>${esc(v.name)}</td><td>${esc(v.city)}</td><td>${esc(v.province)}</td><td>${esc(v.type)}</td><td class="num">${v.capacity||'—'}</td></tr>`).join('')}</tbody>
+      </table>
+      ${parsed.length>200?`<p class="muted" style="font-size:12px;padding:8px 12px">…and ${parsed.length-200} more.</p>`:''}
+    </div>`:''}`;
+  const btn=document.getElementById('vbi-confirm-btn');
+  if(btn) btn.style.display=parsed.length?'inline-flex':'none';
+}
+
+function venueBulkConfirmImport(){
+  if(!_vbiRows.length) return;
+  let added=0;
+  _vbiRows.forEach(row=>{
+    const rec={
+      id:uid('v'), name:row.name, hall:'', type:row.type, city:row.city,
+      province:row.province, country:row.country||'Canada', capacity:row.capacity||0, address:'',
+      contactName:'', contactRole:'', contactEmail:row.contactEmail||'', contactPhone:row.contactPhone||'',
+      notes:row.notes||'', tags:[],
+      contractType:'rental', guarantee:0, rental:0, doorSplit:0, rentalPct:0,
+      showCosts:{crew:[],equipment:[],fees:[]}, perTicketFees:[],
+      depositAmount:0, depositPayer:'venue',
+      taxRate:inferProvinceTaxRate(row.province), taxOn:'base'
+    };
+    DB.venues.push(rec);
+    added++;
+  });
+  logActivity('created','Venue','Bulk imported '+added+' venue'+(added!==1?'s':''));
+  persist();
+  _vbiRows=[];
+  closeModal();
+  go('venues');
+}
+
 function deleteVenue(id){
   const v=get(DB.venues,id); if(!v) return;
   const linked=DB.events.filter(e=>e.venueId===id);
