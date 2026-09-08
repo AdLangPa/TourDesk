@@ -555,6 +555,58 @@ function venueOptionsGrouped(venues, selectedId, opts){
     return `<optgroup label="${esc(label)}">${optsHtml}</optgroup>`;
   }).join('');
 }
+
+// ─── Generic cascading venue picker: Country → Province/State → City → Venue ───
+// Any four <select> elements with IDs `${prefix}-country`, `${prefix}-province`,
+// `${prefix}-city`, `${prefix}-venue` can use this shared logic — used by both
+// the event form and the proposal "Add show" flow. Each level narrows the next;
+// any level can be left on "All" to skip filtering by it.
+function venueCascadeInit(prefix, selectedVenueId, onVenueChange){
+  const v = selectedVenueId ? get(DB.venues, selectedVenueId) : null;
+  venueCascadePopulateFilters(prefix, v?.country||'', v?.province||'', v?.city||'');
+  venueCascadePopulateVenues(prefix, selectedVenueId, onVenueChange);
+}
+function venueCascadePopulateFilters(prefix, selCountry, selProvince, selCity){
+  const countrySel=document.getElementById(prefix+'-country');
+  const provinceSel=document.getElementById(prefix+'-province');
+  const citySel=document.getElementById(prefix+'-city');
+  if(!countrySel) return;
+  const curCountry=selCountry!==undefined?selCountry:countrySel.value;
+  const countries=[...new Set(DB.venues.map(v=>v.country||'Canada'))].sort();
+  countrySel.innerHTML='<option value="">All countries</option>'+countries.map(c=>`<option value="${esc(c)}" ${c===curCountry?'selected':''}>${esc(c)}</option>`).join('');
+
+  const curProvince=selProvince!==undefined?selProvince:provinceSel.value;
+  const provPool=DB.venues.filter(v=>!curCountry||(v.country||'Canada')===curCountry);
+  const provinces=[...new Set(provPool.map(v=>v.province).filter(Boolean))].sort();
+  provinceSel.innerHTML='<option value="">All provinces/states</option>'+provinces.map(pr=>`<option value="${esc(pr)}" ${pr===curProvince?'selected':''}>${esc(pr)}</option>`).join('');
+
+  const curCity=selCity!==undefined?selCity:citySel.value;
+  const cityPool=provPool.filter(v=>!curProvince||v.province===curProvince);
+  const cities=[...new Set(cityPool.map(v=>v.city).filter(Boolean))].sort();
+  citySel.innerHTML='<option value="">All cities</option>'+cities.map(ci=>`<option value="${esc(ci)}" ${ci===curCity?'selected':''}>${esc(ci)}</option>`).join('');
+}
+function venueCascadePopulateVenues(prefix, preselectId, onVenueChange){
+  const venueSel=document.getElementById(prefix); if(!venueSel) return;
+  const country=document.getElementById(prefix+'-country')?.value||'';
+  const province=document.getElementById(prefix+'-province')?.value||'';
+  const city=document.getElementById(prefix+'-city')?.value||'';
+  const filtered=DB.venues.filter(v=>
+    (!country||(v.country||'Canada')===country) &&
+    (!province||v.province===province) &&
+    (!city||v.city===city)
+  );
+  const prevSelected=preselectId!==undefined?preselectId:venueSel.value;
+  venueSel.innerHTML='<option value="">— select venue —</option>'+
+    filtered.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(v=>
+      `<option value="${v.id}" ${v.id===prevSelected?'selected':''}>${esc(v.name)}${v.city?' ('+esc(v.city)+')':''}</option>`
+    ).join('');
+  if(onVenueChange) onVenueChange();
+}
+function venueCascadeFilterChanged(prefix, level, onVenueChange){
+  if(level==='country') venueCascadePopulateFilters(prefix,undefined,'','');
+  else if(level==='province') venueCascadePopulateFilters(prefix,undefined,undefined,'');
+  venueCascadePopulateVenues(prefix,undefined,onVenueChange);
+}
 function currentLogoUrl(){ return DB.settings.logoDataUrl || DEFAULT_LOGO_DATA_URL; }
 
 /* ---------- AUDIT LOG ---------- */
@@ -1373,6 +1425,7 @@ VIEWS.venues={
           <option value="medium">200–500</option>
           <option value="large">500–1000</option>
           <option value="xlarge">1000+</option>
+          <option value="none">No capacity specified</option>
         </select>
         <select id="vn-prov" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
           <option value="">All provinces/states</option>
@@ -1445,18 +1498,28 @@ function filterVenues(){
     if(prov && v.province!==prov) return false;
     if(country && (v.country||'Canada')!==country) return false;
     if(size){
+      const hasCap=v.capacity!=null && v.capacity!=='' && +v.capacity>0;
       const cap=+v.capacity||0;
-      if(size==='small'&&cap>=200) return false;
-      if(size==='medium'&&(cap<200||cap>=500)) return false;
-      if(size==='large'&&(cap<500||cap>=1000)) return false;
-      if(size==='xlarge'&&cap<1000) return false;
+      if(size==='none') { if(hasCap) return false; }
+      else {
+        if(!hasCap) return false; // unspecified capacity never falls into a numeric bucket
+        if(size==='small'&&cap>=200) return false;
+        if(size==='medium'&&(cap<200||cap>=500)) return false;
+        if(size==='large'&&(cap<500||cap>=1000)) return false;
+        if(size==='xlarge'&&cap<1000) return false;
+      }
     }
     return true;
   });
   list=[...list].sort((a,b)=>{
     if(sort==='name') return (a.name||'').localeCompare(b.name||'');
-    if(sort==='cap-asc') return (+a.capacity||0)-(+b.capacity||0);
-    if(sort==='cap-desc') return (+b.capacity||0)-(+a.capacity||0);
+    if(sort==='cap-asc'||sort==='cap-desc'){
+      const aHas=a.capacity!=null && a.capacity!=='' && +a.capacity>0;
+      const bHas=b.capacity!=null && b.capacity!=='' && +b.capacity>0;
+      if(aHas!==bHas) return aHas?-1:1; // unspecified capacity always sorts after specified, either direction
+      if(!aHas && !bHas) return (a.name||'').localeCompare(b.name||'');
+      return sort==='cap-asc' ? (+a.capacity-+b.capacity) : (+b.capacity-+a.capacity);
+    }
     if(sort==='prov') return (a.province||'').localeCompare(b.province||'');
     if(sort==='country') return (a.country||'Canada').localeCompare(b.country||'Canada');
     return 0;
@@ -4003,8 +4066,16 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
     <div class="row2">
       <div class="field"><label>Tour</label><select id="ef-tour"><option value="">—</option>
         ${DB.tours.map(x=>`<option value="${x.id}" ${e.tourId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>Venue</label><select id="ef-venue" onchange="prefillVenueTerms()"><option value="">—</option>
-        ${venueOptionsGrouped(DB.venues, e.venueId)}</select></div>
+    </div>
+    <div class="form-section" style="margin-top:0">Venue</div>
+    <p class="muted" style="font-size:12px;margin:-6px 0 8px">Narrow by location, then pick the venue.</p>
+    <div class="row2">
+      <div class="field"><label>Country</label><select id="ef-venue-country" onchange="venueCascadeFilterChanged('ef-venue','country',prefillVenueTerms)"></select></div>
+      <div class="field"><label>Province / State</label><select id="ef-venue-province" onchange="venueCascadeFilterChanged('ef-venue','province',prefillVenueTerms)"></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>City</label><select id="ef-venue-city" onchange="venueCascadeFilterChanged('ef-venue','city',prefillVenueTerms)"></select></div>
+      <div class="field"><label>Venue</label><select id="ef-venue" onchange="prefillVenueTerms()"></select></div>
     </div>
     <div class="row3">
       <div class="field"><label>Date</label><input id="ef-date" type="date" value="${e.date||''}"></div>
@@ -4129,6 +4200,7 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
   openModal(id?'Edit event deal':'New event', body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveEvent('${id||''}')">Save event</button>`);
+  venueCascadeInit('ef-venue', e.venueId, null); // populate without triggering prefill on initial open
   _efPtf=JSON.parse(JSON.stringify(p.perTicketFees||[]));
   efRenderPtfRows();
   setTimeout(()=>toggleDealFields({guarantee:t.guarantee||'',doorSplit:t.doorSplit||'',rental:t.rental||''}), 30);
@@ -4228,7 +4300,8 @@ function applyPastedShow(){
     pricing:{
       base:d.ticketBase||'',serviceFee:d.serviceFee||0,feeType:d.feeType||'fixed',
       ccFee:d.ccFee||0,taxRate:d.taxRate!=null?d.taxRate:DB.settings.taxRate,
-      taxOn:d.taxOn||'base'
+      taxOn:d.taxOn||'base',
+      perTicketFees:(d.perTicketFees||[]).map(f=>({desc:f.desc||'',feeType:f.feeType||'fixed',amount:f.amount||0,mode:f.mode||'customer'}))
     },
     terms:{
       contractType:d.contractType||'rental',
