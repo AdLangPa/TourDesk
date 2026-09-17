@@ -132,6 +132,20 @@ a{color:var(--blue);text-decoration:none}
 .tab:hover{color:var(--txt)}
 .tab.active{color:var(--acc);border-bottom-color:var(--acc);font-weight:500}
 
+/* Calendar */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-grid-head{margin-bottom:6px}
+.cal-dow{font-size:11px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;text-align:center;padding:4px 0}
+.cal-cell{min-height:88px;border:1px solid var(--bord);border-radius:var(--rad);padding:6px;cursor:pointer;background:var(--surf);transition:border-color .12s,background .12s;position:relative;overflow:hidden}
+.cal-cell:hover{border-color:var(--acc);background:var(--surf2)}
+.cal-cell.cal-empty{visibility:hidden;cursor:default;border:none}
+.cal-cell.cal-today{border-color:var(--acc);border-width:2px;background:var(--acc-soft)}
+.cal-daynum{font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:4px}
+.cal-pill{font-size:11px;background:var(--surf3);color:var(--txt);border-radius:4px;padding:2px 5px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-more{font-size:10px;color:var(--txt3);padding:1px 5px}
+.cal-todo-dot{position:absolute;top:6px;right:7px;font-size:8px;color:var(--amber)}
+@media(max-width:760px){ .cal-cell{min-height:56px} .cal-pill{display:none} }
+
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(20,20,18,.4);display:flex;align-items:flex-start;justify-content:center;z-index:200;padding:40px 20px;overflow-y:auto}
 .modal{background:var(--surf);border-radius:var(--rad-lg);width:560px;max-width:100%;box-shadow:0 8px 40px rgba(0,0,0,.18);margin:auto}
@@ -178,6 +192,7 @@ a{color:var(--blue);text-decoration:none}
       <div class="nav-item" data-view="venues"><span class="nav-ico">▣</span>Venues</div>
       <div class="nav-item" data-view="tours"><span class="nav-ico">↝</span>Tours</div>
       <div class="nav-item" data-view="events"><span class="nav-ico">◉</span>Events</div>
+      <div class="nav-item" data-view="calendar"><span class="nav-ico">📅</span>Calendar</div>
       <div class="nav-item" data-view="tasks"><span class="nav-ico">☑</span>Tasks<span id="tasks-nav-badge" class="nav-badge" style="display:none"></span></div>
       <div class="nav-item" data-view="contacts"><span class="nav-ico">☺</span>Contacts</div>
       <div class="nav-item" data-view="artists"><span class="nav-ico">♪</span>Artists</div>
@@ -337,7 +352,7 @@ const DEFAULT_LOGO_DATA_URL='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJwAA
 
 const DB = {
   venues: [], tours: [], events: [], contacts: [], artists: [], proposals: [],
-  activity: [],
+  activity: [], users: null, // populated by syncUsersFromDB() once load() completes
   settings: { mgmtPct: 15, taxRate: 13, serviceFeePct: 5, supabaseConfig: null, googleConnected: false, theme: 'light',
     companyName:'', companyTagline:'', contactEmail:'', contactPhone:'', logoDataUrl:null,
     pitchSlides: null, // populated by defaultPitchSlides() on first load if null
@@ -639,15 +654,29 @@ function toggleTheme(){
 /* ============================================================
    AUTHENTICATION — simple username / password
    ============================================================ */
-const USERS = [
+// Cached in localStorage so login works immediately at boot, before the async
+// DB/Supabase load completes. Once load() finishes, this gets reconciled with
+// DB.users (the synced, editable source of truth) via syncUsersFromDB().
+let USERS = JSON.parse(localStorage.getItem('tourdesk_users_cache')||'null') || [
   { username:'AdamLanger', password:'KermitTheDog', role:'admin', displayName:'Adam Langer' },
   { username:'DrewDudley',  password:'TigerTheLion',  role:'producer', displayName:'Drew Dudley' }
 ];
+function cacheUsers(){ localStorage.setItem('tourdesk_users_cache', JSON.stringify(USERS)); }
+// Called once DB has loaded: DB.users becomes the source of truth going forward
+// (synced via the normal persist()/Supabase path); first run seeds DB.users
+// from whatever was cached/hardcoded so nothing is lost.
+function syncUsersFromDB(){
+  if(Array.isArray(DB.users) && DB.users.length){ USERS=DB.users; cacheUsers(); }
+  else { DB.users=USERS; }
+}
 
 // Role capabilities
-// admin    — full access
+// admin    — full access, including managing user accounts
 // producer — view all, create proposals, edit own proposals, mark ready for review
 //            cannot: edit/delete events, tours, venues, contacts, artists, settings, accept proposals
+// artist   — permanently locked to one artist's own dashboard/tours/events/proposals
+//            (same filtered view as an admin's "View as" mode, but as a real login
+//            the artist can't exit or switch to see anyone else's data)
 
 let AUTH_USER = null;
 
@@ -664,7 +693,11 @@ function initAuth(){
     try{
       const u=JSON.parse(saved);
       const found=USERS.find(x=>x.username===u.username);
-      if(found){ AUTH_USER={...found}; return; }
+      if(found){
+        AUTH_USER={...found};
+        if(AUTH_USER.role==='artist' && AUTH_USER.linkedArtistId) ARTIST_VIEW=AUTH_USER.linkedArtistId;
+        return;
+      }
     }catch(e){}
   }
   showLogin();
@@ -1192,7 +1225,7 @@ const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 
 /* ---------- ROUTER ---------- */
 let route={view:'dashboard',id:null,tab:null};
-const NAV_TITLES={dashboard:'Dashboard',venues:'Venues',tours:'Tours',events:'Events',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
+const NAV_TITLES={dashboard:'Dashboard',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
 
 /* ---------- ARTIST VIEW MODE ---------- */
 let ARTIST_VIEW=null; // artist id when filtering the whole app to one artist
@@ -1203,12 +1236,14 @@ function enterArtistView(id){
   go('dashboard');
 }
 function exitArtistView(){
+  if(AUTH_USER?.role==='artist') return; // a real artist login can't exit to see everyone else's data
   ARTIST_VIEW=null;
   localStorage.removeItem('tourdesk_artistview');
   applyArtistViewChrome();
   go('dashboard');
 }
 function switchArtistView(val){
+  if(AUTH_USER?.role==='artist') return; // locked to their own linked artist
   if(!val) return exitArtistView();
   enterArtistView(val);
 }
@@ -1222,7 +1257,7 @@ function artistEvents(arId){ const tours=artistTours(arId); return DB.events.fil
 function applyArtistViewChrome(){
   const nav=document.getElementById('nav');
   // In artist view: only Dashboard, Tours, Events, Proposals visible
-  const avAllowed=['dashboard','tours','events','proposals'];
+  const avAllowed=['dashboard','tours','events','calendar','tasks','proposals'];
   // Producer cannot access settings, activity, artists, contacts, venues
   const producerBlocked=['settings','activity','artists','contacts','venues'];
   nav.querySelectorAll('.nav-item').forEach(n=>{
@@ -1243,11 +1278,17 @@ function applyArtistViewChrome(){
   }
   if(inArtistView()){
     const ar=currentArtist();
-    bar.innerHTML=`<span style="font-size:12px;color:var(--txt3)">Viewing as</span>
-      <select onchange="switchArtistView(this.value)" style="padding:5px 8px;border:1px solid var(--acc);border-radius:6px;background:var(--acc-soft);color:var(--txt);font-size:12px;font-weight:600">
-        ${DB.artists.filter(a=>a.type==='roster').map(a=>`<option value="${a.id}" ${a.id===ARTIST_VIEW?'selected':''}>${esc(a.name)}</option>`).join('')}
-      </select>
-      <button class="btn sm" onclick="exitArtistView()" style="padding:4px 10px">Exit</button>`;
+    if(AUTH_USER?.role==='artist'){
+      // A real artist login: no switcher, no exit — just a plain label.
+      bar.innerHTML=`<span style="font-size:12px;color:var(--txt3)">Logged in as</span>
+        <span style="font-size:12px;font-weight:600;color:var(--txt)">${esc(ar?.name||'')}</span>`;
+    } else {
+      bar.innerHTML=`<span style="font-size:12px;color:var(--txt3)">Viewing as</span>
+        <select onchange="switchArtistView(this.value)" style="padding:5px 8px;border:1px solid var(--acc);border-radius:6px;background:var(--acc-soft);color:var(--txt);font-size:12px;font-weight:600">
+          ${DB.artists.filter(a=>a.type==='roster').map(a=>`<option value="${a.id}" ${a.id===ARTIST_VIEW?'selected':''}>${esc(a.name)}</option>`).join('')}
+        </select>
+        <button class="btn sm" onclick="exitArtistView()" style="padding:4px 10px">Exit</button>`;
+    }
   } else {
     bar.innerHTML='';
   }
@@ -1255,7 +1296,7 @@ function applyArtistViewChrome(){
 
 function go(view,id=null,tab=null,_unused=null,ref=null){
   // Block disallowed views for artist view
-  if(inArtistView() && !['dashboard','tours','events','proposals'].includes(view)){
+  if(inArtistView() && !['dashboard','tours','events','calendar','tasks','proposals'].includes(view)){
     view='dashboard'; id=null; tab=null; ref=null;
   }
   // Block disallowed views for producer role
@@ -2410,13 +2451,168 @@ VIEWS.events={
   }
 };
 
+let _calMonth=new Date().toISOString().slice(0,7); // 'YYYY-MM' of the month currently shown
+let _calSelected=new Set(); // event ids checked for export
+
+VIEWS.calendar={
+  render(c,a){
+    const av=inArtistView();
+    const scopedEvents=(av?artistEvents(ARTIST_VIEW):DB.events).filter(e=>e.date);
+    a.innerHTML=`<button class="btn sm" onclick="calExportAll()">⬇ Export all as .ics</button>`;
+
+    const [y,m]=_calMonth.split('-').map(Number);
+    const first=new Date(y,m-1,1);
+    const startDow=first.getDay(); // 0=Sun
+    const daysInMonth=new Date(y,m,0).getDate();
+    const monthLabel=first.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+
+    // Map date -> events on that date (within the scoped set)
+    const byDate={};
+    scopedEvents.forEach(e=>{ (byDate[e.date]=byDate[e.date]||[]).push(e); });
+    const todosByDate={};
+    const scopedTours=av?artistTours(ARTIST_VIEW):DB.tours;
+    scopedEvents.forEach(e=>(e.todos||[]).forEach(t=>{ if(t.dueDate&&!t.done) (todosByDate[t.dueDate]=todosByDate[t.dueDate]||[]).push(t.title); }));
+    scopedTours.forEach(t=>(t.todos||[]).forEach(td=>{ if(td.dueDate&&!td.done) (todosByDate[td.dueDate]=todosByDate[td.dueDate]||[]).push(td.title); }));
+
+    const todayStr=new Date().toISOString().slice(0,10);
+    let cells='';
+    for(let i=0;i<startDow;i++) cells+='<div class="cal-cell cal-empty"></div>';
+    for(let d=1;d<=daysInMonth;d++){
+      const dateStr=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const dayEvents=byDate[dateStr]||[];
+      const dayTodos=todosByDate[dateStr]||[];
+      const isToday=dateStr===todayStr;
+      cells+=`<div class="cal-cell${isToday?' cal-today':''}" onclick="calShowDay('${dateStr}')">
+        <div class="cal-daynum">${d}</div>
+        ${dayEvents.slice(0,3).map(e=>`<div class="cal-pill">${esc(e.name)}</div>`).join('')}
+        ${dayEvents.length>3?`<div class="cal-more">+${dayEvents.length-3} more</div>`:''}
+        ${dayTodos.length?`<div class="cal-todo-dot" title="${dayTodos.length} to-do${dayTodos.length!==1?'s':''} due">●</div>`:''}
+      </div>`;
+    }
+
+    const dowLabels=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    c.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn ghost sm" onclick="calNavMonth(-1)">←</button>
+          <span class="detail-title" style="font-size:18px">${monthLabel}</span>
+          <button class="btn ghost sm" onclick="calNavMonth(1)">→</button>
+        </div>
+        <button class="btn sm" onclick="calGoToday()">Today</button>
+      </div>
+      <div class="cal-grid cal-grid-head">${dowLabels.map(d=>`<div class="cal-dow">${d}</div>`).join('')}</div>
+      <div class="cal-grid">${cells}</div>
+
+      <div class="sec" style="margin-top:24px">
+        <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Events this month (${(byDate ? Object.values(byDate).flat().length : 0)})</span>
+          <span style="font-weight:400">
+            <button class="btn ghost sm" onclick="calSelectAll(true)">Select all</button>
+            <button class="btn ghost sm" onclick="calSelectAll(false)">Select none</button>
+          </span>
+        </div>
+        <div id="cal-month-list"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+          <button class="btn primary sm" onclick="calExportSelected()">⬇ Export selected (<span id="cal-sel-count">0</span>) as .ics</button>
+          <button class="btn sm" onclick="calExportAll()">⬇ Export all as .ics</button>
+          <span class="muted" style="font-size:11px">.ics files import directly into Google Calendar, Apple Calendar, or Outlook — no account connection needed.</span>
+        </div>
+      </div>`;
+    calRenderMonthList();
+  }
+};
+
+function calNavMonth(delta){
+  const [y,m]=_calMonth.split('-').map(Number);
+  const d=new Date(y,m-1+delta,1);
+  _calMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  render();
+}
+function calGoToday(){ _calMonth=new Date().toISOString().slice(0,7); render(); }
+
+function calMonthEvents(){
+  const av=inArtistView();
+  const scoped=(av?artistEvents(ARTIST_VIEW):DB.events).filter(e=>e.date);
+  return scoped.filter(e=>e.date.slice(0,7)===_calMonth).sort((a,b)=>a.date<b.date?-1:1);
+}
+
+function calRenderMonthList(){
+  const host=document.getElementById('cal-month-list'); if(!host) return;
+  const events=calMonthEvents();
+  if(!events.length){ host.innerHTML='<p class="muted" style="font-size:13px;padding:8px 0">No events this month.</p>'; calUpdateSelCount(); return; }
+  host.innerHTML=events.map(e=>{
+    const v=get(DB.venues,e.venueId);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--bord)">
+      <input type="checkbox" class="cal-pick" value="${e.id}" ${_calSelected.has(e.id)?'checked':''} onchange="calToggleSelect('${e.id}',this.checked)" style="width:16px;height:16px;flex-shrink:0;cursor:pointer">
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="go('events','${e.id}')">
+        <div style="font-size:13px;font-weight:600">${esc(e.name)}</div>
+        <div style="font-size:11px;color:var(--txt3)">${fmtDate(e.date)}${v?' · '+esc(v.name):''}</div>
+      </div>
+      <button class="btn ghost sm" onclick="exportEventToGoogleCalendar('${e.id}')" title="Add just this one to Google Calendar">📅</button>
+    </div>`;
+  }).join('');
+  calUpdateSelCount();
+}
+function calToggleSelect(id,checked){
+  if(checked) _calSelected.add(id); else _calSelected.delete(id);
+  calUpdateSelCount();
+}
+function calSelectAll(on){
+  const events=calMonthEvents();
+  if(on) events.forEach(e=>_calSelected.add(e.id));
+  else events.forEach(e=>_calSelected.delete(e.id));
+  calRenderMonthList();
+}
+function calUpdateSelCount(){
+  const el=document.getElementById('cal-sel-count');
+  if(el) el.textContent=_calSelected.size;
+}
+function calExportSelected(){
+  const events=[..._calSelected].map(id=>get(DB.events,id)).filter(Boolean);
+  downloadICS(events,'tourdesk-selected-events.ics');
+}
+function calExportAll(){
+  const av=inArtistView();
+  const events=(av?artistEvents(ARTIST_VIEW):DB.events).filter(e=>e.date);
+  downloadICS(events,'tourdesk-all-events.ics');
+}
+function calShowDay(dateStr){
+  const av=inArtistView();
+  const scoped=(av?artistEvents(ARTIST_VIEW):DB.events).filter(e=>e.date===dateStr);
+  const scopedTours=av?artistTours(ARTIST_VIEW):DB.tours;
+  const dayTodos=[];
+  scoped.forEach(e=>(e.todos||[]).forEach(t=>{ if(t.dueDate===dateStr) dayTodos.push({...t,recordType:'event',recordId:e.id,recordName:e.name}); }));
+  scopedTours.forEach(t=>(t.todos||[]).forEach(td=>{ if(td.dueDate===dateStr) dayTodos.push({...td,recordType:'tour',recordId:t.id,recordName:t.name}); }));
+  const body=`
+    ${scoped.length?`<p class="eyebrow" style="margin-bottom:8px">Shows</p>${scoped.map(e=>{
+      const v=get(DB.venues,e.venueId);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bord)">
+        <div style="cursor:pointer" onclick="closeModal();go('events','${e.id}')">
+          <div style="font-size:13px;font-weight:600">${esc(e.name)}</div>
+          <div style="font-size:11px;color:var(--txt3)">${v?esc(v.name):''}${e.showTime?' · '+esc(e.showTime):''}</div>
+        </div>
+        <button class="btn ghost sm" onclick="exportEventToGoogleCalendar('${e.id}')">📅 Google Cal</button>
+      </div>`;
+    }).join('')}`:'<p class="muted" style="font-size:13px">No shows on this date.</p>'}
+    ${dayTodos.length?`<p class="eyebrow" style="margin:14px 0 8px">To-dos due</p>${dayTodos.map(t=>`
+      <div style="padding:6px 0;font-size:13px;cursor:pointer" onclick="closeModal();go('${t.recordType==='tour'?'tours':'events'}','${t.recordId}'${t.recordType==='event'?",'todos'":''})">
+        ${esc(t.title)} <span style="color:var(--txt3);font-size:11px">— ${esc(t.recordName)}</span>
+      </div>`).join('')}`:''}`;
+  openModal(fmtDate(dateStr), body, `<button class="btn" onclick="closeModal()">Close</button>`);
+}
+
 VIEWS.tasks={
   render(c,a){
     a.innerHTML=canDo('admin')?'<button class="btn sm" onclick="goToTodoTemplateEditor()">✎ Manage templates</button>':'';
-    // Aggregate every to-do across all events and tours into one flat, sortable list.
+    // Aggregate every to-do across all events and tours into one flat, sortable list —
+    // scoped to just this artist's own tours/events when in artist view, since Tasks
+    // otherwise spans the whole company's to-do list.
+    const av=inArtistView();
+    const taskEvents=av?artistEvents(ARTIST_VIEW):DB.events;
+    const taskTours=av?artistTours(ARTIST_VIEW):DB.tours;
     const items=[];
-    DB.events.forEach(e=>(e.todos||[]).forEach(t=>items.push({...t,recordType:'event',recordId:e.id,recordName:e.name,recordDate:e.date})));
-    DB.tours.forEach(t=>(t.todos||[]).forEach(td=>items.push({...td,recordType:'tour',recordId:t.id,recordName:t.name,recordDate:tourRefDate(t.id)})));
+    taskEvents.forEach(e=>(e.todos||[]).forEach(t=>items.push({...t,recordType:'event',recordId:e.id,recordName:e.name,recordDate:e.date})));
+    taskTours.forEach(t=>(t.todos||[]).forEach(td=>items.push({...td,recordType:'tour',recordId:t.id,recordName:t.name,recordDate:tourRefDate(t.id)})));
 
     const today=new Date().toISOString().slice(0,10);
     const filterVal=route.tab||'open'; // open | done | all
@@ -2519,28 +2715,32 @@ function duplicateEvent(id){
 // One-way export to Google Calendar via the "quick add" URL scheme — no OAuth
 // or API key needed. Opens a pre-filled new-event screen in a new tab; the
 // user reviews and saves it themselves on Google's side.
+// Shared by both the single-event Google quick-add export and the bulk .ics
+// export: computes a start/end datetime for an event, defaulting to a 3-hour
+// block from the show/load-in time, or an all-day span if no time is set.
+function eventDateRange(e){
+  const startTime=e.showTime||e.loadIn||'';
+  if(startTime){
+    const start=new Date(e.date+'T'+(startTime.length===5?startTime:startTime+':00')+':00');
+    const end=new Date(start); end.setHours(end.getHours()+3);
+    return {start,end,allDay:false};
+  }
+  const start=new Date(e.date+'T00:00:00');
+  const end=new Date(start); end.setDate(end.getDate()+1);
+  return {start,end,allDay:true};
+}
+
 function exportEventToGoogleCalendar(id){
   const e=get(DB.events,id); if(!e||!e.date) return;
   const v=get(DB.venues,e.venueId);
   // Google's quick-add expects UTC-ish basic format: YYYYMMDDTHHMMSS or YYYYMMDD for all-day.
-  const toGCalDate=(dateStr,timeStr)=>{
-    const datePart=dateStr.replace(/-/g,'');
-    if(!timeStr) return datePart;
-    const [h,m]=timeStr.split(':');
-    return datePart+'T'+String(h).padStart(2,'0')+String(m||'0').padStart(2,'0')+'00';
+  const toGCalDate=(d,allDay)=>{
+    const datePart=d.toISOString().slice(0,10).replace(/-/g,'');
+    if(allDay) return datePart;
+    const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
+    return datePart+'T'+hh+mm+'00';
   };
-  const startTime=e.showTime||e.loadIn||'';
-  const start=toGCalDate(e.date,startTime);
-  // Default to a 3-hour block if we only have a start time; all-day if we have neither time.
-  let end;
-  if(startTime){
-    const d=new Date(e.date+'T'+(startTime.length===5?startTime:startTime+':00')+':00');
-    d.setHours(d.getHours()+3);
-    end=toGCalDate(d.toISOString().slice(0,10),d.toTimeString().slice(0,5));
-  } else {
-    const d=new Date(e.date+'T00:00:00'); d.setDate(d.getDate()+1);
-    end=toGCalDate(d.toISOString().slice(0,10));
-  }
+  const {start,end,allDay}=eventDateRange(e);
   const details=[
     v?('Venue: '+v.name):'',
     e.loadIn?('Load-in: '+e.loadIn):'',
@@ -2550,11 +2750,59 @@ function exportEventToGoogleCalendar(id){
   const params=new URLSearchParams({
     action:'TEMPLATE',
     text:e.name||'Event',
-    dates:start+'/'+end,
+    dates:toGCalDate(start,allDay)+'/'+toGCalDate(end,allDay),
     details,
     location:v?[v.name,v.city,v.province].filter(Boolean).join(', '):''
   });
   window.open('https://calendar.google.com/calendar/render?'+params.toString(),'_blank');
+}
+
+// Bulk export — generates a standard .ics file (works with Google Calendar's
+// "Import" feature, plus Apple/Outlook/anything else) containing one VEVENT
+// per selected event. This is the robust path for exporting more than one or
+// two events at once — looping the single-event quick-add popup would get
+// blocked by the browser after the first tab or two.
+function icsEscape(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/[;,]/g,m=>'\\'+m).replace(/\n/g,'\\n'); }
+function icsDate(d,allDay){
+  const datePart=d.toISOString().slice(0,10).replace(/-/g,'');
+  if(allDay) return 'VALUE=DATE:'+datePart;
+  const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
+  return ':'+datePart+'T'+hh+mm+'00';
+}
+function generateICS(events){
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TourDesk//EN','CALSCALE:GREGORIAN'];
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  events.filter(e=>e.date).forEach(e=>{
+    const v=get(DB.venues,e.venueId);
+    const {start,end,allDay}=eventDateRange(e);
+    const details=[
+      v?('Venue: '+v.name):'',
+      e.loadIn?('Load-in: '+e.loadIn):'',
+      e.showTime?('Show: '+e.showTime):'',
+      'Capacity: '+(e.capacityAlloc||'—'),
+    ].filter(Boolean).join('\n');
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:'+e.id+'@tourdesk');
+    lines.push('DTSTAMP:'+stamp);
+    lines.push('DTSTART'+(allDay?';':'')+icsDate(start,allDay));
+    lines.push('DTEND'+(allDay?';':'')+icsDate(end,allDay));
+    lines.push('SUMMARY:'+icsEscape(e.name||'Event'));
+    if(details) lines.push('DESCRIPTION:'+icsEscape(details));
+    if(v) lines.push('LOCATION:'+icsEscape([v.name,v.city,v.province].filter(Boolean).join(', ')));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+function downloadICS(events,filename){
+  if(!events.length){ alert('No events selected.'); return; }
+  const ics=generateICS(events);
+  const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename||'tourdesk-events.ics';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 
 /* ============================================================
@@ -7867,6 +8115,12 @@ VIEWS.settings={
         <button class="btn sm" onclick="saveSettings()">Save defaults</button>
       </div>
       <div class="sec" style="max-width:640px">
+        <div class="sec-label">User accounts</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">Admin sees and edits everything. Producer can create and manage their own proposals but can't touch venues, contacts, artists, settings, or accept proposals. Artist is locked permanently to one roster artist's own dashboard, tours, events, and proposals — they can't switch to anyone else's data or see commission figures.</p>
+        <div id="users-list"></div>
+        <button class="btn sm" style="margin-top:8px" onclick="userFormAdd()">+ Add user</button>
+      </div>
+      <div class="sec" style="max-width:640px">
         <div class="sec-label">Logo</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">Shown on the Proposals pages and on the PDF and pitch deck cover. PNG with a transparent background works best.</p>
         <div style="display:flex;align-items:center;gap:16px">
@@ -7955,6 +8209,7 @@ VIEWS.settings={
       </div>`;
     renderPitchSlidesList();
     renderTodoTemplatesList();
+    renderUsersList();
   }
 };
 function saveSettings(){ 
@@ -7982,6 +8237,101 @@ function uploadLogo(file){
 function resetLogo(){
   DB.settings.logoDataUrl=null;
   persist(); render();
+}
+
+// ─── User accounts (Settings) ───
+const ROLE_LABEL={admin:'Admin',producer:'Producer',artist:'Artist'};
+function renderUsersList(){
+  const host=document.getElementById('users-list'); if(!host) return;
+  host.innerHTML=(DB.users||USERS).map(u=>{
+    const linkedArtist=u.role==='artist'?get(DB.artists,u.linkedArtistId):null;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bord);border-radius:8px;margin-bottom:8px;background:var(--surf)">
+      <span class="badge ${u.role==='admin'?'blue':u.role==='artist'?'amber':'gray'}" style="flex-shrink:0">${ROLE_LABEL[u.role]||u.role}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${esc(u.displayName||u.username)} <span style="font-weight:400;color:var(--txt3)">@${esc(u.username)}</span></div>
+        ${u.role==='artist'?`<div style="font-size:11px;color:var(--txt3)">${linkedArtist?'Linked to '+esc(linkedArtist.name):'⚠ No artist linked — this account can\'t see any shows yet'}</div>`:''}
+      </div>
+      <button class="btn sm" onclick="userFormEdit('${esc(u.username)}')">Edit</button>
+      <button class="btn ghost sm" onclick="deleteUserAccount('${esc(u.username)}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+function userFormAdd(){ userFormOpen(null); }
+function userFormEdit(username){ userFormOpen(username); }
+
+function userFormOpen(username){
+  const u=username?(DB.users||USERS).find(x=>x.username===username):null;
+  const rosterArtists=DB.artists.filter(a=>a.type==='roster');
+  const body=`
+    <div class="row2">
+      <div class="field"><label>Username</label><input id="uf-username" value="${esc(u?.username||'')}" ${u?'readonly style="background:var(--surf2)"':''}></div>
+      <div class="field"><label>Display name</label><input id="uf-displayname" value="${esc(u?.displayName||'')}"></div>
+    </div>
+    <div class="field"><label>Password</label><input id="uf-password" type="text" value="${esc(u?.password||'')}" placeholder="${u?'Leave as-is to keep current password':'Set a password'}"></div>
+    <div class="field"><label>Role</label><select id="uf-role" onchange="document.getElementById('uf-artist-field').style.display=this.value==='artist'?'block':'none'">
+      <option value="admin" ${u?.role==='admin'?'selected':''}>Admin — full access</option>
+      <option value="producer" ${u?.role==='producer'?'selected':''}>Producer — own proposals only</option>
+      <option value="artist" ${u?.role==='artist'?'selected':''}>Artist — locked to one roster artist's own shows</option>
+    </select></div>
+    <div id="uf-artist-field" class="field" style="display:${u?.role==='artist'?'block':'none'}">
+      <label>Linked artist</label>
+      <select id="uf-artist">
+        <option value="">— select artist —</option>
+        ${rosterArtists.map(a=>`<option value="${a.id}" ${u?.linkedArtistId===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}
+      </select>
+      <p class="muted" style="font-size:11px;margin-top:4px">This account will only ever see shows/tours/proposals where the artist name matches this roster artist. ${!rosterArtists.length?'No roster artists exist yet — add one under Artists first.':''}</p>
+    </div>
+    <div id="uf-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:6px"></div>`;
+  openModal(u?'Edit user':'Add user', body,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveUserForm(${username?`'${esc(username)}'`:'null'})">Save</button>`);
+}
+
+function saveUserForm(originalUsername){
+  const err=document.getElementById('uf-err');
+  const username=fv('uf-username').trim();
+  const displayName=fv('uf-displayname').trim();
+  const password=fv('uf-password');
+  const role=fv('uf-role');
+  const linkedArtistId=role==='artist'?fv('uf-artist'):null;
+
+  if(!username){ err.textContent='Username is required.'; return; }
+  if(!password){ err.textContent='Password is required.'; return; }
+  if(role==='artist' && !linkedArtistId){ err.textContent='Select which artist this account is linked to.'; return; }
+
+  DB.users=DB.users||[...USERS];
+  const isNew=!originalUsername;
+  const dupe=DB.users.find(x=>x.username===username && x.username!==originalUsername);
+  if(dupe){ err.textContent='That username is already taken.'; return; }
+
+  if(isNew){
+    DB.users.push({username,password,displayName,role,linkedArtistId:linkedArtistId||null});
+  } else {
+    const rec=DB.users.find(x=>x.username===originalUsername);
+    if(rec){ rec.displayName=displayName; rec.password=password; rec.role=role; rec.linkedArtistId=linkedArtistId||null; }
+    // If the currently logged-in admin is editing their own account, keep the live session in sync.
+    if(AUTH_USER?.username===originalUsername) AUTH_USER={...AUTH_USER,displayName,role,linkedArtistId:linkedArtistId||null};
+  }
+  USERS=DB.users; cacheUsers();
+  logActivity(isNew?'created':'edited','User',displayName||username);
+  persist();
+  closeModal();
+  renderUsersList();
+}
+
+function deleteUserAccount(username){
+  const list=DB.users||USERS;
+  if(username===AUTH_USER?.username){ alert("You can't delete the account you're currently logged in as."); return; }
+  const admins=list.filter(u=>u.role==='admin');
+  const target=list.find(u=>u.username===username);
+  if(target?.role==='admin' && admins.length<=1){ alert("Can't delete the last remaining admin account — you'd lock everyone out of Settings."); return; }
+  if(!confirm(`Delete the account "${username}"? They won't be able to log in anymore.`)) return;
+  DB.users=list.filter(u=>u.username!==username);
+  USERS=DB.users; cacheUsers();
+  logActivity('deleted','User',username);
+  persist();
+  renderUsersList();
 }
 
 // ─── To-do template library (Settings) ───
@@ -8536,14 +8886,20 @@ if(AUTH_USER) {
     const c=document.getElementById('content');
     if(c) c.innerHTML='<div style="padding:40px;text-align:center;color:var(--txt3);font-size:13px">Connecting…</div>';
     await load();
+    syncUsersFromDB();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
     // Migrate: seed default to-do templates, and ensure the id counter exists
     if(!DB.settings.todoTemplates || !Array.isArray(DB.settings.todoTemplates)) DB.settings.todoTemplates = defaultTodoTemplates();
     if(!DB._seq.td) DB._seq.td = 1;
     applyTheme(); // reconcile with the authoritative (possibly Supabase-synced) setting
-    const savedAV=localStorage.getItem('tourdesk_artistview');
-    if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
+    // Only restore an admin's cached "View as artist" simulation — a real artist-role
+    // login already got its permanent ARTIST_VIEW set in initAuth() and must not be
+    // overridden by a stale simulation value left over from a different session.
+    if(AUTH_USER?.role!=='artist'){
+      const savedAV=localStorage.getItem('tourdesk_artistview');
+      if(savedAV && get(DB.artists,savedAV)) ARTIST_VIEW=savedAV;
+    }
     applyArtistViewChrome();
     go('dashboard');
     updateSyncBadge();
@@ -8561,9 +8917,12 @@ function updateSyncBadge(){
 function refreshTasksBadge(){
   const badge=document.getElementById('tasks-nav-badge'); if(!badge) return;
   const today=new Date().toISOString().slice(0,10);
+  const av=inArtistView();
+  const bEvents=av?artistEvents(ARTIST_VIEW):DB.events;
+  const bTours=av?artistTours(ARTIST_VIEW):DB.tours;
   let count=0;
-  DB.events.forEach(e=>(e.todos||[]).forEach(t=>{ if(!t.done && t.dueDate && t.dueDate<=today) count++; }));
-  DB.tours.forEach(t=>(t.todos||[]).forEach(td=>{ if(!td.done && td.dueDate && td.dueDate<=today) count++; }));
+  bEvents.forEach(e=>(e.todos||[]).forEach(t=>{ if(!t.done && t.dueDate && t.dueDate<=today) count++; }));
+  bTours.forEach(t=>(t.todos||[]).forEach(td=>{ if(!td.done && td.dueDate && td.dueDate<=today) count++; }));
   if(count>0){ badge.textContent=count; badge.style.display='inline-block'; }
   else badge.style.display='none';
 }
