@@ -1427,14 +1427,9 @@ VIEWS.venues={
           <option value="xlarge">1000+</option>
           <option value="none">No capacity specified</option>
         </select>
-        <select id="vn-prov" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
-          <option value="">All provinces/states</option>
-          ${provs.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('')}
-        </select>
-        <select id="vn-country" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
-          <option value="">All countries</option>
-          ${countries.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
-        </select>
+        <select id="vn-country" onchange="vnFilterChanged('country')" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px"></select>
+        <select id="vn-province" onchange="vnFilterChanged('province')" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px"></select>
+        <select id="vn-city" onchange="vnFilterChanged('city')" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px"></select>
         <select id="vn-sort" onchange="filterVenues()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);font-size:13px">
           <option value="name">Sort: Name A–Z</option>
           <option value="cap-asc">Sort: Capacity ↑</option>
@@ -1444,6 +1439,7 @@ VIEWS.venues={
         </select>
       </div>
       <div id="vn-list" class="cards-grid">${renderVenueCards(DB.venues)}</div>`;
+    venueCascadePopulateFilters('vn','','','');
     filterVenues();
   },
   detail(c,a,id){
@@ -1487,15 +1483,24 @@ function ctLabel(ct){return {guarantee:'Guarantee',door:'Door split',guarantee_p
 function renderVenueCards(list){
   return list.length ? list.map(venueCard).join('') : emptyState('▣','No venues match');
 }
+// Country/Province narrow the downstream City filter (same cascading pattern
+// used elsewhere), then re-filter the card grid.
+function vnFilterChanged(level){
+  if(level==='country') venueCascadePopulateFilters('vn',undefined,'','');
+  else if(level==='province') venueCascadePopulateFilters('vn',undefined,undefined,'');
+  filterVenues();
+}
 function filterVenues(){
   const q=(document.getElementById('vn-search')?.value||'').toLowerCase();
   const size=document.getElementById('vn-size')?.value||'';
-  const prov=document.getElementById('vn-prov')?.value||'';
+  const prov=document.getElementById('vn-province')?.value||'';
+  const city=document.getElementById('vn-city')?.value||'';
   const country=document.getElementById('vn-country')?.value||'';
   const sort=document.getElementById('vn-sort')?.value||'name';
   let list=DB.venues.filter(v=>{
     if(q && !((v.name||'').toLowerCase().includes(q)||(v.city||'').toLowerCase().includes(q)||(v.province||'').toLowerCase().includes(q))) return false;
     if(prov && v.province!==prov) return false;
+    if(city && v.city!==city) return false;
     if(country && (v.country||'Canada')!==country) return false;
     if(size){
       const hasCap=v.capacity!=null && v.capacity!=='' && +v.capacity>0;
