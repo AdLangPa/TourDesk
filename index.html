@@ -42,7 +42,7 @@ a{color:var(--blue);text-decoration:none}
 
 /* Layout */
 .layout{display:flex;height:100vh;overflow:hidden}
-.sidebar{width:208px;min-width:208px;background:var(--surf2);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:16px 0}
+.sidebar{width:208px;min-width:208px;background:var(--surf2);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:16px 0;overflow-y:auto}
 .logo{padding:0 18px 16px;border-bottom:1px solid var(--bord);margin-bottom:8px}
 .logo-title{font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:7px}
 .logo-sub{font-size:11px;color:var(--txt3);margin-top:2px}
@@ -718,12 +718,24 @@ function showLogin(){
       </div>
     </div>`;
   setTimeout(()=>{ const el=document.getElementById('li-user'); if(el) el.focus(); }, 50);
+  refreshUsersFromSupabase(); // kick off in the background; doLogin() also awaits it as a fallback
 }
 
-function doLogin(){
+async function doLogin(){
   const u=document.getElementById('li-user').value.trim();
   const p=document.getElementById('li-pass').value;
-  const found=USERS.find(x=>x.username===u && x.password===p);
+  let found=USERS.find(x=>x.username===u && x.password===p);
+  if(!found){
+    // The background refresh from showLogin() may not have finished yet (or this
+    // account was created on another device after this one last synced) — try
+    // once more with a guaranteed-fresh fetch before actually declaring failure.
+    const btn=document.querySelector('.btn.primary');
+    const origText=btn?btn.textContent:null;
+    if(btn){ btn.textContent='Checking…'; btn.disabled=true; }
+    await refreshUsersFromSupabase();
+    if(btn){ btn.textContent=origText; btn.disabled=false; }
+    found=USERS.find(x=>x.username===u && x.password===p);
+  }
   if(found){
     localStorage.setItem('tourdesk_session', JSON.stringify({username:found.username}));
     AUTH_USER={...found};
@@ -771,6 +783,30 @@ function initSupabase() {
       .subscribe();
     updateSyncBadge();
   } catch (e) { console.error('Supabase init failed:', e); }
+}
+
+// A brand-new user account (e.g. an artist login just created by an admin) only
+// exists in Supabase until this specific browser/device has ever logged in and
+// synced — but load()/syncUsersFromDB() were only ever called *after* a
+// successful login, so a new device checking credentials for the first time had
+// no way to see accounts created elsewhere. Supabase credentials are hardcoded
+// above and don't require being authenticated, so this fetches just the current
+// user list ahead of / during a login attempt, independent of the full app load.
+async function refreshUsersFromSupabase(){
+  try{
+    let waited=0;
+    while(!window.supabase && waited<3000){ await new Promise(r=>setTimeout(r,100)); waited+=100; }
+    if(!window.supabase) return false;
+    if(!SBDB) SBDB=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    const {data,error}=await SBDB.from('tourdesk_data').select('data').eq('id',1).single();
+    if(error||!data?.data) return false;
+    const loaded=typeof data.data==='string'?JSON.parse(data.data):data.data;
+    if(Array.isArray(loaded.users) && loaded.users.length){
+      USERS=loaded.users; cacheUsers();
+      return true;
+    }
+    return false;
+  }catch(e){ return false; }
 }
 
 async function persist() {
