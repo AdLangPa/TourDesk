@@ -211,7 +211,12 @@ a{color:var(--blue);text-decoration:none}
     <div class="topbar">
       <div class="topbar-title" id="page-title">Settings</div>
       <div style="display:flex;align-items:center;gap:12px">
-        <div id="artist-view-bar" style="display: flex; align-items: center; gap: 8px;"></div><div id="user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2)"><span>Adam Langer</span></div>
+        <div id="artist-view-bar" style="display: flex; align-items: center; gap: 8px;"></div>
+        <div style="position:relative">
+          <button class="btn ghost sm" onclick="toggleNotifPanel()" style="padding:5px 9px;font-size:15px;position:relative">🔔<span id="notif-badge" class="nav-badge" style="display:none;position:absolute;top:-4px;right:-4px"></span></button>
+          <div id="notif-panel" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:100"></div>
+        </div>
+        <div id="user-info" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2)"><span>Adam Langer</span></div>
         <div class="topbar-actions" id="page-actions"></div>
         <button class="btn sm" onclick="logout()" style="margin-left:8px" fdprocessedid="7f5tj">Logout</button>
       </div>
@@ -353,6 +358,7 @@ const DEFAULT_LOGO_DATA_URL='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJwAA
 const DB = {
   venues: [], tours: [], events: [], contacts: [], artists: [], proposals: [],
   activity: [], users: null, // populated by syncUsersFromDB() once load() completes
+  notifications: [],
   settings: { mgmtPct: 15, taxRate: 13, serviceFeePct: 5, supabaseConfig: null, googleConnected: false, theme: 'light',
     companyName:'', companyTagline:'', contactEmail:'', contactPhone:'', logoDataUrl:null,
     pitchSlides: null, // populated by defaultPitchSlides() on first load if null
@@ -400,6 +406,39 @@ function defaultPitchSlides(){
 }
 
 function uid(kind){ return kind + (DB._seq[kind]++); }
+
+// Object.assign(DB, loaded) replaces DB._seq wholesale — if a saved blob was
+// ever missing a key (an older version of the app, a partial/malformed sync),
+// that counter becomes undefined, and the next uid() call produces a literal
+// "NaN" in the id (e.g. "aNaN") instead of a number. This recomputes every
+// counter from the actual highest id found in its own array whenever the
+// current value isn't a sane positive integer, so a bad load self-heals
+// instead of quietly producing broken ids on the next record created.
+function sanitizeSeqCounters(){
+  DB._seq = DB._seq || {};
+  const specs = [
+    ['v',DB.venues,'v'], ['t',DB.tours,'t'], ['e',DB.events,'e'],
+    ['c',DB.contacts,'c'], ['a',DB.artists,'a'], ['p',DB.proposals,'p'],
+    ['td', null, 'td'], // to-do ids live inside events/tours, not a top-level array — handled separately below
+  ];
+  specs.forEach(([key,arr,prefix])=>{
+    const cur=DB._seq[key];
+    if(Number.isFinite(cur) && cur>0) return; // already sane, leave it
+    let max=0;
+    if(arr){
+      arr.forEach(rec=>{
+        const m=String(rec.id||'').match(new RegExp('^'+prefix+'(\\d+)$'));
+        if(m) max=Math.max(max,+m[1]);
+      });
+    } else if(key==='td'){
+      [...DB.events,...DB.tours].forEach(rec=>(rec.todos||[]).forEach(t=>{
+        const m=String(t.id||'').match(/^td(\d+)$/);
+        if(m) max=Math.max(max,+m[1]);
+      }));
+    }
+    DB._seq[key]=max+1;
+  });
+}
 function fmtDate(dateStr){
   if(!dateStr) return '';
   const d=new Date(dateStr+'T12:00:00');
@@ -432,6 +471,7 @@ function addTodo(recordType,recordId,title,dueDate,templateId){
   const rec=getTodoOwner(recordType,recordId); if(!rec||!title) return;
   rec.todos.push({id:uid('td'),title,dueDate:dueDate||'',done:false,templateId:templateId||null});
   persist();
+  notifyCounterparty(recordType,recordId,`added a to-do ("${title}")`,{view:recordType==='tour'?'tours':'events',id:recordId,tab:'todos'});
 }
 function toggleTodoDone(recordType,recordId,todoId){
   const rec=getTodoOwner(recordType,recordId); if(!rec) return;
@@ -440,13 +480,16 @@ function toggleTodoDone(recordType,recordId,todoId){
   persist();
   renderTodoTab(recordType,recordId);
   refreshTasksBadge();
+  notifyCounterparty(recordType,recordId,`${t.done?'completed':'reopened'} the to-do "${t.title}"`,{view:recordType==='tour'?'tours':'events',id:recordId,tab:'todos'});
 }
 function deleteTodo(recordType,recordId,todoId){
   const rec=getTodoOwner(recordType,recordId); if(!rec) return;
+  const t=rec.todos.find(x=>x.id===todoId);
   rec.todos=rec.todos.filter(x=>x.id!==todoId);
   persist();
   renderTodoTab(recordType,recordId);
   refreshTasksBadge();
+  if(t) notifyCounterparty(recordType,recordId,`removed the to-do "${t.title}"`,{view:recordType==='tour'?'tours':'events',id:recordId,tab:'todos'});
 }
 function applyTodoTemplatesToRecord(recordType,recordId,templateIds,refDate){
   const rec=getTodoOwner(recordType,recordId); if(!rec) return;
@@ -537,6 +580,7 @@ function applyPickedTemplates(recordType,recordId){
   closeModal();
   renderTodoTab(recordType,recordId);
   refreshTasksBadge();
+  if(ids.length) notifyCounterparty(recordType,recordId,`added ${ids.length} to-do${ids.length!==1?'s':''} from templates`,{view:recordType==='tour'?'tours':'events',id:recordId,tab:'todos'});
 }
 
 // Build <optgroup>-sorted venue <option> HTML, grouped by Country → Province/State
@@ -634,6 +678,117 @@ function logActivity(action, recordType, recordName){
   });
   // Keep the log bounded — last 1000 entries
   if(DB.activity.length>1000) DB.activity=DB.activity.slice(0,1000);
+}
+
+/* ---------- NOTIFICATIONS ----------
+   Two-way: when an artist-role user changes something on their own event/tour
+   (a to-do, a logistics note), every admin gets notified. When an admin or
+   producer changes something on a record linked to an artist account (completes
+   a to-do, adds an expense, edits the deal), that artist gets notified. Nothing
+   fires when there's no linked artist account for the record, or when the actor
+   and the intended recipient are the same person. */
+function pushNotification(forUsername, message, link){
+  if(!forUsername || forUsername===AUTH_USER?.username) return; // never notify yourself
+  DB.notifications = DB.notifications || [];
+  DB.notifications.unshift({
+    id:'nt'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    forUsername, message, link:link||null, read:false, ts:new Date().toISOString()
+  });
+  if(DB.notifications.length>500) DB.notifications=DB.notifications.slice(0,500);
+}
+
+// Resolves the record's owning tour's artist name -> roster artist -> linked
+// artist-role user account, if any of those links exist.
+function linkedArtistUserForRecord(recordType, recordId){
+  let artistName=null;
+  if(recordType==='tour'){
+    artistName=get(DB.tours,recordId)?.artist;
+  } else if(recordType==='event'){
+    const e=get(DB.events,recordId);
+    artistName=e?.tourId?get(DB.tours,e.tourId)?.artist:null;
+  }
+  if(!artistName) return null;
+  const artistRec=DB.artists.find(a=>a.name&&a.name.toLowerCase()===artistName.toLowerCase());
+  if(!artistRec) return null;
+  return (DB.users||USERS).find(u=>u.role==='artist'&&u.linkedArtistId===artistRec.id) || null;
+}
+function recordDisplayName(recordType,recordId){
+  const rec=recordType==='tour'?get(DB.tours,recordId):get(DB.events,recordId);
+  return rec?.name||'Untitled';
+}
+
+// Call this from any action an artist or an admin/producer takes on a specific
+// event or tour. Figures out direction automatically: if the person acting IS
+// the linked artist, every admin gets notified; otherwise, if there IS a linked
+// artist for this record, that artist gets notified. Silently does nothing if
+// this record has no linked artist account at all.
+function notifyCounterparty(recordType, recordId, actionPhrase, link){
+  const artistUser=linkedArtistUserForRecord(recordType,recordId);
+  if(!artistUser) return;
+  const actorName=AUTH_USER?.displayName||'Someone';
+  const label=recordDisplayName(recordType,recordId);
+  const message=`${actorName} ${actionPhrase} on ${label}`;
+  if(AUTH_USER?.username===artistUser.username){
+    (DB.users||USERS).filter(u=>u.role==='admin').forEach(admin=>pushNotification(admin.username,message,link));
+  } else {
+    pushNotification(artistUser.username,message,link);
+  }
+}
+
+function unreadNotifications(){
+  if(!AUTH_USER) return [];
+  return (DB.notifications||[]).filter(n=>n.forUsername===AUTH_USER.username && !n.read);
+}
+function myNotifications(){
+  if(!AUTH_USER) return [];
+  return (DB.notifications||[]).filter(n=>n.forUsername===AUTH_USER.username);
+}
+function refreshNotifBadge(){
+  const badge=document.getElementById('notif-badge'); if(!badge) return;
+  const n=unreadNotifications().length;
+  if(n>0){ badge.textContent=n>99?'99+':n; badge.style.display='inline-flex'; }
+  else badge.style.display='none';
+}
+function toggleNotifPanel(){
+  const panel=document.getElementById('notif-panel');
+  if(!panel) return;
+  const opening=panel.style.display==='none'||!panel.style.display;
+  panel.style.display=opening?'block':'none';
+  if(opening) renderNotifPanel();
+}
+function renderNotifPanel(){
+  const panel=document.getElementById('notif-panel'); if(!panel) return;
+  const items=myNotifications().slice(0,30);
+  panel.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--bord)">
+      <strong style="font-size:13px">Notifications</strong>
+      ${items.some(n=>!n.read)?`<button class="btn ghost sm" style="padding:2px 8px" onclick="markAllNotifsRead()">Mark all read</button>`:''}
+    </div>
+    <div style="max-height:360px;overflow-y:auto">
+      ${items.length?items.map(n=>`
+        <div onclick="openNotif('${n.id}')" style="padding:10px 14px;border-bottom:1px solid var(--bord);cursor:pointer;background:${n.read?'transparent':'var(--acc-soft)'}">
+          <div style="font-size:12px;line-height:1.5;color:var(--txt)">${esc(n.message)}</div>
+          <div style="font-size:10px;color:var(--txt3);margin-top:3px">${timeAgo(n.ts)}</div>
+        </div>`).join(''):'<p class="muted" style="font-size:12px;padding:14px">No notifications yet.</p>'}
+    </div>`;
+}
+function markAllNotifsRead(){
+  myNotifications().forEach(n=>n.read=true);
+  persist(); refreshNotifBadge(); renderNotifPanel();
+}
+function openNotif(id){
+  const n=(DB.notifications||[]).find(x=>x.id===id); if(!n) return;
+  n.read=true;
+  persist(); refreshNotifBadge();
+  document.getElementById('notif-panel').style.display='none';
+  if(n.link) go(n.link.view, n.link.id, n.link.tab);
+}
+function timeAgo(ts){
+  const s=Math.floor((Date.now()-new Date(ts).getTime())/1000);
+  if(s<60) return 'just now';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
 }
 
 /* ---------- THEME ---------- */
@@ -776,7 +931,10 @@ function initSupabase() {
               ? JSON.parse(payload.new.data)
               : payload.new.data;
             Object.assign(DB, data);
+            sanitizeSeqCounters();
             if (route && route.view) render();
+            refreshTasksBadge();
+            refreshNotifBadge();
           }
         }
       )
@@ -2967,17 +3125,20 @@ function lgConfirm(eid, lid){
   const v=e.venueId?get(DB.venues,e.venueId):null;
   const host=document.getElementById('ev-tab');
   if(host) eventLogistics(host,e,v); else go('events',eid,'logistics');
+  notifyCounterparty('event',eid,`confirmed "${item.label}"`,{view:'events',id:eid,tab:'logistics'});
 }
 
 function lgDelete(eid, lid){
   if(!confirm('Delete this logistics item?')) return;
   const e=get(DB.events,eid); if(!e) return;
+  const item=(e.logistics||[]).find(i=>i.id===lid);
   e.logistics=(e.logistics||[]).filter(i=>i.id!==lid);
   if(window._lgActive===lid) window._lgActive=null;
   persist();
   const v=e.venueId?get(DB.venues,e.venueId):null;
   const host=document.getElementById('ev-tab');
   if(host) eventLogistics(host,e,v); else go('events',eid,'logistics');
+  if(item) notifyCounterparty('event',eid,`removed the logistics item "${item.label}"`,{view:'events',id:eid,tab:'logistics'});
 }
 
 function lgAdd(eid){
@@ -3209,6 +3370,7 @@ function addProjExpense(id){
   e.projection.expenses=e.projection.expenses||[];
   e.projection.expenses.push({desc:'',amount:0,payer:'producer',markupPct:0});
   renderProjExpenses(e); renderScenario(id); persist();
+  notifyCounterparty('event',id,'added an expense',{view:'events',id,tab:'expenses'});
 }
 function setProjExp(id,i,field,val){
   const e=get(DB.events,id);
@@ -3230,8 +3392,10 @@ function setProjExp(id,i,field,val){
 }
 function removeProjExp(id,i){
   const e=get(DB.events,id);
+  const removed=e.projection.expenses[i];
   e.projection.expenses.splice(i,1);
   renderProjExpenses(e); renderScenario(id); persist();
+  if(removed?.desc) notifyCounterparty('event',id,`removed the expense "${removed.desc}"`,{view:'events',id,tab:'expenses'});
 }
 
 function recalcEvent(id){
@@ -4202,6 +4366,33 @@ function saveAssign(eid,field){
   persist();closeModal();render();
 }
 
+// Parses a pasted URL to see if it looks like a real Google Drive/Docs link,
+// and if so what kind of file it is. We can't fetch the actual file's title
+// without real OAuth access to the Drive API — this is pattern-matching on
+// the URL shape only — but it's enough to validate the link and pick a
+// sensible icon instead of treating every file link identically.
+function parseDriveUrl(url){
+  url=(url||'').trim();
+  if(!url) return {valid:null}; // empty — no opinion yet
+  const patterns=[
+    {re:/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,type:'file'},
+    {re:/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,type:'file'},
+    {re:/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9_-]+)/,type:'folder'},
+    {re:/drive\.google\.com\/drive\/u\/\d+\/folders\/([a-zA-Z0-9_-]+)/,type:'folder'},
+    {re:/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/,type:'doc'},
+    {re:/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/,type:'sheet'},
+    {re:/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)/,type:'slide'},
+    {re:/docs\.google\.com\/forms\/d\/([a-zA-Z0-9_-]+)/,type:'form'},
+  ];
+  for(const p of patterns){
+    const m=url.match(p.re);
+    if(m) return {valid:true,fileId:m[1],type:p.type};
+  }
+  return {valid:false};
+}
+const DRIVE_TYPE_ICON={doc:'📘',sheet:'📗',slide:'📙',form:'📋',folder:'📁',file:'📄'};
+const DRIVE_TYPE_LABEL={doc:'Google Doc',sheet:'Google Sheet',slide:'Google Slides',form:'Google Form',folder:'Drive folder',file:'Drive file'};
+
 function eventFiles(host,e){
   const files=e.files||[];
   const driveFolder=DB.settings.driveFolder||'';
@@ -4215,15 +4406,19 @@ function eventFiles(host,e){
       </div>`}
       <div class="sec-label" style="margin-bottom:10px">Files</div>
       ${files.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-        ${files.map((f,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surf2);border-radius:var(--rad)">
+        ${files.map((f,i)=>{
+          const dt=f.driveType||null;
+          const looksWrong=f.url && f.driveValid===false;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surf2);border-radius:var(--rad)">
           <span style="font-size:16px">${f.category==='Contract'?'📄':f.category==='Insurance'?'🛡':f.category==='Settlement'?'💰':f.category==='Tech / Rider'?'🎛':'📎'}</span>
           <div style="flex:1;min-width:0">
             <div style="font-weight:500;font-size:13px">${esc(f.name)}</div>
-            <div style="font-size:11px;color:var(--txt3)">${esc(f.category)} · ${esc(f.date||'')}</div>
+            <div style="font-size:11px;color:var(--txt3)">${esc(f.category)}${dt?' · '+DRIVE_TYPE_ICON[dt]+' '+DRIVE_TYPE_LABEL[dt]:''} · ${esc(f.date||'')}${looksWrong?' · <span style="color:var(--amber)">⚠ link may not be a Drive link</span>':''}</div>
           </div>
           ${f.url?`<a href="${esc(f.url)}" target="_blank" class="btn sm">Open ↗</a>`:''}
           ${canDo('admin')?`<button class="btn ghost sm" style="padding:2px 7px" onclick="deleteFile('${e.id}',${i})" title="Remove">×</button>`:''}
-        </div>`).join('')}
+        </div>`;
+        }).join('')}
       </div>`:`<p class="muted" style="font-size:13px;margin-bottom:16px">No files yet.</p>`}
       ${canDo('admin')?`<button class="btn sm" onclick="addFileRef('${e.id}')">+ Add file link</button>`:''}
     </div>`;
@@ -4236,19 +4431,46 @@ function addFileRef(eid){
       ${['Contract','Insurance','Settlement','Tech / Rider','Misc'].map(x=>`<option>${x}</option>`).join('')}
     </select></div>
     <div class="field"><label>Google Drive link</label>
-      <input id="ff-url" placeholder="Paste Drive file URL here…">
+      <input id="ff-url" placeholder="Paste Drive file URL here…" oninput="ffValidateUrl()">
       <p class="muted" style="font-size:11px;margin-top:4px">Right-click the file in Drive → Share → Copy link, then paste here.</p>
+      <div id="ff-url-feedback" style="font-size:12px;margin-top:6px;min-height:16px"></div>
     </div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="saveFileRef('${eid}')">Add</button>`);
+}
+
+function sdValidateUrl(){
+  const feedback=document.getElementById('sd-url-feedback'); if(!feedback) return;
+  const parsed=parseDriveUrl(fv('set-drive'));
+  if(parsed.valid===null){ feedback.innerHTML=''; return; }
+  if(parsed.valid && parsed.type==='folder'){
+    feedback.innerHTML=`<span style="color:var(--green)">✓ 📁 Looks like a Drive folder</span>`;
+  } else if(parsed.valid){
+    feedback.innerHTML=`<span style="color:var(--amber)">⚠ This looks like a ${DRIVE_TYPE_LABEL[parsed.type]} link, not a folder — make sure you copied the folder's share link, not a file inside it</span>`;
+  } else {
+    feedback.innerHTML=`<span style="color:var(--amber)">⚠ This doesn't look like a Google Drive link — you can still save it, but double-check the URL</span>`;
+  }
+}
+function ffValidateUrl(){
+  const feedback=document.getElementById('ff-url-feedback'); if(!feedback) return;
+  const parsed=parseDriveUrl(fv('ff-url'));
+  if(parsed.valid===null){ feedback.innerHTML=''; return; }
+  if(parsed.valid){
+    feedback.innerHTML=`<span style="color:var(--green)">✓ ${DRIVE_TYPE_ICON[parsed.type]} Looks like a ${DRIVE_TYPE_LABEL[parsed.type]}</span>`;
+  } else {
+    feedback.innerHTML=`<span style="color:var(--amber)">⚠ This doesn't look like a Google Drive link — you can still save it, but double-check the URL</span>`;
+  }
 }
 
 function saveFileRef(eid){
   const e=get(DB.events,eid); if(!e) return;
   const name=fv('ff-name');
   if(!name){alert('Please enter a file name.');return;}
+  const url=fv('ff-url');
+  const parsed=parseDriveUrl(url);
   e.files=e.files||[];
-  e.files.push({name,category:fv('ff-cat'),url:fv('ff-url'),date:todayStr()});
+  e.files.push({name,category:fv('ff-cat'),url,date:todayStr(),
+    driveType:parsed.valid?parsed.type:null, driveValid:url?parsed.valid:null});
   logActivity('edited','Event',e.name+' (file added: '+name+')');
   persist();closeModal();
   const v=e.venueId?get(DB.venues,e.venueId):null;
@@ -4839,6 +5061,7 @@ function saveEvent(id){
   const linkedProp=_curProposalLink; _curProposalLink=null;
   const ref=_curEventRef; _curEventRef=null;
   persist();closeModal();
+  if(id) notifyCounterparty('event',id,'edited the deal terms',{view:'events',id,tab:'overview'});
   if(linkedProp && !id) go('proposals',linkedProp);
   else if(ref) go('proposals',ref);
   else if(id) go('events',id,'overview');
@@ -7876,6 +8099,7 @@ function proposalAddVenue(pid){
       <div class="field"><label>Venue</label><select id="pav-venue" onchange="pavPreview('${pid}')"></select></div>
     </div>
     <div id="pav-preview"></div>
+    <div id="pav-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:4px"></div>
     <div class="row2" style="margin-top:12px">
       <div class="field"><label>Date (optional)</label><input id="pav-date" type="date"></div>
       <div class="field"><label>Capacity (leave blank to use venue default)</label><input id="pav-cap" type="number"></div>
@@ -7953,7 +8177,10 @@ function pavPreview(pid){
 }
 
 function pavSave(pid){
-  const vid=fv('pav-venue'); if(!vid){alert('Please select a venue.');return;}
+  const vid=fv('pav-venue');
+  const err=document.getElementById('pav-err');
+  if(!vid){ if(err) err.textContent='Please select a venue.'; return; }
+  if(err) err.textContent='';
   const p=get(DB.proposals,pid); if(!p) return;
   const capVal=+(document.getElementById('pav-cap')?.value)||get(DB.venues,vid)?.capacity||0;
   const s=proposalShowFromVenue(vid, 0, p);
@@ -8219,8 +8446,9 @@ VIEWS.settings={
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">
           Paste your Google Drive folder URL below. Files in each event's Files tab will link directly to Drive — no login required.</p>
         <div class="field"><label>Drive folder URL</label>
-          <input id="set-drive" placeholder="https://drive.google.com/drive/folders/…" value="${esc(DB.settings.driveFolder||'')}">
+          <input id="set-drive" placeholder="https://drive.google.com/drive/folders/…" value="${esc(DB.settings.driveFolder||'')}" oninput="sdValidateUrl()">
           <p class="muted" style="font-size:11px;margin-top:4px">In Google Drive: right-click your TourDesk folder → Share → Copy link</p>
+          <div id="sd-url-feedback" style="font-size:12px;margin-top:6px;min-height:16px"></div>
         </div>
         <button class="btn sm" onclick="saveDriveFolder()">Save folder link</button>
         ${DB.settings.driveFolder?`<a href="${esc(DB.settings.driveFolder)}" target="_blank" class="btn sm" style="margin-left:8px">Open Drive ↗</a>`:''}
@@ -8615,7 +8843,10 @@ async function connectSupabase(){
         if(payload.new && payload.new.data){
           const d=typeof payload.new.data==='string'?JSON.parse(payload.new.data):payload.new.data;
           Object.assign(DB,d);
+          sanitizeSeqCounters();
           if(route && route.view) render();
+          refreshTasksBadge();
+          refreshNotifBadge();
         }
       }).subscribe();
     // Patch persist to record when we last wrote
@@ -8664,7 +8895,7 @@ function exportData(){
 function importData(file){
   if(!file)return;
   const r=new FileReader();
-  r.onload=()=>{ try{ const d=JSON.parse(r.result); Object.assign(DB,d); persist(); go('dashboard'); }catch(e){ alert('Invalid backup file'); } };
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); Object.assign(DB,d); sanitizeSeqCounters(); persist(); go('dashboard'); }catch(e){ alert('Invalid backup file'); } };
   r.readAsText(file);
 }
 function resetData(){
@@ -8922,12 +9153,12 @@ if(AUTH_USER) {
     const c=document.getElementById('content');
     if(c) c.innerHTML='<div style="padding:40px;text-align:center;color:var(--txt3);font-size:13px">Connecting…</div>';
     await load();
+    sanitizeSeqCounters();
     syncUsersFromDB();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
-    // Migrate: seed default to-do templates, and ensure the id counter exists
+    // Migrate: seed default to-do templates
     if(!DB.settings.todoTemplates || !Array.isArray(DB.settings.todoTemplates)) DB.settings.todoTemplates = defaultTodoTemplates();
-    if(!DB._seq.td) DB._seq.td = 1;
     applyTheme(); // reconcile with the authoritative (possibly Supabase-synced) setting
     // Only restore an admin's cached "View as artist" simulation — a real artist-role
     // login already got its permanent ARTIST_VIEW set in initAuth() and must not be
@@ -8940,6 +9171,13 @@ if(AUTH_USER) {
     go('dashboard');
     updateSyncBadge();
     refreshTasksBadge();
+    refreshNotifBadge();
+    document.addEventListener('click', (e)=>{
+      const panel=document.getElementById('notif-panel');
+      if(panel && panel.style.display==='block' && !panel.contains(e.target) && !e.target.closest('button[onclick="toggleNotifPanel()"]')){
+        panel.style.display='none';
+      }
+    });
   })();
 }
 
