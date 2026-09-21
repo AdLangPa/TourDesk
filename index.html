@@ -1600,7 +1600,7 @@ function tableEvents(list){
       +'<td class="num">'+money0(f.gross)+'</td>'
       +(hideComm?'':'<td class="num pos">'+money0(f.commission)+'</td>')
       +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'">'+money0(f.artistNet)+'</td>'
-      +'<td><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span></td></tr>';
+      +'<td><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)+'</td></tr>';
   }).join('');
   return hdr+rows+'</tbody></table>';
 }
@@ -1709,11 +1709,81 @@ VIEWS.venues={
       </div>
       ${v.notes?`<div class="sec"><div class="sec-label">Notes</div><p style="font-size:13px;color:var(--txt2);line-height:1.6">${esc(v.notes)}</p></div>`:''}
       ${(v.tags||[]).length?('<div class="sec">'+v.tags.map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('')+'</div>'):''}
+      <div class="sec">
+        <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Known availability</span>
+          ${canDo('admin')?`<button class="btn ghost sm" onclick="venueAvailAdd('${v.id}')">+ Add date</button>`:''}
+        </div>
+        <div id="venue-avail-list">${renderVenueAvailList(v)}</div>
+      </div>
       <div class="sec"><div class="sec-label">Events at this venue (${evts.length})</div>
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No events here yet.</p>'}</div>`;
   }
 };
+function renderVenueAvailList(v){
+  const entries=(v.availability||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
+  if(!entries.length) return '<p class="muted" style="font-size:13px">No availability info recorded yet — add dates you know are open, held, or already booked elsewhere.</p>';
+  return entries.map(a=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--bord)">
+      <span style="font-size:13px;font-weight:600;min-width:90px">${fmtDate(a.date)}</span>
+      <span class="badge ${a.type==='unavailable'?'red':a.type==='held'?'amber':'green'}">${AVAIL_TYPE_LABEL[a.type]||a.type}</span>
+      <span style="flex:1;font-size:12px;color:var(--txt2)">${esc(a.note||'')}</span>
+      ${canDo('admin')?`<button class="btn ghost sm" style="padding:2px 7px" onclick="venueAvailDelete('${v.id}','${a.id}')">×</button>`:''}
+    </div>`).join('');
+}
+function venueAvailAdd(vid){
+  openModal('Add availability info',`
+    <div class="row2">
+      <div class="field"><label>Date</label><input id="va-date" type="date"></div>
+      <div class="field"><label>Type</label><select id="va-type">
+        <option value="unavailable">Unavailable (already booked)</option>
+        <option value="held">Held (by someone, not yet confirmed)</option>
+        <option value="available">Known available</option>
+      </select></div>
+    </div>
+    <div class="field"><label>Note (optional)</label><input id="va-note" placeholder="e.g. Held by another agency, or house show"></div>
+    <div id="va-err" style="color:var(--red);font-size:12px;min-height:16px"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="venueAvailSave('${vid}')">Add</button>`);
+}
+function venueAvailSave(vid){
+  const date=fv('va-date');
+  const err=document.getElementById('va-err');
+  if(!date){ if(err) err.textContent='Please pick a date.'; return; }
+  const v=get(DB.venues,vid); if(!v) return;
+  v.availability=v.availability||[];
+  if(v.availability.some(a=>a.date===date)){ if(err) err.textContent='There\'s already an entry for this date — remove it first if you want to replace it.'; return; }
+  v.availability.push({id:'av'+Date.now().toString(36),date,type:fv('va-type'),note:fv('va-note')});
+  persist();
+  closeModal();
+  const host=document.getElementById('venue-avail-list');
+  if(host) host.innerHTML=renderVenueAvailList(v);
+}
+function venueAvailDelete(vid,aid){
+  const v=get(DB.venues,vid); if(!v) return;
+  v.availability=(v.availability||[]).filter(a=>a.id!==aid);
+  persist();
+  const host=document.getElementById('venue-avail-list');
+  if(host) host.innerHTML=renderVenueAvailList(v);
+}
 function ctLabel(ct){return {guarantee:'Guarantee',door:'Door split',guarantee_plus:'Guarantee+',rental:'Rental (flat fee)',rental_greater_of:'Rental (greater of flat or %)',rental_plus_pct:'Rental (flat fee + % of net)'}[ct]||'—';}
+
+// Hold status tracks where things stand with the VENUE specifically — separate
+// from the event's own lifecycle status (Routing/Confirmed/Completed), since a
+// show can be "Confirmed" as an internal event record while still only holding
+// a date with the venue pending a signed contract.
+const HOLD_STATUSES=['','Inquiry','1st Hold','2nd Hold','3rd Hold','Confirmed'];
+function holdStatusColor(hs){
+  if(hs==='Confirmed') return 'green';
+  if(hs==='1st Hold') return 'amber';
+  if(hs==='2nd Hold'||hs==='3rd Hold') return 'gray';
+  if(hs==='Inquiry') return 'blue';
+  return '';
+}
+function holdStatusBadge(hs){
+  if(!hs) return '';
+  return `<span class="badge ${holdStatusColor(hs)}" style="margin-left:6px">${esc(hs)}</span>`;
+}
 
 function renderVenueCards(list){
   return list.length ? list.map(venueCard).join('') : emptyState('▣','No venues match');
@@ -2626,7 +2696,7 @@ VIEWS.events={
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="${backAction}">${backLabel}</span>
         <span class="detail-title">${esc(e.name)}</span>
-        <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span></div>
+        <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span>${holdStatusBadge(e.holdStatus)}</div>
       <div class="tabs">
         ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['todos','To-dos'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}',null,'${refProp||''}')">${lbl}</div>`).join('')}
@@ -4586,17 +4656,22 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
     </div>
     <div class="row2">
       <div class="field"><label>City</label><select id="ef-venue-city" onchange="venueCascadeFilterChanged('ef-venue','city',prefillVenueTerms)"></select></div>
-      <div class="field"><label>Venue</label><select id="ef-venue" onchange="prefillVenueTerms()"></select></div>
+      <div class="field"><label>Venue</label><select id="ef-venue" onchange="prefillVenueTerms();efCheckAvailability()"></select></div>
     </div>
     <div class="row3">
-      <div class="field"><label>Date</label><input id="ef-date" type="date" value="${e.date||''}"></div>
+      <div class="field"><label>Date</label><input id="ef-date" type="date" value="${e.date||''}" onchange="efCheckAvailability()"></div>
       <div class="field"><label>Show time</label><input id="ef-show" value="${esc(e.showTime||'')}" placeholder="20:00"></div>
       <div class="field"><label>Load-in</label><input id="ef-load" value="${esc(e.loadIn||'')}" placeholder="18:30"></div>
     </div>
+    <div id="ef-availability-warn" style="font-size:12px;margin:-6px 0 10px;min-height:16px"></div>
     <div class="row3">
       <div class="field"><label>Status</label><select id="ef-status">
         ${['Routing','Confirmed','Completed'].map(s=>`<option ${e.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Hold status <span class="muted" style="font-weight:400">(with venue)</span></label><select id="ef-hold">
+        ${HOLD_STATUSES.map(s=>`<option value="${s}" ${(e.holdStatus||'')===s?'selected':''}>${s||'— not set —'}</option>`).join('')}</select></div>
       <div class="field"><label>Capacity allocated</label><input id="ef-cap" type="number" value="${e.capacityAlloc||''}"></div>
+    </div>
+    <div class="row2">
       <div class="field"><label>Presales</label><input id="ef-pre" type="number" value="${e.presales||0}"></div>
     </div>
 
@@ -4774,6 +4849,17 @@ function prefillVenueTerms(){
     }
   }
 }
+function efCheckAvailability(){
+  const host=document.getElementById('ef-availability-warn'); if(!host) return;
+  const vid=fv('ef-venue'), date=fv('ef-date');
+  const avail=venueAvailabilityOn(vid,date);
+  if(!avail){ host.innerHTML=''; return; }
+  if(avail.type!=='available'){
+    host.innerHTML=`<span style="color:${AVAIL_TYPE_COLOR[avail.type]}">⚠ ${AVAIL_TYPE_LABEL[avail.type]} on this date${avail.note?': '+esc(avail.note):''}</span>`;
+  } else {
+    host.innerHTML=`<span style="color:${AVAIL_TYPE_COLOR.available}">✓ ${AVAIL_TYPE_LABEL.available} on this date${avail.note?': '+esc(avail.note):''}</span>`;
+  }
+}
 /* ---- Paste show data → fill event form ---- */
 function pasteShowData(){
   const body=`
@@ -4945,7 +5031,7 @@ function reopenEventForm(){
   // Preserve form state then re-render with updated cost lines
   const cur={
     id:_curEventFormId,tourId:fv('ef-tour'),venueId:fv('ef-venue'),name:fv('ef-name'),
-    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),
+    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),
     capacityAlloc:fv('ef-cap'),presales:fv('ef-pre'),comps:fv('ef-comps'),mgmtPct:fv('ef-mgmt'),
     pricing:{base:fv('ef-base'),serviceFee:fv('ef-fee'),feeType:fv('ef-feetype'),
       ccFee:fv('ef-cc'),taxRate:fv('ef-tax'),taxOn:fv('ef-taxon')},
@@ -5002,7 +5088,7 @@ function toggleDealFields(seeds){
 function saveEvent(id){
   const rec={
     name:fv('ef-name'),tourId:fv('ef-tour'),venueId:fv('ef-venue'),date:fv('ef-date'),
-    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),
+    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),
     capacityAlloc:fvn('ef-cap'),presales:fvn('ef-pre'),comps:fvn('ef-comps'),
     mgmtPct:fvn('ef-mgmt'),
     pricing:(()=>{
@@ -6554,8 +6640,8 @@ function proposalShowsTable(p,shows,isAccepted){
   });
   const tcps=proposalTourCostPerShow(p);
   return `<div style="overflow-x:auto">
-    <table class="tbl" style="min-width:580px"><thead><tr>
-      <th>Venue</th><th>Date</th><th class="num">Ticket</th><th class="num">Est. sold</th>
+    <table class="tbl" style="min-width:660px"><thead><tr>
+      <th>Venue</th><th>Date</th><th>Hold</th><th class="num">Ticket</th><th class="num">Est. sold</th>
       <th class="num">Gross</th><th class="num">Commission</th><th class="num">Artist net</th>
       ${!isAccepted?'<th></th>':''}
     </tr></thead><tbody>
@@ -6567,6 +6653,11 @@ function proposalShowsTable(p,shows,isAccepted){
           ${v?.city?`<div style="font-size:11px;color:var(--txt3)">${esc(v.city)}</div>`:''}
         </td>
         <td>${esc(s.date||'TBD')}</td>
+        <td onclick="event.stopPropagation()">
+          <select onchange="setShowHoldStatus('${p.id}','${s._sid}',this.value)" style="font-size:11px;padding:3px 5px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt)">
+            ${HOLD_STATUSES.map(hs=>`<option value="${hs}" ${(s.holdStatus||'')===hs?'selected':''}>${hs||'— not set —'}</option>`).join('')}
+          </select>
+        </td>
         <td class="num">${(s.tiers&&s.tiers.length>0) ? s.tiers.map(t=>esc(t.name)+' '+money0(t.base)).join(', ') : money0(s.ticketBase)}</td>
         <td class="num">${s.ticketsEst||'—'} <span class="muted">(${Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)}%)</span></td>
         <td class="num">${money0(f.grossBoxOffice)}</td>
@@ -6579,13 +6670,20 @@ function proposalShowsTable(p,shows,isAccepted){
       </tr>`;
     }).join('')}
     <tr style="border-top:2px solid var(--bord2);font-weight:600">
-      <td colspan="4">${p.kind==='tour'?'Tour total':'Total'} (${shows.length} show${shows.length!==1?'s':''})</td>
+      <td colspan="5">${p.kind==='tour'?'Tour total':'Total'} (${shows.length} show${shows.length!==1?'s':''})</td>
       <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s,undefined,tcps).grossBoxOffice,0))}</td>
       <td class="num pos">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s,undefined,tcps).commission,0))}</td>
       <td class="num">${money0(shows.reduce((t,s)=>t+proposalShowFigures(s,undefined,tcps).artistNet,0))}</td>
       ${!isAccepted?'<td></td>':''}
     </tr>
     </tbody></table></div>`;
+}
+function setShowHoldStatus(pid,sid,value){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
+  s.holdStatus=value;
+  logActivity('edited','Proposal',p.title+' (hold status: '+(value||'cleared')+')');
+  persist();
 }
 
 function proposalCard(p){
@@ -8099,11 +8197,15 @@ function proposalAddVenue(pid){
       <div class="field"><label>Venue</label><select id="pav-venue" onchange="pavPreview('${pid}')"></select></div>
     </div>
     <div id="pav-preview"></div>
+    <div id="pav-availability-warn" style="font-size:12px;margin-top:6px;min-height:16px"></div>
     <div id="pav-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:4px"></div>
     <div class="row2" style="margin-top:12px">
-      <div class="field"><label>Date (optional)</label><input id="pav-date" type="date"></div>
+      <div class="field"><label>Date (optional)</label><input id="pav-date" type="date" onchange="pavPreview('${pid}')"></div>
       <div class="field"><label>Capacity (leave blank to use venue default)</label><input id="pav-cap" type="number"></div>
     </div>
+    <div class="field"><label>Hold status <span class="muted" style="font-weight:400">(with venue)</span></label><select id="pav-hold">
+      ${HOLD_STATUSES.map(hs=>`<option value="${hs}">${hs||'— not set —'}</option>`).join('')}
+    </select></div>
     <p class="muted" style="font-size:11px;margin-top:4px">Ticket tiers and prices are set at the tour level. Tax rate comes from the venue's location.</p>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" onclick="pavSave('${pid}')">Add to proposal</button>`);
@@ -8160,10 +8262,20 @@ function pavFilterChanged(pid,level){
   pavPopulateVenues(pid);
 }
 
+// Looks up whether a specific date has a known availability entry for a venue.
+function venueAvailabilityOn(venueId, date){
+  if(!date) return null;
+  const v=get(DB.venues,venueId); if(!v) return null;
+  return (v.availability||[]).find(a=>a.date===date) || null;
+}
+const AVAIL_TYPE_LABEL={unavailable:'Marked unavailable',held:'Marked as held (by someone)',available:'Marked available'};
+const AVAIL_TYPE_COLOR={unavailable:'var(--red)',held:'var(--amber)',available:'var(--green)'};
+
 function pavPreview(pid){
   const vid=fv('pav-venue');
   const host=document.getElementById('pav-preview'); if(!host) return;
-  if(!vid){ host.innerHTML=''; return; }
+  const warnHost=document.getElementById('pav-availability-warn');
+  if(!vid){ host.innerHTML=''; if(warnHost) warnHost.innerHTML=''; return; }
   const p=get(DB.proposals,pid);
   const v=get(DB.venues,vid);
   const prev=mostRecentEventAtVenue(vid);
@@ -8174,6 +8286,17 @@ function pavPreview(pid){
     <div style="font-weight:600;margin-bottom:4px">${esc(v?.name||'')}</div>
     <div style="color:var(--txt2)">Contract: ${ctLabel(ct)} · ${prev?'costs from: '+esc(prev.name):'using venue defaults'}</div>
   </div>`;
+  if(warnHost){
+    const date=fv('pav-date');
+    const avail=venueAvailabilityOn(vid,date);
+    if(avail && avail.type!=='available'){
+      warnHost.innerHTML=`<span style="color:${AVAIL_TYPE_COLOR[avail.type]}">⚠ ${AVAIL_TYPE_LABEL[avail.type]} on this date${avail.note?': '+esc(avail.note):''}</span>`;
+    } else if(avail && avail.type==='available'){
+      warnHost.innerHTML=`<span style="color:${AVAIL_TYPE_COLOR.available}">✓ ${AVAIL_TYPE_LABEL.available} on this date${avail.note?': '+esc(avail.note):''}</span>`;
+    } else {
+      warnHost.innerHTML='';
+    }
+  }
 }
 
 function pavSave(pid){
@@ -8186,6 +8309,7 @@ function pavSave(pid){
   const s=proposalShowFromVenue(vid, 0, p);
   if(!s) return;
   s.date=fv('pav-date')||'';
+  s.holdStatus=fv('pav-hold')||'';
   s.capacity=capVal||s.capacity;
   // Re-apply tiers with actual capacity now that we know it
   if(p.tourTiers?.length && s.capacity){
@@ -8335,7 +8459,7 @@ function acceptProposal(id){
       name:v?(esc(v.city||v.name)+' — '+esc(v.name)):'Untitled show',
       tourId:tourId||'',venueId:s.venueId||'',
       date:s.date||'',showTime:s.showTime||'',loadIn:s.loadIn||'',
-      status:'Routing',capacityAlloc:s.capacity||0,presales:0,comps:0,
+      status:'Routing',holdStatus:s.holdStatus||'',capacityAlloc:s.capacity||0,presales:0,comps:0,
       mgmtPct:s.mgmtPct||DB.settings.mgmtPct,
       pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
         taxRate:+s.taxRate||DB.settings.taxRate,taxOn:s.taxOn||'base',
