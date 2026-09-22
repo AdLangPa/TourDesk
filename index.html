@@ -1412,7 +1412,7 @@ function settlementFigures(ev){
 
 /* ---------- FORMAT HELPERS ---------- */
 const money=n=>'$'+(Math.round((+n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-const money0=n=>'$'+Math.round(+n||0).toLocaleString();
+const money0=n=>'$'+(Math.round((+n||0)*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const get=(arr,id)=>arr.find(x=>x.id===id);
 const feeDisp=(val,mode)=> !val ? '—' : (mode==='pct' ? val+'%' : money0(val));
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
