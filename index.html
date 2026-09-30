@@ -1600,7 +1600,8 @@ function tableEvents(list){
       +'<td class="num">'+money0(f.gross)+'</td>'
       +(hideComm?'':'<td class="num pos">'+money0(f.commission)+'</td>')
       +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'">'+money0(f.artistNet)+'</td>'
-      +'<td><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)+'</td></tr>';
+      +'<td><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)
+      +(e.statusNote?'<div class="muted" style="font-size:11px;margin-top:3px;max-width:180px;white-space:normal">'+esc(e.statusNote)+'</div>':'')+'</td></tr>';
   }).join('');
   return hdr+rows+'</tbody></table>';
 }
@@ -1614,6 +1615,14 @@ function statusColor(s){
 function eventDisplayStatus(e){
   if(e.settlementV2?.settled) return 'Settled';
   return e.status||'Draft';
+}
+function setEventStatusNote(id,value){
+  const e=get(DB.events,id); if(!e) return;
+  const v=(value||'').trim();
+  if((e.statusNote||'')===v) return;
+  e.statusNote=v;
+  logActivity('edited','Event',e.name+' (status update: '+(v||'cleared')+')');
+  persist();
 }
 
 function tourCard(t){
@@ -2696,7 +2705,10 @@ VIEWS.events={
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="${backAction}">${backLabel}</span>
         <span class="detail-title">${esc(e.name)}</span>
-        <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span>${holdStatusBadge(e.holdStatus)}</div>
+        <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span>${holdStatusBadge(e.holdStatus)}
+        <input type="text" id="ev-statusnote-${id}" value="${esc(e.statusNote||'')}" placeholder="Add a status update…" ${canDo('admin')?'':'disabled'}
+          style="flex:1;min-width:140px;max-width:360px;margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--bord);border-radius:6px;background:var(--surf);color:var(--txt2)"
+          onchange="setEventStatusNote('${id}',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"></div>
       <div class="tabs">
         ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['todos','To-dos'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}',null,'${refProp||''}')">${lbl}</div>`).join('')}
@@ -4672,6 +4684,10 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
       <div class="field"><label>Capacity allocated</label><input id="ef-cap" type="number" value="${e.capacityAlloc||''}"></div>
     </div>
     <div class="row2">
+      <div class="field" style="flex:1"><label>Status update <span class="muted" style="font-weight:400">(free text, e.g. "Venue preparing contract")</span></label>
+        <input id="ef-statusnote" value="${esc(e.statusNote||'')}" placeholder="e.g. Awaiting email from Gerry"></div>
+    </div>
+    <div class="row2">
       <div class="field"><label>Presales</label><input id="ef-pre" type="number" value="${e.presales||0}"></div>
     </div>
 
@@ -5031,7 +5047,7 @@ function reopenEventForm(){
   // Preserve form state then re-render with updated cost lines
   const cur={
     id:_curEventFormId,tourId:fv('ef-tour'),venueId:fv('ef-venue'),name:fv('ef-name'),
-    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),
+    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),statusNote:fv('ef-statusnote'),
     capacityAlloc:fv('ef-cap'),presales:fv('ef-pre'),comps:fv('ef-comps'),mgmtPct:fv('ef-mgmt'),
     pricing:{base:fv('ef-base'),serviceFee:fv('ef-fee'),feeType:fv('ef-feetype'),
       ccFee:fv('ef-cc'),taxRate:fv('ef-tax'),taxOn:fv('ef-taxon')},
@@ -5088,7 +5104,7 @@ function toggleDealFields(seeds){
 function saveEvent(id){
   const rec={
     name:fv('ef-name'),tourId:fv('ef-tour'),venueId:fv('ef-venue'),date:fv('ef-date'),
-    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),
+    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),statusNote:fv('ef-statusnote'),
     capacityAlloc:fvn('ef-cap'),presales:fvn('ef-pre'),comps:fvn('ef-comps'),
     mgmtPct:fvn('ef-mgmt'),
     pricing:(()=>{
