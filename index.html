@@ -5275,10 +5275,14 @@ VIEWS.artists={
     const allEvents=DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(e.talentIds&&e.talentIds.includes(ar.contactId)));
     let totalEarned=0, totalShows=allEvents.length;
     allEvents.forEach(e=>{const f=eventBest(e);totalEarned+=f.artistNet;});
+    const statusReportBtn='<button class="btn sm" onclick="printArtistStatusReport(\''+id+'\')">' + '📋 Status update</button>';
     if(canDo('admin')){
       a.innerHTML=(ar.type==='roster'?'<button class="btn sm primary" onclick="enterArtistView(\''+id+'\')">' + 'View as '+esc(ar.name.split(' ')[0])+'</button> ':'')
+        +statusReportBtn+' '
         +'<button class="btn sm" onclick="artistForm(\''+id+'\')">' + 'Edit</button>'
         +' <button class="btn sm danger" onclick="deleteArtist(\''+id+'\')">' + 'Delete</button>';
+    } else if(canDo('view')){
+      a.innerHTML=statusReportBtn;
     } else { a.innerHTML=''; }
     c.innerHTML=`
       <div class="detail-head">
@@ -6895,6 +6899,69 @@ function printProposalDoc(id){
 
   const w=window.open('','_blank');
   w.document.write('<html><head><title>'+esc(p.title)+'</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>body{font-family:-apple-system,Arial,sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#243f56}@media print{.no-print{display:none}}</style></head><body>'+doc+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),400);
+}
+
+// Badge color keys (as used by statusColor/holdStatusColor) mapped to hex pairs,
+// for use in standalone print windows which don't have the app's CSS/theme vars.
+const REPORT_CHIP_COLORS={
+  green:{bg:'#e7f0e6',fg:'#397044'}, amber:{bg:'#faf1de',fg:'#a8721c'},
+  blue:{bg:'#e7eef3',fg:'#2f6690'}, red:{bg:'#fbe8ea',fg:'#c81e3a'},
+  gray:{bg:'#f4f0e8',fg:'#5c7086'}, '':{bg:'#f4f0e8',fg:'#5c7086'}
+};
+function reportChip(label,colorKey){
+  const c=REPORT_CHIP_COLORS[colorKey||'']||REPORT_CHIP_COLORS.gray;
+  return `<span style="display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${c.bg};color:${c.fg};margin-right:6px">${esc(label)}</span>`;
+}
+
+// One-pager status update for a single artist: every show that's still in
+// discussion (not yet Completed) or Completed but not yet settled, with its
+// lifecycle status, hold status and latest free-text status note. Opens a
+// standalone print-ready window, same pattern as printProposalDoc — so Adam
+// can review it, then Print → Save as PDF to send to the artist or a client.
+function printArtistStatusReport(artistId){
+  const ar=get(DB.artists,artistId); if(!ar) return;
+  // Same event-scoping as the artist detail page's own "Recent shows": events
+  // linked via a same-name tour, plus one-off events where this artist's linked
+  // contact is tagged as talent (one-off shows never get a tourId, so the
+  // tour-only artistEvents() helper would silently miss them here).
+  const tours=DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===ar.name.toLowerCase());
+  const allEvents=DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(e.talentIds&&e.talentIds.includes(ar.contactId)));
+  const events=allEvents
+    .filter(e=>!(e.status==='Completed' && e.settlementV2?.settled))
+    .slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+  const rows=events.map(e=>{
+    const v=get(DB.venues,e.venueId);
+    const dispStatus=eventDisplayStatus(e);
+    const dateStr=e.date?new Date(e.date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}):'Date TBD';
+    return `<div style="padding:16px 0;border-bottom:1px solid #e3dccb;page-break-inside:avoid">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:#243f56">${esc(v?v.name:e.name)}</div>
+          <div style="font-size:12px;color:#5c7086;margin-top:2px">${v?esc([v.city,v.province].filter(Boolean).join(', ')):''}</div>
+        </div>
+        <div style="font-size:13px;color:#243f56;font-weight:500;text-align:right;white-space:nowrap">${esc(dateStr)}</div>
+      </div>
+      <div style="margin-top:10px">
+        ${reportChip(dispStatus,statusColor(dispStatus))}
+        ${e.holdStatus?reportChip(e.holdStatus,holdStatusColor(e.holdStatus)):''}
+      </div>
+      ${e.statusNote?`<div style="margin-top:8px;font-size:13px;color:#5c7086;line-height:1.5">${esc(e.statusNote)}</div>`:''}
+    </div>`;
+  }).join('');
+
+  const doc=`
+    <div style="text-align:center;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #243f56">
+      <img src="${currentLogoUrl()}" alt="" style="height:36px;width:auto;max-width:110px;object-fit:contain;margin-bottom:12px">
+      <div style="font-size:22px;font-weight:600;font-family:'Plus Jakarta Sans',-apple-system,sans-serif">${esc(ar.name)} — Status Update</div>
+      <div style="font-size:13px;color:#607080;margin-top:4px">${new Date().toLocaleDateString('en-CA')}</div>
+    </div>
+    ${events.length?rows:'<p style="font-size:13px;color:#8a97a3;text-align:center;padding:30px 0">No shows currently in discussion or awaiting settlement.</p>'}
+    <p style="font-size:11px;color:#8a97a3;margin-top:20px">Generated by TourDesk.</p>`;
+
+  const w=window.open('','_blank');
+  w.document.write('<html><head><title>'+esc(ar.name)+' — Status Update</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>body{font-family:-apple-system,Arial,sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#243f56}@media print{.no-print{display:none}}</style></head><body>'+doc+'</body></html>');
   w.document.close(); w.focus(); setTimeout(()=>w.print(),400);
 }
 
