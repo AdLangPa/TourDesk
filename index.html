@@ -2710,7 +2710,7 @@ VIEWS.events={
           style="flex:1;min-width:140px;max-width:360px;margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--bord);border-radius:6px;background:var(--surf);color:var(--txt2)"
           onchange="setEventStatusNote('${id}',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"></div>
       <div class="tabs">
-        ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['todos','To-dos'],['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
+        ${[['overview','Overview'],['projections','Projections'],['expenses','Expenses'],['settlement','Settlement'],['logistics','Logistics'],['todos','To-dos'],...(!inArtistView()?[['notes','Notes'+((e.notesLog||[]).length?' ('+(e.notesLog||[]).length+')':'')]]:[]),['people','People'],['files','Files'],...(!inArtistView()?[['compare','Venue history']]:[]),(refProp?[]:[''])].filter(x=>x[0]).map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('events','${id}','${tb}',null,'${refProp||''}')">${lbl}</div>`).join('')}
       </div>
       <div id="ev-tab"></div>`;
@@ -2723,6 +2723,7 @@ VIEWS.events={
     else if(tab==='todos'){ host.innerHTML=`<div id="todo-tab-event-${id}"></div>`; renderTodoTab('event',id); }
     else if(tab==='people') eventPeople(host,e);
     else if(tab==='files') eventFiles(host,e);
+    else if(tab==='notes' && !inArtistView()) eventNotes(host,e);
     else if(tab==='compare') eventVenueHistory(host,e,v);
   }
 };
@@ -2980,6 +2981,7 @@ function duplicateEvent(id){
   copy.date=''; // reset date
   copy.presales=0;
   copy.todos=[]; // don't carry over to-dos tied to the original event's date
+  copy.notesLog=[]; copy.statusNote=''; // notes/status belong to the original event's history
   // reset settlement actuals but keep cost structure and projection
   copy.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''};
   DB.events.push(copy);
@@ -4474,6 +4476,52 @@ function parseDriveUrl(url){
 }
 const DRIVE_TYPE_ICON={doc:'📘',sheet:'📗',slide:'📙',form:'📋',folder:'📁',file:'📄'};
 const DRIVE_TYPE_LABEL={doc:'Google Doc',sheet:'Google Sheet',slide:'Google Slides',form:'Google Form',folder:'Drive folder',file:'Drive file'};
+
+/* ---------- EVENT NOTES LOG ----------
+   Quick-post, date-stamped notes per event (e.notesLog = [{id,ts,text,by}]).
+   Internal only: the tab is hidden in artist view. */
+function eventNotes(host,e){
+  const log=(e.notesLog||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  const canEdit=canDo('admin');
+  let lastDay='';
+  const items=log.map(n=>{
+    const d=new Date(n.ts);
+    const day=isNaN(d)?'':d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const time=isNaN(d)?'':d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+    let head='';
+    if(day!==lastDay){ head='<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--txt3);margin:18px 0 8px">'+esc(day)+'</div>'; lastDay=day; }
+    return head+'<div style="padding:10px 12px;background:var(--surf2);border-radius:var(--rad);margin-bottom:6px">'
+      +'<div style="font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word">'+esc(n.text)+'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:var(--txt3)">'
+      +'<span>'+esc(time)+(n.by?' · '+esc(n.by):'')+'</span>'
+      +(canEdit?'<a onclick="eventNoteDelete(\''+e.id+'\',\''+n.id+'\')" style="cursor:pointer;color:var(--txt3)">Delete</a>':'')
+      +'</div></div>';
+  }).join('');
+  host.innerHTML='<div style="max-width:680px">'
+    +(canEdit?'<div class="field" style="margin-bottom:6px"><textarea id="en-text" rows="3" placeholder="Jot a note… (Ctrl/Cmd + Enter to post)" style="width:100%;resize:vertical" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key===\'Enter\'){event.preventDefault();eventNotePost(\''+e.id+'\')}"></textarea></div>'
+      +'<div style="margin-bottom:6px"><button class="btn primary sm" onclick="eventNotePost(\''+e.id+'\')">Post note</button></div>':'')
+    +(log.length?items:'<p class="muted" style="font-size:13px;margin-top:14px">No notes yet. Anything you post here is saved with the date and time.</p>')
+    +'</div>';
+}
+function eventNotePost(id){
+  const e=get(DB.events,id); if(!e||!canDo('admin')) return;
+  const ta=document.getElementById('en-text'); if(!ta) return;
+  const text=ta.value.trim(); if(!text) return;
+  e.notesLog=e.notesLog||[];
+  e.notesLog.push({id:'n'+Date.now()+Math.floor(Math.random()*1000),ts:new Date().toISOString(),text,by:(AUTH_USER&&AUTH_USER.displayName)||''});
+  logActivity('added a note to','Event',e.name);
+  persist();
+  go('events',id,'notes');
+  const t2=document.getElementById('en-text'); if(t2) t2.focus();
+}
+function eventNoteDelete(id,nid){
+  const e=get(DB.events,id); if(!e||!canDo('admin')) return;
+  if(!confirm('Delete this note?')) return;
+  e.notesLog=(e.notesLog||[]).filter(n=>n.id!==nid);
+  logActivity('deleted a note from','Event',e.name);
+  persist();
+  go('events',id,'notes');
+}
 
 function eventFiles(host,e){
   const files=e.files||[];
