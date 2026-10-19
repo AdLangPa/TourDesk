@@ -1620,7 +1620,7 @@ function setEventStatusNote(id,value){
   const e=get(DB.events,id); if(!e) return;
   const v=(value||'').trim();
   if((e.statusNote||'')===v) return;
-  e.statusNote=v;
+  e.statusNote=v; e.statusNoteAt=v?new Date().toISOString():'';
   logActivity('edited','Event',e.name+' (status update: '+(v||'cleared')+')');
   persist();
 }
@@ -5203,8 +5203,10 @@ function saveEvent(id){
     }
     return;
   }
-  if(id){ const e=get(DB.events,id); Object.assign(e,rec); logActivity('edited','Event',rec.name); }
-  else { rec.id=uid('e'); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[];rec.todos=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
+  if(id){ const e=get(DB.events,id);
+    if((e.statusNote||'')!==(rec.statusNote||'')) rec.statusNoteAt=rec.statusNote?new Date().toISOString():'';
+    Object.assign(e,rec); logActivity('edited','Event',rec.name); }
+  else { rec.id=uid('e'); if(rec.statusNote) rec.statusNoteAt=new Date().toISOString(); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[];rec.todos=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
     const pickedTpl=[...document.querySelectorAll('.ef-tpl-pick:checked')].map(el=>el.value);
     if(pickedTpl.length) applyTodoTemplatesToRecord('event',rec.id,pickedTpl,rec.date);
     if(_curProposalLink){ const p=get(DB.proposals,_curProposalLink); if(p){ p.eventIds=p.eventIds||[]; p.eventIds.push(rec.id);} } }
@@ -6957,6 +6959,10 @@ const REPORT_CHIP_COLORS={
   blue:{bg:'#e7eef3',fg:'#2f6690'}, red:{bg:'#fbe8ea',fg:'#c81e3a'},
   gray:{bg:'#f4f0e8',fg:'#5c7086'}, '':{bg:'#f4f0e8',fg:'#5c7086'}
 };
+function reportDate(ts){
+  const d=new Date(ts); if(isNaN(d)) return '';
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
 function reportChip(label,colorKey){
   const c=REPORT_CHIP_COLORS[colorKey||'']||REPORT_CHIP_COLORS.gray;
   return `<span style="display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${c.bg};color:${c.fg};margin-right:6px">${esc(label)}</span>`;
@@ -6975,13 +6981,21 @@ function printArtistStatusReport(artistId){
   // tour-only artistEvents() helper would silently miss them here).
   const tours=DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===ar.name.toLowerCase());
   const allEvents=DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(e.talentIds&&e.talentIds.includes(ar.contactId)));
+  // Anything marked settled is done and dropped; undated (TBD) shows go last.
   const events=allEvents
-    .filter(e=>!(e.status==='Completed' && e.settlementV2?.settled))
-    .slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    .filter(e=>!e.settlementV2?.settled)
+    .slice().sort((a,b)=>{
+      if(!a.date && !b.date) return 0;
+      if(!a.date) return 1;
+      if(!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
 
   const rows=events.map(e=>{
     const v=get(DB.venues,e.venueId);
     const dispStatus=eventDisplayStatus(e);
+    // Most recent 3 dated notes, newest first
+    const notes=(e.notesLog||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||'')).slice(0,3);
     const dateStr=e.date?new Date(e.date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}):'Date TBD';
     return `<div style="padding:16px 0;border-bottom:1px solid #e3dccb;page-break-inside:avoid">
       <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
@@ -6995,7 +7009,8 @@ function printArtistStatusReport(artistId){
         ${reportChip(dispStatus,statusColor(dispStatus))}
         ${e.holdStatus?reportChip(e.holdStatus,holdStatusColor(e.holdStatus)):''}
       </div>
-      ${e.statusNote?`<div style="margin-top:8px;font-size:13px;color:#5c7086;line-height:1.5">${esc(e.statusNote)}</div>`:''}
+      ${e.statusNote?`<div style="margin-top:10px;font-size:13px;color:#243f56;line-height:1.5"><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#8a97a3">Latest update${e.statusNoteAt?' \u00b7 '+esc(reportDate(e.statusNoteAt)):''}</span><br>${esc(e.statusNote)}</div>`:''}
+      ${notes.length?`<div style="margin-top:10px;padding-left:10px;border-left:2px solid #e3dccb">${notes.map(n=>`<div style="font-size:12px;color:#5c7086;line-height:1.5;margin-bottom:6px;white-space:pre-wrap"><span style="color:#8a97a3">${esc(reportDate(n.ts))}</span> \u2014 ${esc(n.text)}</div>`).join('')}</div>`:''}
     </div>`;
   }).join('');
 
