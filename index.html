@@ -186,6 +186,54 @@ a{color:var(--blue);text-decoration:none}
 
 /* ===== Mobile / phone layout ===== */
 .pe-l{display:none;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.itin-sec{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);padding:14px 16px}
+.itin-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.itin-row{display:grid;grid-template-columns:120px 170px 1fr 30px;gap:8px;align-items:center}
+.itin-row input{padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;min-width:0;width:100%}
+.itin-row.ro{grid-template-columns:90px auto 1fr;padding:6px 2px;border-bottom:1px solid var(--bord)}
+.itin-time{font-weight:600;font-variant-numeric:tabular-nums}
+.itin-label{font-weight:500}
+.itin-note-ro{color:var(--txt2);font-size:12px}
+.itin-chips{display:flex;flex-wrap:wrap;gap:6px}
+.itin-add{border-style:dashed}
+.itin-mini,.ev-card-itin{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.itin-chip{font-size:11px;font-weight:400;color:var(--txt2);background:var(--surf2);border-radius:100px;padding:2px 8px;white-space:nowrap}
+.itin-chip b{color:var(--txt);font-weight:600}
+.ev-card-itin{margin-top:8px}
+.task-list{display:flex;flex-direction:column}
+.task-row{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--bord)}
+.task-row input[type=checkbox]{width:17px;height:17px;margin-top:2px;flex-shrink:0;cursor:pointer}
+.task-main{flex:1;min-width:0}
+.task-title{font-size:13px;font-weight:500}
+.task-row.done .task-title{text-decoration:line-through;color:var(--txt3)}
+.task-notes{font-size:12px;color:var(--txt2);margin-top:2px;white-space:pre-wrap}
+.task-meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--txt3);margin-top:3px}
+.task-side{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;text-align:right}
+.task-due{font-size:11px;color:var(--txt3)}
+.task-due.overdue{color:var(--red);font-weight:600}
+.task-acts{font-size:11px}.task-acts a{cursor:pointer;color:var(--txt3)}.task-acts a:hover{color:var(--txt)}
+.task-done-block{margin-top:10px}.task-done-block summary{cursor:pointer;font-size:12px;color:var(--txt3);padding:4px 0}
+.fin-panel{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);margin-bottom:10px}
+.fin-panel>summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;gap:10px}
+.fin-panel>summary::-webkit-details-marker{display:none}
+.fin-panel>summary::before{content:'▸';color:var(--txt3);transition:transform .15s;display:inline-block}
+.fin-panel[open]>summary::before{transform:rotate(90deg)}
+.fin-title{font-weight:600;font-size:14px}
+.fin-sub{font-size:12px;color:var(--txt3);margin-left:auto;text-align:right}
+.fin-body{padding:0 16px 16px}
+.fin-body .stats{margin-bottom:10px}
+:root{--fin-c1:#2a78d6;--fin-c2:#eb6834}
+[data-theme="dark"]{--fin-c1:#3987e5;--fin-c2:#d95926}
+.fin-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--txt2);margin-bottom:10px;align-items:center}
+.fin-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.sw.f,.fin-bar.f{background:var(--fin-c1)}.sw.r,.fin-bar.r{background:var(--fin-c2)}
+.fin-chart{display:flex;align-items:flex-end;gap:6px;height:180px;padding-top:6px;border-bottom:1px solid var(--bord);overflow-x:auto}
+.fin-col{flex:1 0 28px;max-width:56px;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;cursor:default;outline:none}
+.fin-stack{width:70%;display:flex;flex-direction:column;gap:2px;justify-content:flex-end}
+.fin-bar{width:100%}.fin-stack>.fin-bar:first-child{border-radius:4px 4px 0 0}
+.fin-col:hover .fin-bar,.fin-col:focus .fin-bar{filter:brightness(1.15)}
+.fin-x{font-size:10px;color:var(--txt3);margin-top:4px;white-space:nowrap;height:16px}
+.fin-table-toggle{margin-top:10px}.fin-table-toggle summary{cursor:pointer;font-size:12px;color:var(--txt3)}
 .ev-cards{display:none;flex-direction:column;gap:10px}
 .ev-card{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);padding:13px 14px;cursor:pointer}
 .ev-card:active{background:var(--surf2)}
@@ -246,6 +294,11 @@ a{color:var(--blue);text-decoration:none}
   .modal-head,.modal-foot{padding-left:16px;padding-right:16px}
   .modal-foot{padding-bottom:calc(14px + env(safe-area-inset-bottom));flex-wrap:wrap}
   .cal-grid{gap:3px}
+  .itin-row{grid-template-columns:104px 1fr 30px}
+  .itin-row .itin-note-in{grid-column:1/3}
+  .itin-row.ro{grid-template-columns:76px 1fr}
+  .itin-row.ro .itin-note-ro{grid-column:2}
+  .fin-sub{display:none}
   .pe-hdr{display:none!important}
   .pe-row{grid-template-columns:1fr 1fr!important;gap:8px!important;background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:10px;margin-bottom:10px!important;align-items:end!important}
   .pe-desc{grid-column:1/-1}
@@ -267,6 +320,7 @@ a{color:var(--blue);text-decoration:none}
     <nav id="nav">
       <div class="nav-section">Overview</div>
       <div class="nav-item" data-view="dashboard"><span class="nav-ico">▦</span>Dashboard</div>
+      <div class="nav-item" data-view="financial"><span class="nav-ico">$</span>Financial</div>
       <div class="nav-section">Manage</div>
       <div class="nav-item" data-view="venues"><span class="nav-ico">▣</span>Venues</div>
       <div class="nav-item" data-view="tours"><span class="nav-ico">↝</span>Tours</div>
@@ -438,7 +492,7 @@ const DEFAULT_LOGO_DATA_URL='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJwAA
 const DB = {
   venues: [], tours: [], events: [], contacts: [], artists: [], proposals: [],
   activity: [], users: null, // populated by syncUsersFromDB() once load() completes
-  notifications: [],
+  notifications: [], tasks: [],
   settings: { mgmtPct: 15, taxRate: 13, serviceFeePct: 5, supabaseConfig: null, googleConnected: false, theme: 'light',
     companyName:'', companyTagline:'', contactEmail:'', contactPhone:'', logoDataUrl:null,
     pitchSlides: null, // populated by defaultPitchSlides() on first load if null
@@ -1499,7 +1553,7 @@ const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 
 /* ---------- ROUTER ---------- */
 let route={view:'dashboard',id:null,tab:null};
-const NAV_TITLES={dashboard:'Dashboard',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
+const NAV_TITLES={dashboard:'Dashboard',financial:'Financial',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
 
 /* ---------- ARTIST VIEW MODE ---------- */
 let ARTIST_VIEW=null; // artist id when filtering the whole app to one artist
@@ -1531,7 +1585,7 @@ function artistEvents(arId){ const tours=artistTours(arId); return DB.events.fil
 function applyArtistViewChrome(){
   const nav=document.getElementById('nav');
   // In artist view: only Dashboard, Tours, Events, Proposals visible
-  const avAllowed=['dashboard','tours','events','calendar','tasks','proposals'];
+  const avAllowed=['dashboard','financial','tours','events','calendar','tasks','proposals'];
   // Producer cannot access settings, activity, artists, contacts, venues
   const producerBlocked=['settings','activity','artists','contacts','venues'];
   nav.querySelectorAll('.nav-item').forEach(n=>{
@@ -1573,7 +1627,7 @@ function closeNav(){ document.body.classList.remove('nav-open'); }
 function go(view,id=null,tab=null,_unused=null,ref=null){
   closeNav();
   // Block disallowed views for artist view
-  if(inArtistView() && !['dashboard','tours','events','calendar','tasks','proposals'].includes(view)){
+  if(inArtistView() && !['dashboard','financial','tours','events','calendar','tasks','proposals'].includes(view)){
     view='dashboard'; id=null; tab=null; ref=null;
   }
   // Block disallowed views for producer role
@@ -1633,56 +1687,43 @@ function fvn(id){ const e=document.getElementById(id); return e?(+e.value||0):0;
    VIEW: DASHBOARD
    ============================================================ */
 VIEWS.dashboard={
-  render(c){
+  render(c,a){
     const av=inArtistView();
     const events = av?artistEvents(ARTIST_VIEW):DB.events;
     const tours = av?artistTours(ARTIST_VIEW):DB.tours;
-    const {firm,routing,all}=splitTotals(events);
-    const upcoming=events.filter(e=>e.date>=todayStr()).sort((a,b)=>a.date.localeCompare(b.date));
+    const upcoming=events.filter(e=>e.date>=todayStr()).sort((x,y)=>x.date.localeCompare(y.date));
+    a.innerHTML=(canDo('admin')&&!av?'<button class="btn sm" onclick="venueInquiryModal()">✉ Venue inquiry</button> ':'')
+      +'<button class="btn sm primary" onclick="taskForm()">+ New task</button>';
+    const mine=myOpenTasks();
     c.innerHTML=`
       ${av?`<div class="banner" style="margin-bottom:16px">Viewing as <strong>${esc(currentArtist().name)}</strong> — showing only their tours and events. <a onclick="exitArtistView()" style="cursor:pointer">Exit artist view</a></div>`:''}
-      <div class="stats">
-        ${av?`
-          <div class="stat"><div class="stat-val">${tours.length}</div><div class="stat-lbl">Tours</div></div>
-          <div class="stat"><div class="stat-val">${events.length}</div><div class="stat-lbl">Shows</div></div>
-          <div class="stat"><div class="stat-val ${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</div><div class="stat-lbl">Artist net (confirmed)</div></div>
-          <div class="stat"><div class="stat-val" style="color:var(--txt2)">${money0(routing.net)}</div><div class="stat-lbl">Artist net (routing)</div></div>
-        `:`
-          <div class="stat"><div class="stat-val">${DB.venues.length}</div><div class="stat-lbl">Venues</div></div>
-          <div class="stat"><div class="stat-val">${DB.events.length}</div><div class="stat-lbl">Events</div></div>
-          <div class="stat"><div class="stat-val pos">${money0(firm.comm)}</div><div class="stat-lbl">Commission (confirmed)</div></div>
-          <div class="stat"><div class="stat-val" style="color:var(--txt2)">${money0(routing.comm)}</div><div class="stat-lbl">Commission (routing)</div></div>
-        `}
-      </div>
-      ${!av?`<div style="display:flex;gap:16px;margin:-8px 0 18px;flex-wrap:wrap;font-size:12px;color:var(--txt3)">
-        <span>Artist net (confirmed): <strong class="${firm.net>=0?'pos':'neg'}">${money0(firm.net)}</strong></span>
-        <span>· routing: <strong>${money0(routing.net)}</strong></span>
-        <span>· total: <strong>${money0(all.net)}</strong></span>
-      </div>`:''}
-      <div class="sec-head"><span class="sec-title">Upcoming events</span></div>
-      ${upcoming.length? tableEvents(upcoming) : emptyState('◉','No upcoming events')}
-      <div style="height:22px"></div>
-      <div class="sec-head"><span class="sec-title">Tours</span></div>
-      <div class="cards-grid">${tours.map(tourCard).join('')||emptyState('↝','No tours yet')}</div>`;
+      <div class="sec-head"><span class="sec-title">My tasks${mine.length?' ('+mine.length+')':''}</span><a onclick="go('tasks',null,'mine')" style="cursor:pointer;font-size:12px">All tasks →</a></div>
+      ${mine.length?'<div class="task-list">'+renderTaskRows(mine.slice(0,6))+'</div>'+(mine.length>6?'<p class="muted" style="font-size:12px;margin-top:6px">+ '+(mine.length-6)+' more in Tasks</p>':''):'<p class="muted" style="font-size:13px;margin-bottom:4px">Nothing assigned to you right now.</p>'}
+      <div class="sec-head" style="margin-top:24px"><span class="sec-title">Upcoming shows</span></div>
+      ${upcoming.length? tableEvents(upcoming,{money:false}) : emptyState('◉','No upcoming shows')}
+      <div class="sec-head" style="margin-top:24px"><span class="sec-title">Tours</span></div>
+      <div class="cards-grid">${tours.map(t=>tourCard(t,{money:false})).join('')||emptyState('↝','No tours yet')}</div>`;
   }
 };
 function todayStr(){return new Date().toISOString().slice(0,10);}
 
-function tableEvents(list){
+function tableEvents(list,opts){
+  opts=opts||{};
+  const money=opts.money!==false;
   const hideComm=inArtistView();
   const hdr='<table class="tbl tbl-cards"><thead><tr><th>Event</th><th>Date</th><th>Venue</th><th>Sold</th>'
-    +'<th class="num">Gross</th>'+(hideComm?'':'<th class="num">My comm.</th>')+'<th class="num">Artist net</th><th>Status</th></tr></thead><tbody>';
+    +(money?'<th class="num">Gross</th>'+(hideComm?'':'<th class="num">My comm.</th>')+'<th class="num">Artist net</th>':'')+'<th>Status</th></tr></thead><tbody>';
   const rows=list.map(e=>{
     const v=get(DB.venues,e.venueId), f=eventBest(e);
     const cap=+e.capacityAlloc||1;
     const sold=f.actual?(e.projection?+e.projection.ticketsEst||0:0):(e.projection?+e.projection.ticketsEst||0:0);
     return '<tr onclick="go(\'events\',\''+e.id+'\')">'
-      +'<td class="tc-title" style="font-weight:500">'+esc(e.name)+'</td><td data-label="Date">'+esc(e.date)+'</td>'
+      +'<td class="tc-title" style="font-weight:500">'+esc(e.name)+(itinSummaryHTML(e)?'<div class="itin-mini">'+itinSummaryHTML(e)+'</div>':'')+'</td><td data-label="Date">'+esc(e.date)+'</td>'
       +'<td data-label="Venue">'+(v?esc(v.name):'—')+'</td>'
       +'<td data-label="Sold">'+sold+'/'+e.capacityAlloc+' <span class="muted">('+Math.round(sold/cap*100)+'%'+(f.actual?'':' est')+')</span></td>'
-      +'<td class="num" data-label="Gross">'+money0(f.gross)+'</td>'
+      +(money?'<td class="num" data-label="Gross">'+money0(f.gross)+'</td>'
       +(hideComm?'':'<td class="num pos" data-label="My comm.">'+money0(f.commission)+'</td>')
-      +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'" data-label="Artist net">'+money0(f.artistNet)+'</td>'
+      +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'" data-label="Artist net">'+money0(f.artistNet)+'</td>':'')
       +'<td class="tc-status"><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)
       +(e.statusNote?'<div class="muted" style="font-size:11px;margin-top:3px;max-width:180px;white-space:normal">'+esc(e.statusNote)+'</div>':'')+'</td></tr>';
   }).join('');
@@ -1699,11 +1740,12 @@ function tableEvents(list){
       +'<div class="ev-card-sub">'+(e.date?esc(fmtDate(e.date)):'Date TBD')+(where?' · '+esc(where):'')+'</div></div>'
       +'<div class="ev-card-badges"><span class="badge '+statusColor(ds)+'">'+esc(ds)+'</span>'+holdStatusBadge(e.holdStatus)+'</div></div>'
       +(e.statusNote?'<div class="ev-card-note">'+esc(e.statusNote)+'</div>':'')
+      +(itinSummaryHTML(e)?'<div class="ev-card-itin">'+itinSummaryHTML(e)+'</div>':'')
       +'<div class="ev-card-figs">'
       +fig('Sold',sold+'/'+(e.capacityAlloc||0)+' <span class="muted" style="font-weight:400">'+Math.round(sold/cap*100)+'%</span>')
-      +fig('Gross',money0(f.gross))
+      +(money?fig('Gross',money0(f.gross))
       +(hideComm?'':fig('Comm.',money0(f.commission),'pos'))
-      +fig('Net',money0(f.artistNet),f.artistNet>=0?'pos':'neg')
+      +fig('Net',money0(f.artistNet),f.artistNet>=0?'pos':'neg'):'')
       +'</div></div>';
   }).join('');
   return hdr+rows+'</tbody></table><div class="ev-cards">'+cards+'</div>';
@@ -1728,10 +1770,23 @@ function setEventStatusNote(id,value){
   persist();
 }
 
-function tourCard(t){
+function tourCard(t,opts){
+  const money=!(opts&&opts.money===false);
   const evts=DB.events.filter(e=>e.tourId===t.id);
   const {firm,routing}=splitTotals(evts);
   const hideComm=inArtistView();
+  if(!money){
+    const dated=evts.filter(e=>e.date).map(e=>e.date).sort();
+    const next=dated.find(d=>d>=todayStr());
+    return `<div class="card" onclick="go('tours','${t.id}')">
+    <div class="card-top"><div><div class="card-title">${esc(t.name)}</div>
+    <div class="card-sub">${esc(t.artist)}</div></div>
+    <span class="badge ${statusColor(t.status)}">${esc(t.status)}</span></div>
+    <div class="card-meta">
+      <div class="meta"><label>Shows</label><span>${evts.length}${routing.count?' <span class="muted" style="font-weight:400">('+routing.count+' routing)</span>':''}</span></div>
+      <div class="meta"><label>Next show</label><span>${next?esc(fmtDate(next)):'—'}</span></div>
+    </div></div>`;
+  }
   return `<div class="card" onclick="go('tours','${t.id}')">
     <div class="card-top"><div><div class="card-title">${esc(t.name)}</div>
     <div class="card-sub">${esc(t.artist)}</div></div>
@@ -1756,7 +1811,8 @@ function emptyState(ico,msg){return `<div class="empty"><div class="empty-ico">$
 VIEWS.venues={
   render(c,a){
     if(route.id) return this.detail(c,a,route.id);
-    a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueContractImport()">📄 Import from contract</button>
+    a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueInquiryModal()">✉ Venue inquiry</button>
+      <button class="btn sm" onclick="venueContractImport()">📄 Import from contract</button>
       <button class="btn sm" onclick="venueBulkImport()">⬆ Bulk import</button>
       <button class="btn primary" onclick="venueForm()">+ Add venue</button>`:'';
     // Collect unique provinces and countries for filters
@@ -1793,7 +1849,8 @@ VIEWS.venues={
     const v=get(DB.venues,id); if(!v){go('venues');return;}
     const contact=get(DB.contacts,v.contactId);
     const evts=DB.events.filter(e=>e.venueId===id);
-    a.innerHTML=canDo('admin')?`<button class="btn sm" onclick="venueForm('${id}')">Edit</button>
+    a.innerHTML=canDo('admin')?`<button class="btn sm primary" onclick="venueInquiryModal('${id}')">✉ Send inquiry</button>
+      <button class="btn sm" onclick="venueForm('${id}')">Edit</button>
       <button class="btn sm danger" onclick="deleteVenue('${id}')">Delete</button>`:'';
     const t=v.terms||{};
     c.innerHTML=`
@@ -1828,6 +1885,8 @@ VIEWS.venues={
         </div>
         <div id="venue-avail-list">${renderVenueAvailList(v)}</div>
       </div>
+      <div class="sec">${tasksSection('venue',v.id,'Tasks')}</div>
+      ${venueInquiriesHTML(v)}
       <div class="sec"><div class="sec-label">Events at this venue (${evts.length})</div>
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No events here yet.</p>'}</div>`;
   }
@@ -2823,7 +2882,7 @@ VIEWS.events={
     else if(tab==='expenses') eventExpenses(host,e);
     else if(tab==='settlement') eventSettlementV2(host,e);
     else if(tab==='logistics') eventLogistics(host,e,v);
-    else if(tab==='todos'){ host.innerHTML=`<div id="todo-tab-event-${id}"></div>`; renderTodoTab('event',id); }
+    else if(tab==='todos'){ host.innerHTML='<div class="sec">'+tasksSection('event',id,'Assigned tasks')+'</div>'+`<div id="todo-tab-event-${id}"></div>`; renderTodoTab('event',id); }
     else if(tab==='people') eventPeople(host,e);
     else if(tab==='files') eventFiles(host,e);
     else if(tab==='notes' && !inArtistView()) eventNotes(host,e);
@@ -2983,7 +3042,24 @@ function calShowDay(dateStr){
 
 VIEWS.tasks={
   render(c,a){
-    a.innerHTML=canDo('admin')?'<button class="btn sm" onclick="goToTodoTemplateEditor()">✎ Manage templates</button>':'';
+    const tabKey=route.tab||'mine';
+    const isChecklist=['open','done','all'].includes(tabKey);
+    a.innerHTML='<button class="btn sm primary" onclick="taskForm()">+ New task</button>'+(canDo('admin')&&isChecklist?' <button class="btn sm" onclick="goToTodoTemplateEditor()">✎ Manage templates</button>':'');
+    const me=AUTH_USER?.username;
+    const showAll=AUTH_USER?.role==='admin'&&!inArtistView();
+    const mineOpen=dbTasks().filter(t=>t.assignedTo===me&&!t.done).length;
+    const topTabs=[['mine','Assigned to me'+(mineOpen?' <span class="badge red" style="font-size:10px">'+mineOpen+'</span>':'')],['assigned','Assigned by me']]
+      .concat(showAll?[['everyone','All tasks']]:[]).concat([['open','Event checklists']]);
+    const tabsHTML='<div class="tabs">'+topTabs.map(([tb,lbl])=>'<div class="tab '+((tb===tabKey)||(tb==='open'&&isChecklist)?'active':'')+'" onclick="go(\'tasks\',null,\''+tb+'\')">'+lbl+'</div>').join('')+'</div>';
+    if(!isChecklist){
+      let list=dbTasks().filter(canSeeTask);
+      let empty='Nothing assigned to you.';
+      if(tabKey==='mine') list=list.filter(t=>t.assignedTo===me);
+      else if(tabKey==='assigned'){ list=list.filter(t=>t.createdBy===me&&t.assignedTo!==me); empty='You haven\'t assigned anything to anyone yet.'; }
+      else { empty='No tasks yet.'; }
+      c.innerHTML=tabsHTML+'<div class="sec">'+taskListBlock(list,empty)+'</div>';
+      return;
+    }
     // Aggregate every to-do across all events and tours into one flat, sortable list —
     // scoped to just this artist's own tours/events when in artist view, since Tasks
     // otherwise spans the whole company's to-do list.
@@ -3021,10 +3097,10 @@ VIEWS.tasks={
       </div>`;
     }).join('');
 
-    c.innerHTML=`
-      <div class="tabs">
+    c.innerHTML=tabsHTML+`
+      <div style="display:flex;gap:6px;margin:-6px 0 14px;flex-wrap:wrap">
         ${[['open','Open'],['done','Done'],['all','All']].map(([tb,lbl])=>
-          `<div class="tab ${filterVal===tb?'active':''}" onclick="go('tasks',null,'${tb}')">${lbl}${tb==='open'&&overdueCount?' <span class="badge red" style="font-size:10px">'+overdueCount+' overdue</span>':''}</div>`).join('')}
+          `<button class="btn sm ${filterVal===tb?'primary':'ghost'}" onclick="go('tasks',null,'${tb}')">${lbl}${tb==='open'&&overdueCount?' · '+overdueCount+' overdue':''}</button>`).join('')}
       </div>
       ${filtered.length?`<div class="sec">${rows}</div>`:emptyState('☑','Nothing here')}`;
   }
@@ -3373,7 +3449,7 @@ function eventOverview(host,e,v,t){
     </tr>`;
   };
 
-  host.innerHTML=`
+  host.innerHTML='<div class="sec itin-sec" id="itin-host">'+itineraryHTML(e)+'</div>'+`
     <div class="stats">
       <div class="stat"><div class="stat-val ${(hasActuals?sf.artistNet:pf.artistNet)>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
       <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.commission):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'Your commission (actual)':'To you (projected)'}</div></div>
@@ -5308,7 +5384,7 @@ function saveEvent(id){
   }
   if(id){ const e=get(DB.events,id);
     if((e.statusNote||'')!==(rec.statusNote||'')) rec.statusNoteAt=rec.statusNote?new Date().toISOString():'';
-    Object.assign(e,rec); logActivity('edited','Event',rec.name); }
+    Object.assign(e,rec); itinSyncFromEventFields(e); logActivity('edited','Event',rec.name); }
   else { rec.id=uid('e'); if(rec.statusNote) rec.statusNoteAt=new Date().toISOString(); rec.projection={ticketsEst:defaultEstimate(rec),expenses:[]}; rec.settlementV2={venuePayout:'',depositCredits:[],expenses:[],settled:false,notes:''}; rec.talentIds=[];rec.vendorIds=[];rec.crewIds=[];rec.files=[];rec.todos=[]; DB.events.push(rec); logActivity('created','Event',rec.name);
     const pickedTpl=[...document.querySelectorAll('.ef-tpl-pick:checked')].map(el=>el.value);
     if(pickedTpl.length) applyTodoTemplatesToRecord('event',rec.id,pickedTpl,rec.date);
@@ -8782,6 +8858,15 @@ VIEWS.settings={
         <button class="btn sm" onclick="saveBranding()">Save cover &amp; contact info</button>
       </div>
       <div class="sec" style="max-width:640px">
+        <div class="sec-label">Venue inquiry emails</div>
+        <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">The inquiry generator opens Gmail as this account. It must be signed in to Gmail in your browser.</p>
+        <div class="row2">
+          <div class="field"><label>Send from</label><input id="set-iq-from" type="email" value="${esc(inquiryFrom())}"></div>
+          <div class="field"><label>CC</label><input id="set-iq-cc" type="email" value="${esc(inquiryCc())}"></div>
+        </div>
+        <button class="btn sm" onclick="saveInquirySettings()">Save inquiry settings</button>
+      </div>
+      <div class="sec" style="max-width:640px">
         <div class="sec-label">Pitch deck — slides</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">These render between the cover slide and the tour projection every time you export a pitch deck. Reorder with the arrows, or edit/remove any slide.</p>
         <div id="pitch-slides-list"></div>
@@ -9507,6 +9592,517 @@ const SYNC = {
   async threadsFor(email){ if(!DB.settings.googleConnected) return []; return []; /* Gmail search */ }
 };
 
+/* ============================================================
+   SHOW-DAY ITINERARY  (e.itinerary = [{id,time:'HH:MM',label,note}])
+   ============================================================ */
+const ITIN_PRESETS=['Hotel check-in','Load-in','Sound check','Dinner','Doors','Show','Meet & greet','Curfew','Settlement','Hotel check-out'];
+function normTime(t){
+  if(!t) return '';
+  const s=String(t).trim().toLowerCase().replace(/\s+/g,'');
+  const m=s.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+  if(!m) return '';
+  let h=+m[1], mi=+(m[2]||0); const ap=m[3];
+  if(ap){ if(ap[0]==='p'&&h<12) h+=12; if(ap[0]==='a'&&h===12) h=0; }
+  if(h>23||mi>59) return '';
+  return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');
+}
+function fmtTime(t){
+  const n=normTime(t); if(!n) return t||'';
+  let h=+n.slice(0,2); const mi=n.slice(3);
+  const ap=h>=12?'PM':'AM'; h=h%12||12;
+  return h+':'+mi+' '+ap;
+}
+function addMinutes(t,delta){
+  const n=normTime(t); if(!n) return '';
+  const tot=((+n.slice(0,2))*60+(+n.slice(3))+delta+2880)%1440;
+  return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0');
+}
+// Sort key: check-out goes last (it's the next morning); times before 5am count as after midnight.
+function itinSortKey(it){
+  if(/check-?out/i.test(it.label||'')) return '9'+(it.time||'99:99');
+  if(!it.time) return '8';
+  return (it.time<'05:00'?'7':'5')+it.time;
+}
+function eventItinerary(e){
+  let list;
+  if(Array.isArray(e.itinerary)&&(e.itinerary.length||e.itinerarySet)) list=e.itinerary.slice();
+  else {
+    list=[];
+    if(normTime(e.loadIn)) list.push({id:'it_li',time:normTime(e.loadIn),label:'Load-in',note:'',_derived:true});
+    if(normTime(e.showTime)) list.push({id:'it_sh',time:normTime(e.showTime),label:'Show',note:'',_derived:true});
+  }
+  return list.sort((a,b)=>itinSortKey(a).localeCompare(itinSortKey(b)));
+}
+function itinMaterialize(e){
+  if(!Array.isArray(e.itinerary)||(!e.itinerary.length&&!e.itinerarySet)){
+    e.itinerary=eventItinerary(e).map(x=>({id:x.id,time:x.time,label:x.label,note:x.note||''}));
+  }
+  e.itinerarySet=true;
+  return e.itinerary;
+}
+// Short one-line version for event lists/cards
+function itinSummaryHTML(e){
+  const items=eventItinerary(e).filter(x=>x.time);
+  if(!items.length) return '';
+  return items.slice(0,6).map(x=>'<span class="itin-chip"><b>'+esc(fmtTime(x.time))+'</b> '+esc(x.label)+'</span>').join('');
+}
+function itineraryText(e){
+  const v=get(DB.venues,e.venueId);
+  const lines=[e.name+(e.date?' — '+fmtDate(e.date):'')];
+  if(v) lines.push(v.name+(v.address?', '+v.address:(v.city?', '+v.city:'')));
+  lines.push('');
+  eventItinerary(e).forEach(x=>lines.push((x.time?fmtTime(x.time):'TBD').padEnd(9)+'  '+x.label+(x.note?' — '+x.note:'')));
+  return lines.join('\n');
+}
+function itineraryHTML(e){
+  const canEdit=canDo('admin');
+  const list=eventItinerary(e);
+  const have=new Set(list.map(x=>(x.label||'').toLowerCase()));
+  const rows=list.map(it=>{
+    if(!canEdit){
+      return '<div class="itin-row ro"><span class="itin-time">'+(it.time?esc(fmtTime(it.time)):'TBD')+'</span>'
+        +'<span class="itin-label">'+esc(it.label)+'</span>'
+        +(it.note?'<span class="itin-note-ro">'+esc(it.note)+'</span>':'')+'</div>';
+    }
+    return '<div class="itin-row">'
+      +'<input type="time" value="'+esc(it.time||'')+'" onchange="itinSet(\''+e.id+'\',\''+it.id+'\',\'time\',this.value)" aria-label="Time">'
+      +'<input class="itin-label-in" value="'+esc(it.label||'')+'" onchange="itinSet(\''+e.id+'\',\''+it.id+'\',\'label\',this.value)" aria-label="What">'
+      +'<input class="itin-note-in" value="'+esc(it.note||'')+'" placeholder="Note (hotel name, address, contact…)" onchange="itinSet(\''+e.id+'\',\''+it.id+'\',\'note\',this.value)" aria-label="Note">'
+      +'<button class="btn ghost sm itin-del" onclick="itinDel(\''+e.id+'\',\''+it.id+'\')" title="Remove">×</button>'
+      +'</div>';
+  }).join('');
+  const chips=canEdit?ITIN_PRESETS.filter(p=>!have.has(p.toLowerCase())).map(p=>
+    '<button class="btn sm itin-add" onclick="itinAdd(\''+e.id+'\',\''+p.replace(/'/g,"\\'")+'\')">+ '+esc(p)+'</button>').join('')
+    +'<button class="btn sm itin-add" onclick="itinAdd(\''+e.id+'\',\'\')">+ Other</button>':'';
+  return '<div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+    +'<span>Show day'+(e.date?' · '+esc(fmtDate(e.date)):'')+'</span>'
+    +(list.length?'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="itinCopy(\''+e.id+'\',this)">⧉ Copy schedule</button>':'')
+    +'</div>'
+    +(list.length?'<div class="itin-list">'+rows+'</div>':'<p class="muted" style="font-size:13px;margin-bottom:10px">No schedule yet.'+(canEdit?' Tap a button below to add times.':'')+'</p>')
+    +(chips?'<div class="itin-chips">'+chips+'</div>':'');
+}
+function itinRerender(eid){
+  const host=document.getElementById('itin-host');
+  const e=get(DB.events,eid);
+  if(host&&e) host.innerHTML=itineraryHTML(e);
+}
+function itinSyncFields(e,it){
+  const n=normTime(it.time);
+  if(/^show$/i.test(it.label||'')&&n) e.showTime=n;
+  if(/^load-?in$/i.test(it.label||'')&&n) e.loadIn=n;
+}
+function itinAdd(eid,label){
+  const e=get(DB.events,eid); if(!e||!canDo('admin')) return;
+  const list=itinMaterialize(e);
+  const show=normTime(e.showTime)||(list.find(x=>/^show$/i.test(x.label))||{}).time||'';
+  const defaults={'Hotel check-in':'15:00','Load-in':normTime(e.loadIn)||'14:00','Sound check':'16:30','Dinner':'17:30',
+    'Doors':show?addMinutes(show,-45):'18:45','Show':show||'19:30','Meet & greet':show?addMinutes(show,90):'','Curfew':'23:00',
+    'Settlement':show?addMinutes(show,120):'','Hotel check-out':'11:00'};
+  const it={id:'it'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),time:defaults[label]||'',label:label||'',note:''};
+  list.push(it);
+  itinSyncFields(e,it);
+  persist(); itinRerender(eid);
+  if(!label){ const ins=document.querySelectorAll('#itin-host .itin-label-in'); const last=[...ins].find(x=>!x.value); if(last) last.focus(); }
+}
+function itinSet(eid,iid,field,value){
+  const e=get(DB.events,eid); if(!e||!canDo('admin')) return;
+  const list=itinMaterialize(e);
+  const it=list.find(x=>x.id===iid); if(!it) return;
+  it[field]=field==='time'?(normTime(value)||''):String(value||'').trim();
+  itinSyncFields(e,it);
+  persist();
+  if(field!=='note') itinRerender(eid);
+}
+function itinDel(eid,iid){
+  const e=get(DB.events,eid); if(!e||!canDo('admin')) return;
+  const list=itinMaterialize(e);
+  e.itinerary=list.filter(x=>x.id!==iid);
+  persist(); itinRerender(eid);
+}
+function itinCopy(eid,btn){
+  const e=get(DB.events,eid); if(!e) return;
+  const txt=itineraryText(e);
+  const done=()=>{ if(btn){ const o=btn.textContent; btn.textContent='✓ Copied'; setTimeout(()=>{btn.textContent=o;},1500);} };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done,()=>{fallbackCopy(txt);done();});
+  else { fallbackCopy(txt); done(); }
+}
+function fallbackCopy(txt){
+  const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove();
+}
+// Keep schedule in step when Load-in / Show time are edited in the deal form
+function itinSyncFromEventFields(e){
+  if(!Array.isArray(e.itinerary)||!e.itinerary.length) return;
+  e.itinerary.forEach(it=>{
+    if(/^show$/i.test(it.label||'')&&normTime(e.showTime)) it.time=normTime(e.showTime);
+    if(/^load-?in$/i.test(it.label||'')&&normTime(e.loadIn)) it.time=normTime(e.loadIn);
+  });
+}
+
+/* ============================================================
+   ASSIGNED TASKS  (DB.tasks — between Adam/admins and artist logins)
+   {id,title,notes,assignedTo,createdBy,linkType:''|'event'|'venue',linkId,dueDate,done,doneAt,createdAt}
+   ============================================================ */
+function allUsers(){ return (Array.isArray(DB.users)&&DB.users.length?DB.users:USERS)||[]; }
+function userName(u){ const x=allUsers().find(a=>a.username===u); return x?(x.displayName||x.username):(u||'—'); }
+function assignableUsers(){
+  const users=allUsers();
+  if(AUTH_USER?.role==='artist') return users.filter(u=>u.role==='admin'||u.username===AUTH_USER.username);
+  return users;
+}
+function dbTasks(){ if(!Array.isArray(DB.tasks)) DB.tasks=[]; return DB.tasks; }
+function canSeeTask(t){
+  if(!AUTH_USER) return false;
+  if(t.assignedTo===AUTH_USER.username||t.createdBy===AUTH_USER.username) return true;
+  return AUTH_USER.role==='admin';
+}
+function canEditTask(t){ return !!AUTH_USER&&(AUTH_USER.role==='admin'||t.createdBy===AUTH_USER.username); }
+function canToggleTask(t){ return !!AUTH_USER&&(AUTH_USER.role==='admin'||t.createdBy===AUTH_USER.username||t.assignedTo===AUTH_USER.username); }
+function myOpenTasks(){
+  if(!AUTH_USER) return [];
+  return dbTasks().filter(t=>!t.done&&t.assignedTo===AUTH_USER.username).sort(taskSort);
+}
+function taskSort(a,b){
+  if(!!a.done!==!!b.done) return a.done?1:-1;
+  if(!a.dueDate&&!b.dueDate) return (b.createdAt||'').localeCompare(a.createdAt||'');
+  if(!a.dueDate) return 1; if(!b.dueDate) return -1;
+  return a.dueDate.localeCompare(b.dueDate);
+}
+function taskLinkHTML(t){
+  if(t.linkType==='event'){
+    const e=get(DB.events,t.linkId); if(!e) return '';
+    return '<a onclick="event.stopPropagation();go(\'events\',\''+e.id+'\',\'todos\')" style="cursor:pointer">◉ '+esc(e.name)+(e.date?' · '+esc(fmtDate(e.date)):'')+'</a>';
+  }
+  if(t.linkType==='venue'){
+    const v=get(DB.venues,t.linkId); if(!v) return '';
+    const canOpen=!inArtistView()&&AUTH_USER?.role!=='producer';
+    const label='▣ '+esc(v.name)+(v.city?', '+esc(v.city):'');
+    return (canOpen?'<a onclick="event.stopPropagation();go(\'venues\',\''+v.id+'\')" style="cursor:pointer">'+label+'</a>':'<span>'+label+'</span>')
+      +(v.contactEmail?' · <a href="mailto:'+esc(v.contactEmail)+'" onclick="event.stopPropagation()">✉ '+esc(v.contactEmail)+'</a>':'');
+  }
+  return '';
+}
+function renderTaskRows(list){
+  const today=todayStr();
+  return list.map(t=>{
+    const overdue=!t.done&&t.dueDate&&t.dueDate<today;
+    const me=AUTH_USER?.username;
+    const who=t.createdBy===t.assignedTo?'Self':(t.createdBy===me?'You → '+esc(userName(t.assignedTo)):esc(userName(t.createdBy))+' → '+(t.assignedTo===me?'you':esc(userName(t.assignedTo))));
+    const link=taskLinkHTML(t);
+    return '<div class="task-row'+(t.done?' done':'')+'">'
+      +'<input type="checkbox" '+(t.done?'checked ':'')+(canToggleTask(t)?'':'disabled ')+'onchange="toggleTask(\''+t.id+'\')" aria-label="Done">'
+      +'<div class="task-main">'
+      +'<div class="task-title">'+esc(t.title)+'</div>'
+      +(t.notes?'<div class="task-notes">'+esc(t.notes)+'</div>':'')
+      +'<div class="task-meta"><span>'+who+'</span>'+(link?'<span>'+link+'</span>':'')+'</div>'
+      +'</div>'
+      +'<div class="task-side">'
+      +'<span class="task-due'+(overdue?' overdue':'')+'">'+(t.dueDate?(overdue?'Overdue · ':'')+esc(fmtDate(t.dueDate)):'')+'</span>'
+      +(canEditTask(t)?'<span class="task-acts"><a onclick="taskForm(\''+t.id+'\')">Edit</a> · <a onclick="deleteTask(\''+t.id+'\')">Delete</a></span>':'')
+      +'</div></div>';
+  }).join('');
+}
+function taskListBlock(list,emptyMsg){
+  const open=list.filter(t=>!t.done).sort(taskSort), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||'').localeCompare(a.doneAt||''));
+  return (open.length?'<div class="task-list">'+renderTaskRows(open)+'</div>':'<p class="muted" style="font-size:13px;margin:4px 0 12px">'+esc(emptyMsg)+'</p>')
+    +(done.length?'<details class="task-done-block"><summary>Completed ('+done.length+')</summary><div class="task-list">'+renderTaskRows(done)+'</div></details>':'');
+}
+function taskForm(id,preset){
+  const t=id?dbTasks().find(x=>x.id===id):null;
+  if(id&&!t) return;
+  preset=preset||{};
+  const linkType=t?t.linkType:(preset.linkType||'');
+  const linkId=t?t.linkId:(preset.linkId||'');
+  // default assignee: artists -> first admin; admin on an artist's event -> that artist; else yourself
+  let defAssignee=AUTH_USER?.username;
+  if(!t){
+    if(AUTH_USER?.role==='artist'){ const adm=allUsers().find(u=>u.role==='admin'); if(adm) defAssignee=adm.username; }
+    else if(linkType==='event'){ const au=linkedArtistUserForRecord('event',linkId); if(au) defAssignee=au.username; }
+  }
+  const assignee=t?t.assignedTo:defAssignee;
+  const users=assignableUsers();
+  const evPool=(inArtistView()?artistEvents(ARTIST_VIEW):DB.events).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
+  const venueLabel=v=>v.name+(v.city?' — '+v.city:'');
+  window._tkVenueMap={};
+  DB.venues.forEach(v=>{ window._tkVenueMap[venueLabel(v)]=v.id; });
+  const curVenue=linkType==='venue'?get(DB.venues,linkId):null;
+  openModal(t?'Edit task':'New task',`
+    <div class="field"><label>Task</label><input id="tk-title" value="${esc(t?.title||'')}" placeholder="e.g. Email the Capitol Theatre about a March hold"></div>
+    <div class="row2">
+      <div class="field"><label>Assign to</label><select id="tk-assignee">
+        ${users.map(u=>`<option value="${esc(u.username)}" ${u.username===assignee?'selected':''}>${esc(u.displayName||u.username)}${u.username===AUTH_USER?.username?' (me)':''}${u.role==='artist'?' · artist':''}</option>`).join('')}
+      </select></div>
+      <div class="field"><label>Due date (optional)</label><input id="tk-due" type="date" value="${esc(t?.dueDate||'')}"></div>
+    </div>
+    <div class="field"><label>Link to</label><select id="tk-linktype" onchange="taskLinkTypeChanged()">
+      <option value="" ${!linkType?'selected':''}>Nothing</option>
+      <option value="event" ${linkType==='event'?'selected':''}>An event</option>
+      <option value="venue" ${linkType==='venue'?'selected':''}>A venue</option>
+    </select></div>
+    <div class="field" id="tk-event-wrap" style="${linkType==='event'?'':'display:none'}"><label>Event</label><select id="tk-event">
+      <option value="">— select event —</option>
+      ${evPool.map(e=>`<option value="${e.id}" ${e.id===linkId?'selected':''}>${esc(e.name)}${e.date?' · '+esc(fmtDate(e.date)):''}</option>`).join('')}
+    </select></div>
+    <div class="field" id="tk-venue-wrap" style="${linkType==='venue'?'':'display:none'}"><label>Venue</label>
+      <input id="tk-venue" list="tk-venue-list" value="${esc(curVenue?venueLabel(curVenue):'')}" placeholder="Start typing a venue or city…">
+      <datalist id="tk-venue-list">${DB.venues.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(v=>`<option value="${esc(venueLabel(v))}"></option>`).join('')}</datalist>
+    </div>
+    <div class="field"><label>Notes (optional)</label><textarea id="tk-notes" rows="3" placeholder="Details, links, who to contact…">${esc(t?.notes||'')}</textarea></div>
+    <div id="tk-err" style="color:var(--red);font-size:12px;min-height:16px"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="saveTask('${t?t.id:''}')">${t?'Save':'Assign task'}</button>`);
+  setTimeout(()=>{ const el=document.getElementById('tk-title'); if(el&&!t) el.focus(); },30);
+}
+function taskLinkTypeChanged(){
+  const lt=fv('tk-linktype');
+  document.getElementById('tk-event-wrap').style.display=lt==='event'?'':'none';
+  document.getElementById('tk-venue-wrap').style.display=lt==='venue'?'':'none';
+}
+function saveTask(id){
+  const err=document.getElementById('tk-err');
+  const title=fv('tk-title'); if(!title){ if(err) err.textContent='Give the task a short description.'; return; }
+  const assignedTo=fv('tk-assignee'); if(!assignedTo){ if(err) err.textContent='Pick who it\'s assigned to.'; return; }
+  const linkType=fv('tk-linktype'); let linkId='';
+  if(linkType==='event'){ linkId=fv('tk-event'); if(!linkId){ if(err) err.textContent='Pick the event, or set "Link to" to Nothing.'; return; } }
+  if(linkType==='venue'){
+    linkId=(window._tkVenueMap||{})[fv('tk-venue')]||'';
+    if(!linkId){ if(err) err.textContent='Pick a venue from the list (start typing its name or city).'; return; }
+  }
+  const tasks=dbTasks();
+  const me=AUTH_USER?.username||'';
+  let t;
+  if(id){
+    t=tasks.find(x=>x.id===id); if(!t) return;
+    const reassigned=t.assignedTo!==assignedTo;
+    Object.assign(t,{title,assignedTo,linkType,linkId,dueDate:fv('tk-due'),notes:fv('tk-notes')});
+    if(reassigned) pushNotification(assignedTo,(AUTH_USER?.displayName||'Someone')+' assigned you a task: "'+title+'"',{view:'tasks',id:null,tab:'mine'});
+    logActivity('edited','Task',title);
+  } else {
+    t={id:'tk'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),title,notes:fv('tk-notes'),assignedTo,createdBy:me,
+      linkType,linkId,dueDate:fv('tk-due'),done:false,doneAt:null,createdAt:new Date().toISOString()};
+    tasks.push(t);
+    pushNotification(assignedTo,(AUTH_USER?.displayName||'Someone')+' assigned you a task: "'+title+'"',{view:'tasks',id:null,tab:'mine'});
+    logActivity('assigned','Task',title+' → '+userName(assignedTo));
+  }
+  persist(); closeModal(); refreshTasksBadge(); refreshNotifBadge(); render();
+}
+function toggleTask(id){
+  const t=dbTasks().find(x=>x.id===id); if(!t||!canToggleTask(t)) return;
+  t.done=!t.done; t.doneAt=t.done?new Date().toISOString():null;
+  if(t.done&&t.createdBy&&t.createdBy!==AUTH_USER?.username) pushNotification(t.createdBy,(AUTH_USER?.displayName||'Someone')+' completed "'+t.title+'"',{view:'tasks',id:null,tab:'assigned'});
+  logActivity(t.done?'completed':'reopened','Task',t.title);
+  persist(); refreshTasksBadge(); render();
+}
+function deleteTask(id){
+  const t=dbTasks().find(x=>x.id===id); if(!t||!canEditTask(t)) return;
+  if(!confirm('Delete this task?')) return;
+  DB.tasks=dbTasks().filter(x=>x.id!==id);
+  logActivity('deleted','Task',t.title);
+  persist(); refreshTasksBadge(); render();
+}
+function tasksSection(linkType,linkId,label){
+  const list=dbTasks().filter(t=>t.linkType===linkType&&t.linkId===linkId&&canSeeTask(t));
+  return '<div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">'
+    +'<span>'+esc(label)+'</span>'
+    +'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="taskForm(null,{linkType:\''+linkType+'\',linkId:\''+linkId+'\'})">+ Assign task</button></div>'
+    +taskListBlock(list,'No assigned tasks here yet.');
+}
+
+/* ============================================================
+   VIEW: FINANCIAL — every dollar figure sits inside a collapsed panel
+   ============================================================ */
+function finToggleAll(open){ document.querySelectorAll('details.fin-panel').forEach(d=>{ d.open=open; }); }
+function finMonthChart(events,artistMode){
+  const metric=e=>artistMode?eventBest(e).gross:eventBest(e).commission;
+  const metricLabel=artistMode?'Gross box office':'Commission';
+  const months={};
+  events.filter(e=>e.date).forEach(e=>{
+    const k=e.date.slice(0,7);
+    months[k]=months[k]||{firm:0,routing:0,count:0};
+    const firm=['Confirmed','Completed'].includes(e.status)||e.settlementV2?.settled;
+    months[k][firm?'firm':'routing']+=Math.max(0,metric(e)); months[k].count++;
+  });
+  const keys=Object.keys(months).sort();
+  if(!keys.length) return '<p class="muted" style="font-size:13px">No dated events yet.</p>';
+  const max=Math.max(1,...keys.map(k=>months[k].firm+months[k].routing));
+  const mLabel=k=>new Date(k+'-15T12:00:00').toLocaleDateString(undefined,{month:'short',year:'2-digit'});
+  const cols=keys.map(k=>{
+    const m=months[k], tot=m.firm+m.routing;
+    const hF=Math.round(m.firm/max*150), hR=Math.round(m.routing/max*150);
+    const tip=mLabel(k)+' · '+metricLabel+': '+money0(tot)+' (confirmed '+money0(m.firm)+', routing '+money0(m.routing)+') · '+m.count+' show'+(m.count!==1?'s':'');
+    return '<div class="fin-col" title="'+esc(tip)+'" tabindex="0" aria-label="'+esc(tip)+'">'
+      +'<div class="fin-stack">'
+      +(hR>0?'<div class="fin-bar r" style="height:'+Math.max(2,hR)+'px"></div>':'')
+      +(hF>0?'<div class="fin-bar f" style="height:'+Math.max(2,hF)+'px"></div>':'')
+      +'</div><div class="fin-x">'+esc(mLabel(k))+'</div></div>';
+  }).join('');
+  const rows=keys.map(k=>{const m=months[k];return '<tr><td>'+esc(mLabel(k))+'</td><td class="num">'+m.count+'</td><td class="num">'+money0(m.firm)+'</td><td class="num">'+money0(m.routing)+'</td><td class="num"><b>'+money0(m.firm+m.routing)+'</b></td></tr>';}).join('');
+  return '<div class="fin-legend"><span><i class="sw f"></i>Confirmed</span><span><i class="sw r"></i>Routing</span><span class="muted">'+esc(metricLabel)+' by month · tallest bar '+money0(max)+'</span></div>'
+    +'<div class="fin-chart">'+cols+'</div>'
+    +'<details class="fin-table-toggle"><summary>Show as table</summary>'
+    +'<table class="tbl" style="margin-top:8px"><thead><tr><th>Month</th><th class="num">Shows</th><th class="num">Confirmed</th><th class="num">Routing</th><th class="num">Total</th></tr></thead><tbody>'+rows+'</tbody></table></details>';
+}
+VIEWS.financial={
+  render(c,a){
+    const av=inArtistView(), hideComm=av;
+    const events=av?artistEvents(ARTIST_VIEW):DB.events;
+    const tours=av?artistTours(ARTIST_VIEW):DB.tours;
+    const {firm,routing,all}=splitTotals(events);
+    a.innerHTML='<button class="btn sm" onclick="finToggleAll(true)">Show all</button> <button class="btn sm" onclick="finToggleAll(false)">Hide all</button>';
+    const panel=(id,title,sub,body)=>'<details class="fin-panel" id="fin-'+id+'"><summary><span class="fin-title">'+title+'</span><span class="fin-sub">'+sub+'</span></summary><div class="fin-body">'+body+'</div></details>';
+    const summary='<div class="stats">'
+      +(hideComm?'':'<div class="stat"><div class="stat-val pos">'+money0(firm.comm)+'</div><div class="stat-lbl">Commission (confirmed)</div></div>'
+        +'<div class="stat"><div class="stat-val" style="color:var(--txt2)">'+money0(routing.comm)+'</div><div class="stat-lbl">Commission (routing)</div></div>')
+      +'<div class="stat"><div class="stat-val '+(firm.net>=0?'pos':'neg')+'">'+money0(firm.net)+'</div><div class="stat-lbl">Artist net (confirmed)</div></div>'
+      +'<div class="stat"><div class="stat-val" style="color:var(--txt2)">'+money0(routing.net)+'</div><div class="stat-lbl">Artist net (routing)</div></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--txt3)">'
+      +'<span>Gross box office (all): <strong>'+money0(all.gross)+'</strong></span>'
+      +(hideComm?'':'<span>Commission (all): <strong>'+money0(all.comm)+'</strong></span>')
+      +'<span>Artist net (all): <strong class="'+(all.net>=0?'pos':'neg')+'">'+money0(all.net)+'</strong></span></div>';
+    const tourRows=tours.map(t=>{
+      const ev=events.filter(e=>e.tourId===t.id); const s=splitTotals(ev).all;
+      return '<tr onclick="go(\'tours\',\''+t.id+'\')"><td>'+esc(t.name)+'<div class="muted" style="font-size:11px">'+esc(t.artist||'')+'</div></td><td class="num">'+ev.length+'</td><td class="num">'+money0(s.gross)+'</td>'
+        +(hideComm?'':'<td class="num pos">'+money0(s.comm)+'</td>')+'<td class="num '+(s.net>=0?'pos':'neg')+'">'+money0(s.net)+'</td></tr>';
+    }).join('');
+    const toursTbl=tours.length?'<table class="tbl"><thead><tr><th>Tour</th><th class="num">Shows</th><th class="num">Gross</th>'+(hideComm?'':'<th class="num">Commission</th>')+'<th class="num">Artist net</th></tr></thead><tbody>'+tourRows+'</tbody></table>':'<p class="muted" style="font-size:13px">No tours yet.</p>';
+    const sortedEvents=events.slice().sort((x,y)=>(x.date||'9999').localeCompare(y.date||'9999'));
+    c.innerHTML='<p class="muted" style="font-size:12px;margin-bottom:14px">🔒 Figures stay hidden until you open a section.</p>'
+      +panel('summary','Summary',hideComm?'Artist net totals':'Commission and artist net totals',summary)
+      +panel('months',hideComm?'Gross by month':'Commission by month',Object.keys(events.reduce((m,e)=>{if(e.date)m[e.date.slice(0,7)]=1;return m;},{})).length+' months, chart and table',finMonthChart(events,hideComm))
+      +panel('tours','By tour',tours.length+' tour'+(tours.length!==1?'s':''),toursTbl)
+      +panel('events','By event',events.length+' event'+(events.length!==1?'s':''),events.length?tableEvents(sortedEvents):'<p class="muted" style="font-size:13px">No events yet.</p>');
+  }
+};
+
+/* ============================================================
+   VENUE INQUIRY EMAIL  → opens Gmail compose in a new tab
+   ============================================================ */
+function inquiryFrom(){ return (DB.settings.inquiryFrom||'bookings@langerpa.com').trim(); }
+function inquiryCc(){ return (DB.settings.inquiryCc!=null?DB.settings.inquiryCc:'adam@langerpa.com').trim(); }
+function inquiryRange(from,to){
+  const short=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const long=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  if(from&&to){
+    if(from===to) return long(from);
+    if(from.slice(0,4)===to.slice(0,4)) return short(from)+' – '+long(to);
+    return long(from)+' – '+long(to);
+  }
+  if(from) return 'From '+long(from);
+  if(to) return 'Until '+long(to);
+  return 'Flexible';
+}
+let _viEdited={subject:false,body:false};
+function venueInquiryModal(preVenueId,preArtistId){
+  if(!canDo('admin')) return;
+  _viEdited={subject:false,body:false};
+  const artists=DB.artists.slice().sort((a,b)=>((a.type==='roster'?0:1)-(b.type==='roster'?0:1))||(a.name||'').localeCompare(b.name||''));
+  const defArtist=preArtistId||(ARTIST_VIEW||'')||(artists[0]?.id||'');
+  openModal('Venue inquiry email',`
+    <div class="row3">
+      <div class="field"><label>Country</label><select id="vi-country" onchange="venueCascadeFilterChanged('vi','country',viVenueChanged)"></select></div>
+      <div class="field"><label>Province / State</label><select id="vi-province" onchange="venueCascadeFilterChanged('vi','province',viVenueChanged)"></select></div>
+      <div class="field"><label>City</label><select id="vi-city" onchange="venueCascadeFilterChanged('vi','city',viVenueChanged)"></select></div>
+    </div>
+    <div class="field"><label>Venue</label><select id="vi" onchange="viVenueChanged()"></select></div>
+    <div class="row2">
+      <div class="field"><label>Artist</label><select id="vi-artist" onchange="viArtistChanged()">
+        ${artists.map(ar=>`<option value="${ar.id}" ${ar.id===defArtist?'selected':''}>${esc(ar.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>Genre</label><input id="vi-genre" oninput="viPreview()" placeholder="e.g. Comedy"></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>Dates from</label><input id="vi-start" type="date" onchange="viPreview()"></div>
+      <div class="field"><label>Dates to</label><input id="vi-end" type="date" onchange="viPreview()"></div>
+      <div class="field"><label>Expected attendance</label><input id="vi-att" type="number" min="0" oninput="viPreview()"></div>
+    </div>
+    <div class="field"><label>To (venue contact)</label><input id="vi-to" type="email" oninput="viPreview()" placeholder="venue@example.com"></div>
+    <div class="field"><label>Subject</label><input id="vi-subject" oninput="_viEdited.subject=true"></div>
+    <div class="field"><label>Message</label><textarea id="vi-body" rows="12" oninput="_viEdited.body=true" style="font-size:13px;line-height:1.5"></textarea></div>
+    <p class="muted" style="font-size:11px;margin-top:-6px">Opens Gmail in a new tab from <b>${esc(inquiryFrom())}</b>${inquiryCc()?', cc <b>'+esc(inquiryCc())+'</b>':''}. Nothing is sent until you press Send in Gmail. Change these addresses in Settings.</p>
+    <div id="vi-err" style="color:var(--red);font-size:12px;min-height:16px"></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn primary" onclick="viOpenGmail()">✉ Open in Gmail</button>`);
+  venueCascadeInit('vi',preVenueId||'',viVenueChanged);
+  viArtistChanged();
+}
+function viVenueChanged(){
+  const v=get(DB.venues,fv('vi'));
+  const to=document.getElementById('vi-to'), att=document.getElementById('vi-att');
+  if(to) to.value=v?(v.contactEmail||get(DB.contacts,v.contactId)?.email||''):'';
+  if(att) att.placeholder=v&&v.capacity?'Venue capacity '+v.capacity:'e.g. 400';
+  viPreview();
+}
+function viArtistChanged(){
+  const ar=get(DB.artists,fv('vi-artist'));
+  const g=document.getElementById('vi-genre'); if(g) g.value=ar?.genre||'';
+  viPreview();
+}
+function viBuild(){
+  const v=get(DB.venues,fv('vi')), ar=get(DB.artists,fv('vi-artist'));
+  const range=inquiryRange(fv('vi-start'),fv('vi-end'));
+  const artistName=ar?.name||'';
+  const contactName=(v?.contactName||'').trim().split(/\s+/)[0];
+  const subject='Availability Inquiry: '+artistName+' ('+range+')';
+  const company=DB.settings.companyName||'Langer Performing Arts';
+  const body=(contactName?'Hi '+contactName+',':'Hello,')+'\n\n'
+    +company+' would like to inquire about the availability of '+(v?v.name+(v.hall&&v.hall!==v.name?' ('+v.hall+')':''):'your venue')+' for the following:\n\n'
+    +'Artist: '+artistName+'\n'
+    +'Genre: '+(fv('vi-genre')||'—')+'\n'
+    +'Date Range: '+range+'\n'
+    +'Expected Attendance: '+(fv('vi-att')||'TBD')+'\n\n'
+    +'Please let us know which dates are available, along with your rental rates and terms.\n\n'
+    +'Thank you,\n\n'+company+'\n'+inquiryFrom()+(DB.settings.contactPhone?'\n'+DB.settings.contactPhone:'');
+  return {subject,body};
+}
+function viPreview(){
+  const b=viBuild();
+  const s=document.getElementById('vi-subject'), t=document.getElementById('vi-body');
+  if(s&&!_viEdited.subject) s.value=b.subject;
+  if(t&&!_viEdited.body) t.value=b.body;
+}
+function gmailComposeUrl(o){
+  const p=['view=cm','fs=1','tf=1'];
+  if(o.to) p.push('to='+encodeURIComponent(o.to));
+  if(o.cc) p.push('cc='+encodeURIComponent(o.cc));
+  p.push('su='+encodeURIComponent(o.subject||''));
+  p.push('body='+encodeURIComponent(o.body||''));
+  return 'https://mail.google.com/mail/u/'+(o.from?o.from:'0')+'/?'+p.join('&');
+}
+function viOpenGmail(){
+  const err=document.getElementById('vi-err');
+  const vid=fv('vi'), arId=fv('vi-artist');
+  if(!vid){ err.textContent='Pick a venue.'; return; }
+  if(!arId){ err.textContent='Pick an artist.'; return; }
+  if(!fv('vi-start')&&!fv('vi-end')){ err.textContent='Add a date range (at least a start date).'; return; }
+  if(fv('vi-start')&&fv('vi-end')&&fv('vi-end')<fv('vi-start')){ err.textContent='The end date is before the start date.'; return; }
+  const v=get(DB.venues,vid), ar=get(DB.artists,arId);
+  const url=gmailComposeUrl({from:inquiryFrom(),to:fv('vi-to'),cc:inquiryCc(),subject:fv('vi-subject'),body:document.getElementById('vi-body').value});
+  window.open(url,'_blank','noopener');
+  // remember it on the venue, and keep a genre typed for an artist that had none
+  const genre=fv('vi-genre'); if(ar&&!ar.genre&&genre) ar.genre=genre;
+  v.inquiries=v.inquiries||[];
+  v.inquiries.push({id:'iq'+Date.now().toString(36),ts:new Date().toISOString(),artistId:arId,artistName:ar?.name||'',range:inquiryRange(fv('vi-start'),fv('vi-end')),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to')});
+  logActivity('opened an inquiry email to','Venue',v.name+' ('+(ar?.name||'')+', '+inquiryRange(fv('vi-start'),fv('vi-end'))+')');
+  persist(); closeModal();
+  if(route.view==='venues'&&route.id===vid) render();
+}
+function venueInquiriesHTML(v){
+  const list=(v.inquiries||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
+  if(!list.length) return '';
+  return '<div class="sec"><div class="sec-label">Inquiries sent ('+list.length+')</div>'
+    +list.map(q=>'<div style="display:flex;gap:10px;padding:7px 4px;border-bottom:1px solid var(--bord);font-size:13px;flex-wrap:wrap">'
+      +'<span style="min-width:96px;color:var(--txt3)">'+esc(new Date(q.ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}))+'</span>'
+      +'<span style="font-weight:500">'+esc(q.artistName)+'</span><span class="muted">'+esc(q.range)+(q.attendance?' · ~'+esc(q.attendance)+' expected':'')+'</span></div>').join('')
+    +'</div>';
+}
+function saveInquirySettings(){
+  DB.settings.inquiryFrom=fv('set-iq-from')||'bookings@langerpa.com';
+  DB.settings.inquiryCc=fv('set-iq-cc');
+  persist();
+  if(typeof event!=='undefined'&&event?.target){ const b=event.target,o=b.textContent; b.textContent='✓ Saved'; setTimeout(()=>{b.textContent=o;},1500); }
+}
+
+
 /* ---------- NAV BIND ---------- */
 document.getElementById('nav').addEventListener('click',e=>{
   const item=e.target.closest('.nav-item');
@@ -9541,6 +10137,7 @@ if(AUTH_USER) {
     if(c) c.innerHTML='<div style="padding:40px;text-align:center;color:var(--txt3);font-size:13px">Connecting…</div>';
     await load();
     sanitizeSeqCounters();
+    if(!Array.isArray(DB.tasks)) DB.tasks=[];
     syncUsersFromDB();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
@@ -9584,6 +10181,7 @@ function refreshTasksBadge(){
   let count=0;
   bEvents.forEach(e=>(e.todos||[]).forEach(t=>{ if(!t.done && t.dueDate && t.dueDate<=today) count++; }));
   bTours.forEach(t=>(t.todos||[]).forEach(td=>{ if(!td.done && td.dueDate && td.dueDate<=today) count++; }));
+  if(AUTH_USER) count+=dbTasks().filter(t=>!t.done&&t.assignedTo===AUTH_USER.username).length;
   if(count>0){ badge.textContent=count; badge.style.display='inline-block'; }
   else badge.style.display='none';
 }
