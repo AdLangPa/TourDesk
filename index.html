@@ -10052,7 +10052,7 @@ function phCategory(label){
   if(/club|venue|room|theatre|theater/.test(l)) return 'venue';
   return 'other';
 }
-const PH_REMEMBER=['self','title','phone','email','company'];
+const PH_REMEMBER=['title','phone','email','company'];
 function phDefault(label,ctx){
   const cat=phCategory(label);
   const saved=(DB.settings.templateValues||{})[label.toLowerCase()];
@@ -10064,7 +10064,8 @@ function phDefault(label,ctx){
     case 'artist': return ctx.artist?ctx.artist.name:'';
     case 'genre': return ctx.genre||'';
     case 'attendance': return ctx.att||'';
-    case 'self': return saved||(AUTH_USER&&AUTH_USER.displayName)||'';
+    // Inquiries go out from the general booking address, so sign as the company, never a person's login name
+    case 'self': return DB.settings.companyName||'Langer Performing Arts';
     case 'title': return saved||'';
     case 'phone': return saved||DB.settings.contactPhone||'';
     case 'email': return saved||inquiryFrom();
