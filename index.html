@@ -246,6 +246,8 @@ a{color:var(--blue);text-decoration:none}
 .ev-card-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--bord)}
 .ev-card-figs label{display:block;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
 .ev-card-figs span{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.vi-ph-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.modal:has(#vi-frame){width:720px}
 .nav-toggle{display:none;background:none;border:none;color:var(--txt);font-size:22px;line-height:1;padding:6px 10px 6px 0;cursor:pointer}
 #nav-scrim{display:none}
 @media(max-width:760px){
@@ -299,6 +301,7 @@ a{color:var(--blue);text-decoration:none}
   .itin-row.ro{grid-template-columns:76px 1fr}
   .itin-row.ro .itin-note-ro{grid-column:2}
   .fin-sub{display:none}
+  .vi-ph-grid{grid-template-columns:1fr}
   .pe-hdr{display:none!important}
   .pe-row{grid-template-columns:1fr 1fr!important;gap:8px!important;background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:10px;margin-bottom:10px!important;align-items:end!important}
   .pe-desc{grid-column:1/-1}
@@ -8866,6 +8869,7 @@ VIEWS.settings={
         </div>
         <button class="btn sm" onclick="saveInquirySettings()">Save inquiry settings</button>
       </div>
+      ${emailTemplatesSettingsHTML()}
       <div class="sec" style="max-width:640px">
         <div class="sec-label">Pitch deck — slides</div>
         <p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:14px">These render between the cover slide and the tour projection every time you export a pitch deck. Reorder with the arrows, or edit/remove any slide.</p>
@@ -9992,10 +9996,297 @@ function inquiryRange(from,to){
   if(to) return 'Until '+long(to);
   return 'Flexible';
 }
+/* ============================================================
+   HTML EMAIL TEMPLATES for venue inquiries
+   DB.settings.emailTemplates = [{id,name,artistId,html,subjects:[...],createdAt}]
+   Placeholders: [Anything in square brackets] or {{anything}} — filled from the
+   inquiry form where we can guess, editable in the inquiry window.
+   Gmail's compose link only takes plain text, so a template is copied to the
+   clipboard as formatted HTML and Gmail opens with To/CC/Subject filled in.
+   ============================================================ */
+const PH_SRC='\\[([^\\[\\]\\n]{2,80})\\]|\\{\\{\\s*([^{}\\n]{1,40}?)\\s*\\}\\}';
+const PH_HL='background:#fff2a8;color:#000;padding:0 3px';
+function emailTemplates(){ if(!Array.isArray(DB.settings.emailTemplates)) DB.settings.emailTemplates=[]; return DB.settings.emailTemplates; }
+function parseTemplateFile(text,fileName){
+  const doc=new DOMParser().parseFromString(text,'text/html');
+  const title=((doc.querySelector('title')&&doc.querySelector('title').textContent)||fileName||'Email template').replace(/\.html?$/i,'').trim();
+  const subjects=[];
+  const helper=doc.getElementById('helper');
+  if(helper) helper.querySelectorAll('code').forEach(c=>{
+    const t=c.textContent.replace(/\s+/g,' ').trim();
+    if(t.length>18&&!/ctrl|cmd/i.test(t)) subjects.push(t);
+  });
+  let root=doc.getElementById('email')||doc.body;
+  if(!root) return {title,subjects,html:''};
+  root=root.cloneNode(true);
+  root.querySelectorAll('script,noscript,#helper,iframe,object,embed,form').forEach(n=>n.remove());
+  root.querySelectorAll('*').forEach(el=>{
+    [...el.attributes].forEach(a=>{
+      if(/^on/i.test(a.name)) el.removeAttribute(a.name);
+      else if((a.name==='href'||a.name==='src')&&/^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
+    });
+  });
+  return {title,subjects,html:root.innerHTML.trim()};
+}
+function templatePlaceholders(t){
+  const out=[];
+  const doc=new DOMParser().parseFromString('<div>'+(t.html||'')+'</div>','text/html');
+  const txt=doc.body.textContent+'\n'+(t.subjects||[]).join('\n');
+  const re=new RegExp(PH_SRC,'g'); let m;
+  while((m=re.exec(txt))){ const k=(m[1]||m[2]).trim(); if(k&&!out.includes(k)) out.push(k); }
+  return out;
+}
+function phCategory(label){
+  const l=label.toLowerCase();
+  if(/your name|my name|sender/.test(l)) return 'self';
+  if(/first name|booker|recipient|contact|their name|^name$/.test(l)) return 'contact';
+  if(/title|role|position/.test(l)) return 'title';
+  if(/phone|cell|mobile/.test(l)) return 'phone';
+  if(/e-?mail/.test(l)) return 'email';
+  if(/company|agency/.test(l)) return 'company';
+  if(/month|season|date|when|time ?frame/.test(l)) return 'dates';
+  if(/genre/.test(l)) return 'genre';
+  if(/attendance|expected|audience size|capacity/.test(l)) return 'attendance';
+  if(/artist|\bact\b|comedian|performer|show name/.test(l)) return 'artist';
+  if(/\bcity\b|\btown\b/.test(l)) return 'city';
+  if(/club|venue|room|theatre|theater/.test(l)) return 'venue';
+  return 'other';
+}
+const PH_REMEMBER=['self','title','phone','email','company'];
+function phDefault(label,ctx){
+  const cat=phCategory(label);
+  const saved=(DB.settings.templateValues||{})[label.toLowerCase()];
+  switch(cat){
+    case 'contact': return ((ctx.venue&&ctx.venue.contactName)||'').trim().split(/\s+/)[0]||'';
+    case 'venue': return ctx.venue?ctx.venue.name:'';
+    case 'city': return ctx.venue?ctx.venue.city||'':'';
+    case 'dates': return ctx.range||'';
+    case 'artist': return ctx.artist?ctx.artist.name:'';
+    case 'genre': return ctx.genre||'';
+    case 'attendance': return ctx.att||'';
+    case 'self': return saved||(AUTH_USER&&AUTH_USER.displayName)||'';
+    case 'title': return saved||'';
+    case 'phone': return saved||DB.settings.contactPhone||'';
+    case 'email': return saved||inquiryFrom();
+    case 'company': return saved||DB.settings.companyName||'Langer Performing Arts';
+    default: return '';
+  }
+}
+function fillTemplateText(s,values){
+  return String(s||'').replace(new RegExp(PH_SRC,'g'),(all,a,b)=>{ const v=values[(a||b).trim()]; return v?v:all; });
+}
+function fillTemplateHTML(html,values){
+  const doc=new DOMParser().parseFromString('<div id="tpl-root">'+(html||'')+'</div>','text/html');
+  const root=doc.getElementById('tpl-root');
+  root.querySelectorAll('.ph').forEach(sp=>{
+    const m=sp.textContent.trim().match(new RegExp('^(?:'+PH_SRC+')$'));
+    const key=m?(m[1]||m[2]).trim():null;
+    if(key&&values[key]) sp.replaceWith(doc.createTextNode(values[key]));
+    else sp.setAttribute('style',(sp.getAttribute('style')||'')+';'+PH_HL);
+  });
+  const walker=doc.createTreeWalker(root,NodeFilter.SHOW_TEXT); const nodes=[];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(n=>{
+    const s=n.nodeValue; const re=new RegExp(PH_SRC,'g');
+    if(!re.test(s)) return; re.lastIndex=0;
+    const frag=doc.createDocumentFragment(); let last=0, m;
+    while((m=re.exec(s))){
+      frag.appendChild(doc.createTextNode(s.slice(last,m.index)));
+      const v=values[(m[1]||m[2]).trim()];
+      if(v) frag.appendChild(doc.createTextNode(v));
+      else { const sp=doc.createElement('span'); sp.setAttribute('style',PH_HL); sp.textContent=m[0]; frag.appendChild(sp); }
+      last=m.index+m[0].length;
+    }
+    frag.appendChild(doc.createTextNode(s.slice(last)));
+    n.parentNode.replaceChild(frag,n);
+  });
+  return root.innerHTML;
+}
+// Copy formatted HTML synchronously (works inside the click, before Gmail opens in a new tab)
+function copyRichHTML(html){
+  const box=document.createElement('div');
+  box.setAttribute('style','all:initial;display:block;position:fixed;left:-10000px;top:0;width:640px;background:#ffffff;color:#000000;font-family:Arial,Helvetica,sans-serif;');
+  box.innerHTML=html;
+  document.body.appendChild(box);
+  const sel=window.getSelection(); const r=document.createRange(); r.selectNodeContents(box);
+  sel.removeAllRanges(); sel.addRange(r);
+  let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  sel.removeAllRanges(); box.remove();
+  return ok;
+}
+function templateFileSize(t){ return (t.html||'').length+JSON.stringify(t.subjects||[]).length; }
+function addTemplateFromText(text,fileName,artistId){
+  const p=parseTemplateFile(text,fileName);
+  if(!p.html) return {error:'That file has no email content in it.'};
+  if(p.html.length>400000) return {error:'That template is too large (over 400 KB). Host big images online and link them instead of embedding them.'};
+  const t={id:'et'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:p.title,artistId:artistId||'',html:p.html,subjects:p.subjects,createdAt:new Date().toISOString()};
+  emailTemplates().push(t);
+  logActivity('added email template','Settings',t.name);
+  persist();
+  return {template:t};
+}
+function readTemplateFile(file,cb){
+  if(!file) return;
+  if(!/\.html?$/i.test(file.name)&&file.type!=='text/html'){ cb({error:'Please choose an .html file.'}); return; }
+  const rd=new FileReader();
+  rd.onload=()=>cb({text:String(rd.result||''),name:file.name});
+  rd.onerror=()=>cb({error:'Could not read that file.'});
+  rd.readAsText(file);
+}
+
+/* ---------- Inquiry window: template mode ---------- */
+let _viTpl={id:'',values:{},edited:{},manual:false,logged:false,timer:null};
+function viCurrentTemplate(){ return emailTemplates().find(t=>t.id===_viTpl.id)||null; }
+function viTemplateOptions(){
+  return '<option value="">Plain text (standard inquiry)</option>'+emailTemplates().map(t=>{
+    const ar=t.artistId?get(DB.artists,t.artistId):null;
+    return '<option value="'+t.id+'" '+(t.id===_viTpl.id?'selected':'')+'>'+esc(t.name)+(ar?' · '+esc(ar.name):'')+'</option>';
+  }).join('');
+}
+function viCtx(){
+  return {venue:get(DB.venues,fv('vi')),artist:get(DB.artists,fv('vi-artist')),range:inquiryRange(fv('vi-start'),fv('vi-end')),genre:fv('vi-genre'),att:fv('vi-att')};
+}
+function viTemplateChanged(manual){
+  const sel=document.getElementById('vi-tpl'); if(!sel) return;
+  if(manual) _viTpl.manual=true;
+  if(_viTpl.id!==sel.value){ _viTpl.id=sel.value; _viTpl.values={}; _viTpl.edited={}; }
+  const t=viCurrentTemplate();
+  document.getElementById('vi-plain').style.display=t?'none':'';
+  document.getElementById('vi-tplwrap').style.display=t?'':'none';
+  document.getElementById('vi-subj-opts-wrap').style.display=(t&&(t.subjects||[]).length)?'':'none';
+  document.getElementById('vi-go').textContent=t?'📋 Copy email & open Gmail':'✉ Open in Gmail';
+  document.getElementById('vi-howto').innerHTML=t
+    ?'Copies the formatted email, then opens Gmail from <b>'+esc(inquiryFrom())+'</b>'+(inquiryCc()?', cc <b>'+esc(inquiryCc())+'</b>':'')+', with the subject filled in. Click in the message and paste (Ctrl/Cmd+V). Yellow text is a blank you haven\'t filled.'
+    :'Opens Gmail in a new tab from <b>'+esc(inquiryFrom())+'</b>'+(inquiryCc()?', cc <b>'+esc(inquiryCc())+'</b>':'')+'. Nothing is sent until you press Send in Gmail. Change these addresses in Settings.';
+  if(t){ _viEdited.subject=false; viRenderTplFields(); }
+  viPreview();
+}
+function viRenderTplFields(){
+  const t=viCurrentTemplate(); const host=document.getElementById('vi-ph-fields'); if(!t||!host) return;
+  const labels=templatePlaceholders(t);
+  const ctx=viCtx();
+  host.innerHTML=labels.length?labels.map((l,i)=>{
+    const val=_viTpl.edited[l]?_viTpl.values[l]:phDefault(l,ctx);
+    _viTpl.values[l]=val;
+    return '<div class="field" style="margin-bottom:8px"><label>'+esc(l)+'</label><input id="vi-ph-'+i+'" data-ph="'+esc(l)+'" value="'+esc(val)+'" oninput="viPhInput(this)"></div>';
+  }).join(''):'<p class="muted" style="font-size:12px">This template has no [placeholders] to fill.</p>';
+  const so=document.getElementById('vi-subj-opts');
+  if(so) so.innerHTML='<option value="__std">Standard: Availability Inquiry: Artist (Dates)</option>'+(t.subjects||[]).map((s,i)=>'<option value="'+i+'">'+esc(s)+'</option>').join('');
+}
+function viPhInput(el){
+  const l=el.getAttribute('data-ph'); _viTpl.values[l]=el.value; _viTpl.edited[l]=true;
+  clearTimeout(_viTpl.timer); _viTpl.timer=setTimeout(viPreview,150);
+}
+function viTplRefresh(){
+  const t=viCurrentTemplate(); if(!t) return;
+  const ctx=viCtx();
+  document.querySelectorAll('#vi-ph-fields input[data-ph]').forEach(inp=>{
+    const l=inp.getAttribute('data-ph');
+    if(!_viTpl.edited[l]){ const d=phDefault(l,ctx); _viTpl.values[l]=d; if(inp.value!==d) inp.value=d; }
+  });
+  const fr=document.getElementById('vi-frame');
+  if(fr) fr.srcdoc='<!doctype html><html><head><meta charset="utf-8"><base target="_blank"></head><body style="margin:0;background:#fff">'+fillTemplateHTML(t.html,_viTpl.values)+'</body></html>';
+  const so=document.getElementById('vi-subj-opts'), s=document.getElementById('vi-subject');
+  if(so&&s&&!_viEdited.subject){
+    if(so.value&&so.value!=='__std'&&t.subjects&&t.subjects[+so.value]!=null) s.value=fillTemplateText(t.subjects[+so.value],_viTpl.values);
+    else s.value=viBuild().subject;
+  }
+}
+function viSubjectPicked(){ _viEdited.subject=false; viTplRefresh(); }
+function viUploadTemplate(file){
+  const err=document.getElementById('vi-err');
+  readTemplateFile(file,r=>{
+    if(r.error){ err.textContent=r.error; return; }
+    const res=addTemplateFromText(r.text,r.name,fv('vi-artist'));
+    if(res.error){ err.textContent=res.error; return; }
+    err.textContent='';
+    _viTpl.id=res.template.id; _viTpl.manual=true; _viTpl.values={}; _viTpl.edited={};
+    document.getElementById('vi-tpl').innerHTML=viTemplateOptions();
+    viTemplateChanged(true);
+  });
+  const fi=document.getElementById('vi-tpl-file'); if(fi) fi.value='';
+}
+function viAutoTemplateForArtist(){
+  if(_viTpl.manual) return;
+  const arId=fv('vi-artist');
+  const match=emailTemplates().find(t=>t.artistId&&t.artistId===arId);
+  const sel=document.getElementById('vi-tpl'); if(!sel) return;
+  const want=match?match.id:'';
+  if(sel.value!==want){ sel.value=want; viTemplateChanged(false); }
+}
+function viRememberValues(){
+  const t=viCurrentTemplate(); if(!t) return;
+  DB.settings.templateValues=DB.settings.templateValues||{};
+  Object.keys(_viTpl.values).forEach(l=>{ if(PH_REMEMBER.includes(phCategory(l))&&_viTpl.values[l]) DB.settings.templateValues[l.toLowerCase()]=_viTpl.values[l]; });
+}
+
+/* ---------- Settings: manage templates ---------- */
+function emailTemplatesSettingsHTML(){
+  const list=emailTemplates();
+  return '<div class="sec" style="max-width:640px" id="et-settings">'
+    +'<div class="sec-label">Email templates</div>'
+    +'<p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:12px">Upload an HTML email (like a booking pitch) to use in the venue inquiry window. Anything in [square brackets] becomes a blank you can fill, and the venue, artist and dates fill in automatically where they match. Link an artist and the template is picked automatically for their inquiries.</p>'
+    +(list.length?list.map(t=>{
+      const ar=t.artistId?get(DB.artists,t.artistId):null;
+      const n=templatePlaceholders(t).length;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surf2);border-radius:var(--rad);margin-bottom:6px;flex-wrap:wrap">'
+        +'<div style="flex:1;min-width:160px"><div style="font-weight:500;font-size:13px">'+esc(t.name)+'</div>'
+        +'<div style="font-size:11px;color:var(--txt3)">'+(ar?esc(ar.name)+' · ':'Any artist · ')+n+' blank'+(n!==1?'s':'')+((t.subjects||[]).length?' · '+t.subjects.length+' subject line'+(t.subjects.length!==1?'s':''):'')+'</div></div>'
+        +'<button class="btn sm" onclick="previewEmailTemplate(\''+t.id+'\')">Preview</button>'
+        +'<button class="btn sm" onclick="editEmailTemplate(\''+t.id+'\')">Edit</button>'
+        +'<button class="btn sm danger" onclick="deleteEmailTemplate(\''+t.id+'\')">Delete</button></div>';
+    }).join(''):'<p class="muted" style="font-size:13px;margin-bottom:10px">No templates yet.</p>')
+    +'<button class="btn sm" onclick="document.getElementById(\'et-file\').click()">⬆ Upload HTML template</button>'
+    +'<input type="file" id="et-file" accept=".html,.htm,text/html" class="hidden" onchange="settingsUploadTemplate(this.files[0])">'
+    +'<div id="et-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:6px"></div></div>';
+}
+function rerenderTemplateSettings(){ const el=document.getElementById('et-settings'); if(el) el.outerHTML=emailTemplatesSettingsHTML(); }
+function settingsUploadTemplate(file){
+  readTemplateFile(file,r=>{
+    const err=document.getElementById('et-err');
+    if(r.error){ if(err) err.textContent=r.error; return; }
+    const res=addTemplateFromText(r.text,r.name,'');
+    if(res.error){ if(err) err.textContent=res.error; return; }
+    rerenderTemplateSettings();
+    editEmailTemplate(res.template.id);
+  });
+}
+function previewEmailTemplate(id){
+  const t=emailTemplates().find(x=>x.id===id); if(!t) return;
+  openModal(t.name,'<iframe id="et-preview" sandbox="allow-same-origin" style="width:100%;height:60vh;border:1px solid var(--bord);border-radius:8px;background:#fff"></iframe>'
+    +((t.subjects||[]).length?'<div style="margin-top:10px;font-size:12px;color:var(--txt2)"><b>Subject lines:</b><br>'+t.subjects.map(s=>esc(s)).join('<br>')+'</div>':''),
+    '<button class="btn" onclick="closeModal()">Close</button>');
+  document.getElementById('et-preview').srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">'+fillTemplateHTML(t.html,{})+'</body></html>';
+}
+function editEmailTemplate(id){
+  const t=emailTemplates().find(x=>x.id===id); if(!t) return;
+  openModal('Email template',
+    '<div class="field"><label>Name</label><input id="et-name" value="'+esc(t.name)+'"></div>'
+    +'<div class="field"><label>Use automatically for artist (optional)</label><select id="et-artist"><option value="">Any artist</option>'
+    +DB.artists.map(a=>'<option value="'+a.id+'" '+(a.id===t.artistId?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Subject line options (one per line)</label><textarea id="et-subjects" rows="4">'+esc((t.subjects||[]).join('\n'))+'</textarea></div>'
+    +'<p class="muted" style="font-size:12px">Blanks found: '+(templatePlaceholders(t).map(l=>'['+esc(l)+']').join(', ')||'none')+'</p>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveEmailTemplate(\''+t.id+'\')">Save</button>');
+}
+function saveEmailTemplate(id){
+  const t=emailTemplates().find(x=>x.id===id); if(!t) return;
+  t.name=fv('et-name')||t.name; t.artistId=fv('et-artist');
+  t.subjects=(document.getElementById('et-subjects').value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  persist(); closeModal(); rerenderTemplateSettings();
+}
+function deleteEmailTemplate(id){
+  const t=emailTemplates().find(x=>x.id===id); if(!t) return;
+  if(!confirm('Delete the template "'+t.name+'"?')) return;
+  DB.settings.emailTemplates=emailTemplates().filter(x=>x.id!==id);
+  logActivity('deleted email template','Settings',t.name);
+  persist(); rerenderTemplateSettings();
+}
+
 let _viEdited={subject:false,body:false};
 function venueInquiryModal(preVenueId,preArtistId){
   if(!canDo('admin')) return;
   _viEdited={subject:false,body:false};
+  _viTpl={id:'',values:{},edited:{},manual:false,logged:false,timer:null};
   const artists=DB.artists.slice().sort((a,b)=>((a.type==='roster'?0:1)-(b.type==='roster'?0:1))||(a.name||'').localeCompare(b.name||''));
   const defArtist=preArtistId||(ARTIST_VIEW||'')||(artists[0]?.id||'');
   openModal('Venue inquiry email',`
@@ -10016,14 +10307,27 @@ function venueInquiryModal(preVenueId,preArtistId){
       <div class="field"><label>Expected attendance</label><input id="vi-att" type="number" min="0" oninput="viPreview()"></div>
     </div>
     <div class="field"><label>To (venue contact)</label><input id="vi-to" type="email" oninput="viPreview()" placeholder="venue@example.com"></div>
+    <div class="field"><label>Email format</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="vi-tpl" onchange="viTemplateChanged(true)" style="flex:1;min-width:200px">${viTemplateOptions()}</select>
+        <button class="btn sm" type="button" onclick="document.getElementById('vi-tpl-file').click()">⬆ Upload HTML template</button>
+        <input type="file" id="vi-tpl-file" accept=".html,.htm,text/html" class="hidden" onchange="viUploadTemplate(this.files[0])">
+      </div></div>
+    <div class="field" id="vi-subj-opts-wrap" style="display:none"><label>Subject line</label><select id="vi-subj-opts" onchange="viSubjectPicked()"></select></div>
     <div class="field"><label>Subject</label><input id="vi-subject" oninput="_viEdited.subject=true"></div>
-    <div class="field"><label>Message</label><textarea id="vi-body" rows="12" oninput="_viEdited.body=true" style="font-size:13px;line-height:1.5"></textarea></div>
-    <p class="muted" style="font-size:11px;margin-top:-6px">Opens Gmail in a new tab from <b>${esc(inquiryFrom())}</b>${inquiryCc()?', cc <b>'+esc(inquiryCc())+'</b>':''}. Nothing is sent until you press Send in Gmail. Change these addresses in Settings.</p>
+    <div id="vi-plain"><div class="field"><label>Message</label><textarea id="vi-body" rows="12" oninput="_viEdited.body=true" style="font-size:13px;line-height:1.5"></textarea></div></div>
+    <div id="vi-tplwrap" style="display:none">
+      <div class="sec-label" style="margin-top:4px">Fill in the blanks</div>
+      <div id="vi-ph-fields" class="vi-ph-grid"></div>
+      <div class="field"><label>Preview</label><iframe id="vi-frame" sandbox="allow-same-origin" title="Email preview" style="width:100%;height:440px;border:1px solid var(--bord);border-radius:8px;background:#fff"></iframe></div>
+    </div>
+    <p class="muted" id="vi-howto" style="font-size:11px;margin-top:-6px"></p>
     <div id="vi-err" style="color:var(--red);font-size:12px;min-height:16px"></div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="viOpenGmail()">✉ Open in Gmail</button>`);
+     <button class="btn primary" id="vi-go" onclick="viOpenGmail()">✉ Open in Gmail</button>`);
   venueCascadeInit('vi',preVenueId||'',viVenueChanged);
   viArtistChanged();
+  viTemplateChanged(false);
 }
 function viVenueChanged(){
   const v=get(DB.venues,fv('vi'));
@@ -10035,6 +10339,7 @@ function viVenueChanged(){
 function viArtistChanged(){
   const ar=get(DB.artists,fv('vi-artist'));
   const g=document.getElementById('vi-genre'); if(g) g.value=ar?.genre||'';
+  viAutoTemplateForArtist();
   viPreview();
 }
 function viBuild(){
@@ -10059,13 +10364,14 @@ function viPreview(){
   const s=document.getElementById('vi-subject'), t=document.getElementById('vi-body');
   if(s&&!_viEdited.subject) s.value=b.subject;
   if(t&&!_viEdited.body) t.value=b.body;
+  if(viCurrentTemplate()) viTplRefresh();
 }
 function gmailComposeUrl(o){
   const p=['view=cm','fs=1','tf=1'];
   if(o.to) p.push('to='+encodeURIComponent(o.to));
   if(o.cc) p.push('cc='+encodeURIComponent(o.cc));
   p.push('su='+encodeURIComponent(o.subject||''));
-  p.push('body='+encodeURIComponent(o.body||''));
+  if(o.body) p.push('body='+encodeURIComponent(o.body));
   return 'https://mail.google.com/mail/u/'+(o.from?o.from:'0')+'/?'+p.join('&');
 }
 function viOpenGmail(){
@@ -10076,15 +10382,33 @@ function viOpenGmail(){
   if(!fv('vi-start')&&!fv('vi-end')){ err.textContent='Add a date range (at least a start date).'; return; }
   if(fv('vi-start')&&fv('vi-end')&&fv('vi-end')<fv('vi-start')){ err.textContent='The end date is before the start date.'; return; }
   const v=get(DB.venues,vid), ar=get(DB.artists,arId);
-  const url=gmailComposeUrl({from:inquiryFrom(),to:fv('vi-to'),cc:inquiryCc(),subject:fv('vi-subject'),body:document.getElementById('vi-body').value});
+  const tpl=viCurrentTemplate();
+  let body=document.getElementById('vi-body').value, copied=false;
+  if(tpl){ copied=copyRichHTML(fillTemplateHTML(tpl.html,_viTpl.values)); body=''; }
+  const url=gmailComposeUrl({from:inquiryFrom(),to:fv('vi-to'),cc:inquiryCc(),subject:fv('vi-subject'),body});
   window.open(url,'_blank','noopener');
-  // remember it on the venue, and keep a genre typed for an artist that had none
-  const genre=fv('vi-genre'); if(ar&&!ar.genre&&genre) ar.genre=genre;
-  v.inquiries=v.inquiries||[];
-  v.inquiries.push({id:'iq'+Date.now().toString(36),ts:new Date().toISOString(),artistId:arId,artistName:ar?.name||'',range:inquiryRange(fv('vi-start'),fv('vi-end')),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to')});
-  logActivity('opened an inquiry email to','Venue',v.name+' ('+(ar?.name||'')+', '+inquiryRange(fv('vi-start'),fv('vi-end'))+')');
-  persist(); closeModal();
-  if(route.view==='venues'&&route.id===vid) render();
+  if(!_viTpl.logged){
+    // remember it on the venue, and keep a genre typed for an artist that had none
+    const genre=fv('vi-genre'); if(ar&&!ar.genre&&genre) ar.genre=genre;
+    v.inquiries=v.inquiries||[];
+    v.inquiries.push({id:'iq'+Date.now().toString(36),ts:new Date().toISOString(),artistId:arId,artistName:ar?.name||'',range:inquiryRange(fv('vi-start'),fv('vi-end')),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to'),template:tpl?tpl.name:''});
+    logActivity('opened an inquiry email to','Venue',v.name+' ('+(ar?.name||'')+', '+inquiryRange(fv('vi-start'),fv('vi-end'))+')'+(tpl?' using "'+tpl.name+'"':''));
+    _viTpl.logged=true;
+  }
+  if(tpl) viRememberValues();
+  persist();
+  if(!tpl){ closeModal(); if(route.view==='venues'&&route.id===vid) render(); return; }
+  err.style.color=copied?'var(--green)':'var(--red)';
+  err.innerHTML=copied?'✓ Email copied. In the Gmail tab, click in the message area and paste (Ctrl/Cmd+V), then check it and press Send.'
+    :'Your browser blocked the copy. Click "Copy again", then paste into the Gmail message.';
+  const foot=document.querySelector('.modal-foot');
+  if(foot) foot.innerHTML='<button class="btn" onclick="viCopyAgain()">📋 Copy again</button><button class="btn primary" onclick="closeModal();if(route.view===\'venues\'&&route.id===\''+vid+'\')render()">Done</button>';
+}
+function viCopyAgain(){
+  const tpl=viCurrentTemplate(); if(!tpl) return;
+  const ok=copyRichHTML(fillTemplateHTML(tpl.html,_viTpl.values));
+  const err=document.getElementById('vi-err');
+  if(err){ err.style.color=ok?'var(--green)':'var(--red)'; err.textContent=ok?'✓ Copied again. Paste into the Gmail message (Ctrl/Cmd+V).':'Copy was blocked. Select the preview, copy it (Ctrl/Cmd+C), and paste into Gmail.'; }
 }
 function venueInquiriesHTML(v){
   const list=(v.inquiries||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||''));
