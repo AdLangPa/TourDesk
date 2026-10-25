@@ -1,7 +1,14 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TourDesk">
+<meta name="theme-color" content="#243f56">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAADMUlEQVR42u3dUWHbAAwE0E0QimH/hTAWg1IQZVciwzACadYmjiOd3iGwTq+Jm9jOz1+///wQuZRSgcAhcAgcAofAIXAIHAKHwCFwiMAhcAgcAofAIXAIHAKHwCFwiMAhcAgcAofAIXAIHAKHwCFwiMAhcAgcAofAcXo+3v4qAY5PZfABx7XXDD7guPZuwgcc1xzwUWQ4P4Xjxt1v9lFk8AHHXfve6aPI4AOOA3a8zUeRwQcch+11j48ig4/VOB6xyw0+igw+luJ49P6yfRQZfKzDcebOUn0UGXwswvGsPeX5KDL4WIGjw26SfBQZfITj6LaPDB9FBh+xODrvYLqPIoOPQBxTep/ro8hwtFE4JnY98ZhLy448BMf08/9Zx1+aNcV4HEnfWUyZpbRposE4Uq+z6j9XadB0I3FsuDek84ylNZMOw7Htfvae85amTD0Gx+ZncHWbvbSjgQE4yOjWQ2mEj9Y4yOjZSWmBj6Y4yOjcT5HBRzscZPTvqsjgoxEOMqb0VmTw0QIHGbM6PBXH6/uL7Q7qsIJnI2PeCSkfU3qrJXOSMQYHHyO6qoUzkzEABx/N+6nl85PRGgcfbTspXZDRHQcfDXsovWhgBo7lPrrNXjoy9SQcC330nLf0ZdJ5OJb46Dxj6c50U3EE++g/V+nRRLNxhPmYMkvp1BQJOAJ8zDr+0q8jz8Ex1MfEYy5/hY42Dcegxue+D87+6dD+vY8+gx7/o8Od25/+v1XCz5X33EHApzIJOBpuIuPzuhAcrfYR80l/Do4mW0n6DigKx9N3E/btcRqOJ24o77qCQBxP2VPkFUmZOE7eVuq1arE4TttZ8FWuyThO2Fz29c/hOB66v/g7J/JxPGiLG+6pWYHj8F0uuRtvC44DN7rnPs1FOA7Z66o7vHfhuHO72+79X4fj5h0vfGrIRhw3bHrn82SW4vjWvtc+iWovji9uffMzylbj+O/ulz/dcDuOKwI89xKOyw7IgOOyBjLguOyDDDicgcIhcAgcAofAIXAIHAKHwCECh8AhcAgcAofAIXAIHAKHwCFwiMAhcAgcAofAIXAIHAKHwCFwiMAhcAgcAoecm3/CAEkwO8NFQwAAAABJRU5ErkJggg==">
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAADQUlEQVR42u3dUXlTURCFURgJaOAdCbioFETgDiNo4AEH96S5d/ZevwC+zsyCJmlSvn7/+fFFutpYgQASQAJIAEkACSABJIAkgASQABJAEkACSAAJIAkgASSABJAAkgASQAJIAEkACSABJIAkgASQABJAEkACSAAJoPD+/PprCQAd6WEIoNN/exgC6PQ7F0MAnT7uYQig00fNDAF0+pyLIYBOZTAE0KkJhgA61cAQQKcOGBp6bv8TAOrVw9DQwxBAj7h3p6GhhyGAHnTjNkNDD0MAPe6uPYaGHoYAeugtGwwNPQwB9Oj7ZRsaehgCaMHNUg0NPQwBtOZOeYaGHl8hQMtuk2Ro6BFA+/TEcB96fNnVgFafIcDQ0GOEUkAxDyNWDzKWbpw6QJHP2JcONRZttCJA8a8WrhtwLNeYFYCqflKxaNixUCOHA6r9KemKwccSjR8LyDs0nr+EsTiGAgHRs2UhY1kMRQGiZ9dyxoIYCgFEz8ZFjaUwtB4QPXuXNhbB0GJA9Gxf4NDD0EpA9GQsc+hhaBkgepIWewOgH7+/OXbMYqdnVHqiHkQzlLHM6RybngRADAUscKyAnt2AGFq9tLEOehIAMbR0UWM19OQAYmjdcsaa6EkDxNCihYyV0ZMJiKEVSxjrM34yoGZDKwYfqzRyPqA2Q4uGHWs1ZgugBkPrBhwrNloXoFRDS4ca6zZOI6AkQ6sHGas3Qi+g7QcI+AuQ8N9+Lz1DxrfgBED/j7HrHjEP4EIA7bpK0lPIKEArbhP2AkQaoIdfKO8l0EBAj71T5AvomYAeeK3UH+HFAnrUzYJ/AJwM6CGXy34LSjig2+8X/wamfEA3XrHhLZQVgG65ZckbcFsAvfmiPR8BKAL0trtWfYCkC9Abrtv2EbY6QJ9648IPQDYC+qRLd34EuxTQy+9d+wH+XkAvvHrzrxCpBvSS25f/App2QIcC/AosgK47oAeg6xroAei6CXoAui6DHoCu+6AHoOuG6AHouiF6ALpuiB6ArhuiB6B3PLcHSAJIAAkgASQBJIAEkACSABJAAkgASQAJIAEkgASQBJAAEkACSAJIAAkgASQBJIAEkACSABJAAkgACSAJIAGklf0DiBpeSFgh7nMAAAAASUVORK5CYII=">
 <title>TourDesk — Event &amp; Tour Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -176,10 +183,82 @@ a{color:var(--blue);text-decoration:none}
 .pos{color:var(--green)}.neg{color:var(--red)}
 .hidden{display:none!important}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== Mobile / phone layout ===== */
+.pe-l{display:none;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.ev-cards{display:none;flex-direction:column;gap:10px}
+.ev-card{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad-lg);padding:13px 14px;cursor:pointer}
+.ev-card:active{background:var(--surf2)}
+.ev-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ev-card-name{font-size:15px;font-weight:600;line-height:1.3}
+.ev-card-sub{font-size:12px;color:var(--txt2);margin-top:3px}
+.ev-card-badges{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;flex-shrink:0;max-width:45%}
+.ev-card-badges .badge{margin-left:0!important}
+.ev-card-note{font-size:13px;color:var(--txt);margin-top:8px;padding:7px 10px;background:var(--surf2);border-radius:var(--rad)}
+.ev-card-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--bord)}
+.ev-card-figs label{display:block;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
+.ev-card-figs span{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.nav-toggle{display:none;background:none;border:none;color:var(--txt);font-size:22px;line-height:1;padding:6px 10px 6px 0;cursor:pointer}
+#nav-scrim{display:none}
+@media(max-width:760px){
+  html,body{-webkit-text-size-adjust:100%;overflow-x:hidden}
+  input,select,textarea{font-size:16px!important}
+  .layout{height:100vh;height:100dvh}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:270px;min-width:270px;z-index:300;transform:translateX(-102%);transition:transform .2s ease;padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(28px + env(safe-area-inset-bottom));box-shadow:none}
+  body.nav-open .sidebar{transform:none;box-shadow:0 0 40px rgba(0,0,0,.35)}
+  #nav-scrim{position:fixed;inset:0;background:rgba(10,14,18,.45);z-index:250}
+  body.nav-open #nav-scrim{display:block}
+  .nav-item{padding:12px 18px;font-size:15px}
+  .nav-toggle{display:block}
+  .topbar{padding:calc(8px + env(safe-area-inset-top)) 12px 8px;flex-wrap:wrap;gap:6px 8px}
+  .topbar-title{font-size:17px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar-right{display:contents!important}
+  #user-info{display:none!important}
+  #artist-view-bar{order:5;flex-basis:100%;flex-wrap:wrap}
+  #page-actions{order:10;flex-basis:100%;flex-wrap:wrap;gap:6px}
+  #notif-panel{position:fixed!important;left:8px;right:8px;top:calc(52px + env(safe-area-inset-top))!important;width:auto!important;max-height:70vh;overflow-y:auto}
+  .btn{padding:9px 14px}
+  .btn.sm{padding:7px 11px}
+  .content{padding:14px 12px calc(24px + env(safe-area-inset-bottom))}
+  .stats{grid-template-columns:1fr 1fr;gap:8px}
+  .stat{padding:12px}
+  .stat-val{font-size:19px}
+  .cards-grid{grid-template-columns:1fr}
+  .info-grid{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
+  .row2,.row3{grid-template-columns:1fr}
+  .detail-head{flex-wrap:wrap;gap:8px}
+  .detail-title{font-size:19px;flex-basis:100%;order:1}
+  .detail-head .back{order:0}
+  .detail-head .badge{order:2}
+  .detail-statusnote{order:3;flex:1 1 100%!important;max-width:none!important;margin-left:0!important;width:100%}
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex-shrink:0;white-space:nowrap;padding:10px 13px}
+  /* wide tables scroll sideways instead of squashing */
+  .content table:not(.tbl-cards){display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+  /* event lists: real card markup on phones (CSS-reshaped tables are unreliable in iOS Safari) */
+  .tbl-cards{display:none!important}
+  .ev-cards{display:flex}
+  /* modals become bottom sheets */
+  .overlay{padding:0;align-items:flex-end}
+  .modal{width:100%;margin:0;border-radius:16px 16px 0 0;max-height:94vh;max-height:94dvh;display:flex;flex-direction:column}
+  .modal-body{max-height:none;flex:1;overflow-y:auto;padding:16px}
+  .modal-head,.modal-foot{padding-left:16px;padding-right:16px}
+  .modal-foot{padding-bottom:calc(14px + env(safe-area-inset-bottom));flex-wrap:wrap}
+  .cal-grid{gap:3px}
+  .pe-hdr{display:none!important}
+  .pe-row{grid-template-columns:1fr 1fr!important;gap:8px!important;background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:10px;margin-bottom:10px!important;align-items:end!important}
+  .pe-desc{grid-column:1/-1}
+  .pe-row>button{grid-column:1/-1;justify-self:end}
+  .pe-row .pe-l{display:block}
+  .pe-row span{text-align:left!important;font-size:14px!important}
+  .content select,.content input,.content textarea{max-width:100%;min-width:0}
+}
 </style>
 </head>
 <body>
 <div class="layout">
+  <div id="nav-scrim" onclick="closeNav()"></div>
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-title"><span id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark" style="cursor:pointer;color:var(--brand-amber)">◆</span> TourDesk</div>
@@ -209,8 +288,9 @@ a{color:var(--blue);text-decoration:none}
   </aside>
   <main class="main">
     <div class="topbar">
+      <button class="nav-toggle" onclick="toggleNav()" aria-label="Menu">&#9776;</button>
       <div class="topbar-title" id="page-title">Settings</div>
-      <div style="display:flex;align-items:center;gap:12px">
+      <div class="topbar-right" style="display:flex;align-items:center;gap:12px">
         <div id="artist-view-bar" style="display: flex; align-items: center; gap: 8px;"></div>
         <div style="position:relative">
           <button class="btn ghost sm" onclick="toggleNotifPanel()" style="padding:5px 9px;font-size:15px;position:relative">🔔<span id="notif-badge" class="nav-badge" style="display:none;position:absolute;top:-4px;right:-4px"></span></button>
@@ -1488,7 +1568,10 @@ function applyArtistViewChrome(){
   }
 }
 
+function toggleNav(){ document.body.classList.toggle('nav-open'); }
+function closeNav(){ document.body.classList.remove('nav-open'); }
 function go(view,id=null,tab=null,_unused=null,ref=null){
+  closeNav();
   // Block disallowed views for artist view
   if(inArtistView() && !['dashboard','tours','events','calendar','tasks','proposals'].includes(view)){
     view='dashboard'; id=null; tab=null; ref=null;
@@ -1587,23 +1670,43 @@ function todayStr(){return new Date().toISOString().slice(0,10);}
 
 function tableEvents(list){
   const hideComm=inArtistView();
-  const hdr='<table class="tbl"><thead><tr><th>Event</th><th>Date</th><th>Venue</th><th>Sold</th>'
+  const hdr='<table class="tbl tbl-cards"><thead><tr><th>Event</th><th>Date</th><th>Venue</th><th>Sold</th>'
     +'<th class="num">Gross</th>'+(hideComm?'':'<th class="num">My comm.</th>')+'<th class="num">Artist net</th><th>Status</th></tr></thead><tbody>';
   const rows=list.map(e=>{
     const v=get(DB.venues,e.venueId), f=eventBest(e);
     const cap=+e.capacityAlloc||1;
     const sold=f.actual?(e.projection?+e.projection.ticketsEst||0:0):(e.projection?+e.projection.ticketsEst||0:0);
     return '<tr onclick="go(\'events\',\''+e.id+'\')">'
-      +'<td style="font-weight:500">'+esc(e.name)+'</td><td>'+esc(e.date)+'</td>'
-      +'<td>'+(v?esc(v.name):'—')+'</td>'
-      +'<td>'+sold+'/'+e.capacityAlloc+' <span class="muted">('+Math.round(sold/cap*100)+'%'+(f.actual?'':' est')+')</span></td>'
-      +'<td class="num">'+money0(f.gross)+'</td>'
-      +(hideComm?'':'<td class="num pos">'+money0(f.commission)+'</td>')
-      +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'">'+money0(f.artistNet)+'</td>'
-      +'<td><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)
+      +'<td class="tc-title" style="font-weight:500">'+esc(e.name)+'</td><td data-label="Date">'+esc(e.date)+'</td>'
+      +'<td data-label="Venue">'+(v?esc(v.name):'—')+'</td>'
+      +'<td data-label="Sold">'+sold+'/'+e.capacityAlloc+' <span class="muted">('+Math.round(sold/cap*100)+'%'+(f.actual?'':' est')+')</span></td>'
+      +'<td class="num" data-label="Gross">'+money0(f.gross)+'</td>'
+      +(hideComm?'':'<td class="num pos" data-label="My comm.">'+money0(f.commission)+'</td>')
+      +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'" data-label="Artist net">'+money0(f.artistNet)+'</td>'
+      +'<td class="tc-status"><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)
       +(e.statusNote?'<div class="muted" style="font-size:11px;margin-top:3px;max-width:180px;white-space:normal">'+esc(e.statusNote)+'</div>':'')+'</td></tr>';
   }).join('');
-  return hdr+rows+'</tbody></table>';
+  // Phone version: same data as simple cards (shown instead of the table under 760px)
+  const cards=list.map(e=>{
+    const v=get(DB.venues,e.venueId), f=eventBest(e);
+    const cap=+e.capacityAlloc||1;
+    const sold=e.projection?+e.projection.ticketsEst||0:0;
+    const ds=eventDisplayStatus(e);
+    const where=v?[v.name,v.city].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join(', '):'';
+    const fig=(lbl,val,cls)=>'<div><label>'+lbl+'</label><span class="'+(cls||'')+'">'+val+'</span></div>';
+    return '<div class="ev-card" onclick="go(\'events\',\''+e.id+'\')">'
+      +'<div class="ev-card-top"><div style="min-width:0"><div class="ev-card-name">'+esc(e.name)+'</div>'
+      +'<div class="ev-card-sub">'+(e.date?esc(fmtDate(e.date)):'Date TBD')+(where?' · '+esc(where):'')+'</div></div>'
+      +'<div class="ev-card-badges"><span class="badge '+statusColor(ds)+'">'+esc(ds)+'</span>'+holdStatusBadge(e.holdStatus)+'</div></div>'
+      +(e.statusNote?'<div class="ev-card-note">'+esc(e.statusNote)+'</div>':'')
+      +'<div class="ev-card-figs">'
+      +fig('Sold',sold+'/'+(e.capacityAlloc||0)+' <span class="muted" style="font-weight:400">'+Math.round(sold/cap*100)+'%</span>')
+      +fig('Gross',money0(f.gross))
+      +(hideComm?'':fig('Comm.',money0(f.commission),'pos'))
+      +fig('Net',money0(f.artistNet),f.artistNet>=0?'pos':'neg')
+      +'</div></div>';
+  }).join('');
+  return hdr+rows+'</tbody></table><div class="ev-cards">'+cards+'</div>';
 }
 function statusColor(s){
   if(s==='Confirmed') return 'green';
@@ -2706,7 +2809,7 @@ VIEWS.events={
       <div class="detail-head"><span class="back" onclick="${backAction}">${backLabel}</span>
         <span class="detail-title">${esc(e.name)}</span>
         <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span>${holdStatusBadge(e.holdStatus)}
-        <input type="text" id="ev-statusnote-${id}" value="${esc(e.statusNote||'')}" placeholder="Add a status update…" ${canDo('admin')?'':'disabled'}
+        <input type="text" class="detail-statusnote" id="ev-statusnote-${id}" value="${esc(e.statusNote||'')}" placeholder="Add a status update…" ${canDo('admin')?'':'disabled'}
           style="flex:1;min-width:140px;max-width:360px;margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--bord);border-radius:6px;background:var(--surf);color:var(--txt2)"
           onchange="setEventStatusNote('${id}',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"></div>
       <div class="tabs">
@@ -3429,20 +3532,20 @@ function renderProjExpenses(e){
   const host=document.getElementById('pr-expenses'); if(!host) return;
   const exps=e.projection?.expenses||[];
   if(!exps.length){ host.innerHTML='<p class="muted" style="font-size:13px">No projected expenses yet. Add travel, marketing, accommodation — mark who pays and any markup.</p>'; return; }
-  const hdr='<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px"><span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span></div>';
+  const hdr='<div class="pe-hdr" style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;padding:0 2px 4px"><span>Description</span><span style="text-align:right">Amount</span><span>Who pays</span><span style="text-align:right">Markup %</span><span style="text-align:right">Bills out</span><span></span></div>';
   const rows=exps.map((x,i)=>{
     const isProd=x.payer==='producer';
     const markup=isProd?(+x.amount||0)*((+x.markupPct||0)/100):0;
     const billsOut=isProd?(+x.amount||0)+markup:0;
-    return '<div style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
-      +'<input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Travel" oninput="setProjExp(\''+e.id+'\','+i+',\'desc\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
-      +'<input type="number" value="'+(x.amount||0)+'" oninput="setProjExp(\''+e.id+'\','+i+',\'amount\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">'
-      +'<select onchange="setProjExp(\''+e.id+'\','+i+',\'payer\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
+    return '<div class="pe-row" style="display:grid;grid-template-columns:1fr 96px 150px 78px 96px 28px;gap:8px;align-items:center;margin-bottom:6px">'
+      +'<div class="pe-c pe-desc"><label class="pe-l">Description</label><input type="text" value="'+esc(x.desc||'')+'" placeholder="e.g. Travel" oninput="setProjExp(\''+e.id+'\','+i+',\'desc\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px"></div>'
+      +'<div class="pe-c"><label class="pe-l">Amount</label><input type="number" value="'+(x.amount||0)+'" oninput="setProjExp(\''+e.id+'\','+i+',\'amount\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right"></div>'
+      +'<div class="pe-c"><label class="pe-l">Who pays</label><select onchange="setProjExp(\''+e.id+'\','+i+',\'payer\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">'
       +'<option value="producer"'+(x.payer==='producer'?' selected':'')+'>Producer (you front)</option>'
       +'<option value="artist"'+(x.payer==='artist'?' selected':'')+'>Artist (direct)</option>'
-      +'</select>'
-      +'<input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProjExp(\''+e.id+'\','+i+',\'markupPct\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'">'
-      +'<span id="pe-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'\">'+(isProd?money0(billsOut):'—')+'</span>'
+      +'</select></div>'
+      +'<div class="pe-c"><label class="pe-l">Markup %</label><input type="number" value="'+(x.markupPct||0)+'"'+(isProd?'':' disabled')+' oninput="setProjExp(\''+e.id+'\','+i+',\'markupPct\',this.value)" style="width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;'+(isProd?'':'background:var(--surf2);color:var(--txt3)')+'"></div>'
+      +'<div class="pe-c"><label class="pe-l">Billed to artist</label><span id="pe-bills-'+i+'" style="text-align:right;font-size:12px;color:'+(isProd?'var(--txt)':'var(--txt3)')+'\">'+(isProd?money0(billsOut):'—')+'</span></div>'
       +'<button class="btn ghost sm" style="padding:3px 6px" onclick="removeProjExp(\''+e.id+'\','+i+')">×</button>'
       +'</div>';
   }).join('');
@@ -9409,6 +9512,20 @@ document.getElementById('nav').addEventListener('click',e=>{
   const item=e.target.closest('.nav-item');
   if(item) go(item.dataset.view);
 });
+
+/* ---------- PWA MANIFEST (generated; this app ships as one file) ---------- */
+(function(){
+  try{
+    const icon=(n,b64)=>({src:'data:image/png;base64,'+b64,sizes:n+'x'+n,type:'image/png',purpose:'any'});
+    const m={name:'TourDesk',short_name:'TourDesk',description:'Event & Tour Manager',
+      start_url:location.href.split('#')[0],scope:location.href.split('#')[0].replace(/[^/]*$/,''),
+      display:'standalone',background_color:'#243f56',theme_color:'#243f56',
+      icons:[icon(192,'iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAADQUlEQVR42u3dUXlTURCFURgJaOAdCbioFETgDiNo4AEH96S5d/ZevwC+zsyCJmlSvn7/+fFFutpYgQASQAJIAEkACSABJIAkgASQABJAEkACSAAJIAkgASSABJAAkgASQAJIAEkACSABJIAkgASQABJAEkACSAAJoPD+/PprCQAd6WEIoNN/exgC6PQ7F0MAnT7uYQig00fNDAF0+pyLIYBOZTAE0KkJhgA61cAQQKcOGBp6bv8TAOrVw9DQwxBAj7h3p6GhhyGAHnTjNkNDD0MAPe6uPYaGHoYAeugtGwwNPQwB9Oj7ZRsaehgCaMHNUg0NPQwBtOZOeYaGHl8hQMtuk2Ro6BFA+/TEcB96fNnVgFafIcDQ0GOEUkAxDyNWDzKWbpw6QJHP2JcONRZttCJA8a8WrhtwLNeYFYCqflKxaNixUCOHA6r9KemKwccSjR8LyDs0nr+EsTiGAgHRs2UhY1kMRQGiZ9dyxoIYCgFEz8ZFjaUwtB4QPXuXNhbB0GJA9Gxf4NDD0EpA9GQsc+hhaBkgepIWewOgH7+/OXbMYqdnVHqiHkQzlLHM6RybngRADAUscKyAnt2AGFq9tLEOehIAMbR0UWM19OQAYmjdcsaa6EkDxNCihYyV0ZMJiKEVSxjrM34yoGZDKwYfqzRyPqA2Q4uGHWs1ZgugBkPrBhwrNloXoFRDS4ca6zZOI6AkQ6sHGas3Qi+g7QcI+AuQ8N9+Lz1DxrfgBED/j7HrHjEP4EIA7bpK0lPIKEArbhP2AkQaoIdfKO8l0EBAj71T5AvomYAeeK3UH+HFAnrUzYJ/AJwM6CGXy34LSjig2+8X/wamfEA3XrHhLZQVgG65ZckbcFsAvfmiPR8BKAL0trtWfYCkC9Abrtv2EbY6QJ9648IPQDYC+qRLd34EuxTQy+9d+wH+XkAvvHrzrxCpBvSS25f/App2QIcC/AosgK47oAeg6xroAei6CXoAui6DHoCu+6AHoOuG6AHouiF6ALpuiB6ArhuiB6B3PLcHSAJIAAkgASQBJIAEkACSABJAAkgASQAJIAEkgASQBJAAEkACSAJIAAkgASQBJIAEkACSABJAAkgACSAJIAGklf0DiBpeSFgh7nMAAAAASUVORK5CYII='),icon(512,'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')]};
+    const l=document.createElement('link'); l.rel='manifest';
+    l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}));
+    document.head.appendChild(l);
+  }catch(e){}
+})();
 
 /* ---------- BOOT ---------- */
 initAuth();
