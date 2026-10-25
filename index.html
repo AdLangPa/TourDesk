@@ -9978,7 +9978,7 @@ VIEWS.financial={
 /* ============================================================
    VENUE INQUIRY EMAIL  → opens Gmail compose in a new tab
    ============================================================ */
-function inquiryFrom(){ return (DB.settings.inquiryFrom||'bookings@langerpa.com').trim(); }
+function inquiryFrom(){ return (DB.settings.inquiryFrom||'booking@langerpa.com').trim(); }
 function inquiryCc(){ return (DB.settings.inquiryCc!=null?DB.settings.inquiryCc:'adam@langerpa.com').trim(); }
 function inquiryRange(from,to){
   const short=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
@@ -10096,7 +10096,7 @@ function venueInquiriesHTML(v){
     +'</div>';
 }
 function saveInquirySettings(){
-  DB.settings.inquiryFrom=fv('set-iq-from')||'bookings@langerpa.com';
+  DB.settings.inquiryFrom=fv('set-iq-from')||'booking@langerpa.com';
   DB.settings.inquiryCc=fv('set-iq-cc');
   persist();
   if(typeof event!=='undefined'&&event?.target){ const b=event.target,o=b.textContent; b.textContent='✓ Saved'; setTimeout(()=>{b.textContent=o;},1500); }
