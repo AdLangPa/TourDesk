@@ -5551,6 +5551,7 @@ VIEWS.artists={
     const statusReportBtn='<button class="btn sm" onclick="printArtistStatusReport(\''+id+'\')">' + '📋 Status update</button>';
     if(canDo('admin')){
       a.innerHTML=(ar.type==='roster'?'<button class="btn sm primary" onclick="enterArtistView(\''+id+'\')">' + 'View as '+esc(ar.name.split(' ')[0])+'</button> ':'')
+        +'<button class="btn sm" onclick="artistReportModal(\''+id+'\')">' + '📄 Artist report</button> '
         +statusReportBtn+' '
         +'<button class="btn sm" onclick="artistForm(\''+id+'\')">' + 'Edit</button>'
         +' <button class="btn sm danger" onclick="deleteArtist(\''+id+'\')">' + 'Delete</button>';
@@ -10354,6 +10355,17 @@ function migrateVenueInquiries(){
 function createInquiry(o){
   const ar=get(DB.artists,o.artistId);
   const now=new Date().toISOString();
+  // Re-opening the same inquiry (same venue, artist, tour and dates) adds to the existing record instead of making a duplicate
+  const same=dbInquiries().find(x=>x.venueId===o.venueId&&(x.artistId||'')===(o.artistId||'')&&(x.tourId||'')===(o.tourId||'')
+    &&(x.start||'')===(o.start||'')&&(x.end||'')===(o.end||'')&&x.status!=='Closed');
+  if(same){
+    same.history=same.history||[];
+    same.history.push({ts:now,status:same.status,note:'Inquiry email opened again in Gmail'+(o.template?' ("'+o.template+'")':''),by:(AUTH_USER&&AUTH_USER.displayName)||''});
+    if(o.to) same.to=o.to; if(o.template) same.template=o.template; if(o.subject) same.subject=o.subject;
+    if(o.attendance) same.attendance=o.attendance; if(o.batchId&&!same.batchId) same.batchId=o.batchId;
+    same.updatedAt=now;
+    return same;
+  }
   const q={id:'iq'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),venueId:o.venueId,artistId:o.artistId||'',artistName:ar?ar.name:'',
     tourId:o.tourId||'',start:o.start||'',end:o.end||'',range:inquiryRange(o.start,o.end),attendance:o.attendance||'',to:o.to||'',
     template:o.template||'',subject:o.subject||'',status:'Sent',
@@ -10483,7 +10495,7 @@ function outreachSectionHTML(filter,label){
 VIEWS.outreach={
   render(c,a){
     if(!canDo('admin')){ c.innerHTML=emptyState('✉','Outreach is only available to administrators.'); return; }
-    a.innerHTML='<button class="btn sm" onclick="contactReportModal({})">📄 Contact report</button> <button class="btn sm" onclick="venueInquiryModal()">✉ Inquiry</button> <button class="btn sm primary" onclick="bulkInquiryModal({})">✉ Bulk inquiry</button>';
+    a.innerHTML='<button class="btn sm" onclick="artistReportModal()">📄 Artist report</button> <button class="btn sm" onclick="contactReportModal({})">📄 Contact report</button> <button class="btn sm" onclick="venueInquiryModal()">✉ Inquiry</button> <button class="btn sm primary" onclick="bulkInquiryModal({})">✉ Bulk inquiry</button>';
     const f=window._outreachFilter||(window._outreachFilter={artist:'',tour:'',status:'open',q:''});
     const all=dbInquiries();
     let list=all.filter(q=>(!f.artist||q.artistId===f.artist)&&(!f.tour||q.tourId===f.tour)
@@ -10810,65 +10822,112 @@ function generateContactReport(){
   setTimeout(()=>URL.revokeObjectURL(url),120000);
 }
 // Self-contained, interactive HTML page: click a venue to see its details, notes and contact history
-function buildContactReportHTML(list,o){
-  const ar=o.artist, tour=o.tour, opt=o.opt;
-  const fmtD=ts=>ts?new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
-  const order=s=>{const i=['Booked','Hold offered','Available','Replied','Not available','Waiting','Sent','Closed'].indexOf(s);return i<0?99:i;};
-  const rows=list.slice().sort((a,b)=>order(a.status)-order(b.status)||(b.createdAt||'').localeCompare(a.createdAt||''));
-  const sysNote=n=>/^(Inquiry email opened|Turned into a show)/.test(n||'');
-  const group=s=>INQ_RESPONDED.includes(s)?'responded':(s==='Sent'||s==='Waiting'?'waiting':'closed');
-  const positive=s=>['Hold offered','Available','Booked'].includes(s);
-  const cnt=s=>list.filter(q=>q.status===s).length;
-  const venuesN=new Set(list.map(q=>q.venueId)).size;
-  const respondedN=list.filter(q=>INQ_RESPONDED.includes(q.status)).length;
-  const dates=list.map(q=>q.createdAt).filter(Boolean).sort();
-  const period=(o.from||o.to)?((o.from?fmtD(o.from+'T12:00:00'):'Start')+' – '+(o.to?fmtD(o.to+'T12:00:00'):'today')):(fmtD(dates[0])+' – '+fmtD(dates[dates.length-1]));
-  const company=DB.settings.companyName||'Langer Performing Arts';
-  const title=(ar?ar.name:'Artist')+' — Venue Outreach';
-  const chip=s=>'<span class="chip s-'+esc((INQ_COLOR[s]||'gray'))+'">'+esc(s)+'</span>';
-  const kv=(k,v)=>v?'<div class="kv"><span>'+esc(k)+'</span><b>'+v+'</b></div>':'';
-  const cards=rows.map(q=>{
-    const v=get(DB.venues,q.venueId)||{}, t=q.tourId?get(DB.tours,q.tourId):null, ev=q.eventId?get(DB.events,q.eventId):null;
-    const hist=(q.history||[]);
-    const lastUpd=hist.filter(h=>h.status!=='Sent').slice(-1)[0];
-    const latestNote=hist.slice().reverse().find(h=>h.note&&!sysNote(h.note));
-    const others=dbInquiries().filter(x=>x.venueId===q.venueId&&x.artistId===q.artistId&&x.id!==q.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-    const where=[v.city,v.province].filter(Boolean).join(', ')+((v.country&&v.country!=='Canada')?', '+v.country:'');
-    const search=((v.name||'')+' '+where+' '+(v.hall||'')+' '+q.status).toLowerCase();
-    return '<details class="card" data-status="'+esc(q.status)+'" data-group="'+group(q.status)+(positive(q.status)?' positive':'')+(q.status==='Booked'?' booked':'')+'" data-search="'+esc(search)+'">'
-      +'<summary><div class="sum-main"><div class="vname">'+esc(v.name||'(venue removed)')+'</div>'
-      +'<div class="vsub">'+esc(where)+(v.capacity?' · '+(+v.capacity).toLocaleString()+' seats':'')+(!tour&&t?' · '+esc(t.name):'')+'</div></div>'
-      +'<div class="sum-dates"><span class="lbl">Dates asked</span>'+esc(q.range||'—')+'</div>'
-      +'<div class="sum-status">'+chip(q.status)+'<span class="lbl">'+(lastUpd?'Updated '+esc(fmtD(lastUpd.ts)):'Sent '+esc(fmtD(q.createdAt)))+'</span></div>'
-      +'<span class="chev" aria-hidden="true">›</span></summary>'
-      +'<div class="body">'
-        +(opt.notes&&latestNote?'<div class="note"><span class="lbl">Latest from the venue</span>'+esc(latestNote.note)+'<span class="note-date">'+esc(fmtD(latestNote.ts))+'</span></div>':'')
-        +(ev?'<div class="booked">✓ Show added'+(ev.date?' for '+esc(fmtD(ev.date+'T12:00:00')):'')+'</div>':'')
-        +'<div class="grid">'
-          +'<div class="panel"><h3>Venue</h3>'+kv('Name',esc(v.name||''))+kv('Hall',esc(v.hall&&v.hall!==v.name?v.hall:''))+kv('Type',esc(v.type||''))
-            +kv('Capacity',v.capacity?esc((+v.capacity).toLocaleString())+' seats':'')+kv('Address',esc(v.address||''))+kv('City',esc(where))
-            +((v.tags||[]).length?'<div class="tags">'+v.tags.map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('')+'</div>':'')+'</div>'
-          +'<div class="panel"><h3>Inquiry</h3>'+kv('Dates asked',esc(q.range||'—'))+kv('Expected attendance',q.attendance?'~'+esc(q.attendance):'')
-            +kv('Sent',esc(fmtD(q.createdAt)))+kv('Tour',t?esc(t.name):'')+(opt.tplcol?kv('Email used',esc(q.template||'Plain text inquiry')):'')
-            +kv('Status',chip(q.status))
-            +(opt.emails?kv('Venue contact',esc(v.contactName||''))+kv('Email',q.to?'<a href="mailto:'+esc(q.to)+'">'+esc(q.to)+'</a>':''):'')+'</div>'
-        +'</div>'
-        +(opt.history?'<div class="panel"><h3>Contact history</h3><ol class="timeline">'+hist.slice().reverse().map(h=>
-            '<li><span class="t-date">'+esc(fmtD(h.ts))+'</span>'+chip(h.status)+(h.note&&(opt.notes||sysNote(h.note))?'<span class="t-note">'+esc(h.note)+'</span>':'')+'</li>').join('')+'</ol>'
-          +(others.length?'<h3 style="margin-top:14px">Other inquiries to this venue</h3><ol class="timeline">'+others.map(x=>'<li><span class="t-date">'+esc(fmtD(x.createdAt))+'</span>'+chip(x.status)+'<span class="t-note">'+esc(x.range||'')+'</span></li>').join('')+'</ol>':'')
-          +'</div>':'')
-      +'</div></details>';
-  }).join('');
-  const statuses=INQ_STATUSES.filter(s=>cnt(s));
-  const stat=(n,l,g,cls)=>'<button class="stat '+(cls||'')+'" data-filter="'+g+'"><b>'+n+'</b><span>'+esc(l)+'</span></button>';
-  const css=`
+/* ============================================================
+   SHARED REPORT PAGE (contact report + artist report)
+   Self-contained, interactive HTML: click a card to see details.
+   ============================================================ */
+function rptFmtD(ts){ return ts?new Date(ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''; }
+function rptShowDate(d){ return d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):'Date TBD'; }
+function rptChip(s,color){ return '<span class="chip s-'+esc(color||'gray')+'">'+esc(s)+'</span>'; }
+function rptInqChip(s){ return rptChip(s,INQ_COLOR[s]||'gray'); }
+function rptKV(k,v){ return v?'<div class="kv"><span>'+esc(k)+'</span><b>'+v+'</b></div>':''; }
+function rptWhere(v){ return [v.city,v.province].filter(Boolean).join(', ')+((v.country&&v.country!=='Canada')?', '+v.country:''); }
+const RPT_SYS_NOTE=/^(Inquiry email opened|Turned into a show)/;
+const RPT_INQ_ORDER=['Booked','Hold offered','Available','Replied','Not available','Waiting','Sent','Closed'];
+function rptInqOrder(s){ const i=RPT_INQ_ORDER.indexOf(s); return i<0?99:i; }
+function rptInqGroup(s){ return INQ_RESPONDED.includes(s)?'responded':(s==='Sent'||s==='Waiting'?'waiting':'closed'); }
+function rptPositive(s){ return ['Hold offered','Available','Booked'].includes(s); }
+// data-* attributes the page script filters and sorts on
+function rptLocAttrs(v){
+  return ' data-country="'+esc(v.country||'Canada')+'" data-province="'+esc(v.province||'')+'" data-city="'+esc(v.city||'')+'"'
+    +' data-name="'+esc(v.name||'')+'" data-cap="'+(+v.capacity||0)+'"';
+}
+function rptVenuePanel(v){
+  return '<div class="panel"><h3>Venue</h3>'+rptKV('Name',esc(v.name||''))+rptKV('Hall',esc(v.hall&&v.hall!==v.name?v.hall:''))+rptKV('Type',esc(v.type||''))
+    +rptKV('Capacity',v.capacity?esc((+v.capacity).toLocaleString())+' seats':'')+rptKV('Address',esc(v.address||''))+rptKV('City',esc(rptWhere(v)))
+    +((v.tags||[]).length?'<div class="tags">'+v.tags.map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('')+'</div>':'')+'</div>';
+}
+// One inquiry as an expandable card. ctx: {tour (report-wide tour, hides the per-card tour), opt}
+function rptInquiryCard(q,ctx){
+  const opt=ctx.opt, v=get(DB.venues,q.venueId)||{}, t=q.tourId?get(DB.tours,q.tourId):null, ev=q.eventId?get(DB.events,q.eventId):null;
+  const hist=(q.history||[]);
+  const lastUpd=hist.filter(h=>h.status!=='Sent').slice(-1)[0];
+  const latestNote=hist.slice().reverse().find(h=>h.note&&!RPT_SYS_NOTE.test(h.note));
+  const others=dbInquiries().filter(x=>x.venueId===q.venueId&&x.artistId===q.artistId&&x.id!==q.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const where=rptWhere(v);
+  const search=((v.name||'')+' '+where+' '+(v.hall||'')+' '+q.status).toLowerCase();
+  return '<details class="card" data-kind="inq" data-status="'+esc(q.status)+'" data-group="inq '+rptInqGroup(q.status)+(rptPositive(q.status)?' positive':'')+(q.status==='Booked'?' booked':'')+'" data-search="'+esc(search)+'"'
+    +rptLocAttrs(v)+' data-order="'+rptInqOrder(q.status)+'" data-upd="'+esc(q.updatedAt||q.createdAt||'')+'" data-date="'+esc((q.createdAt||'').slice(0,10))+'">'
+    +'<summary><div class="sum-main"><div class="vname">'+esc(v.name||'(venue removed)')+'</div>'
+    +'<div class="vsub">'+esc(where)+(v.capacity?' · '+(+v.capacity).toLocaleString()+' seats':'')+(!ctx.tour&&t?' · '+esc(t.name):'')+'</div></div>'
+    +'<div class="sum-dates"><span class="lbl">Dates asked</span>'+esc(q.range||'—')+'</div>'
+    +'<div class="sum-status">'+rptInqChip(q.status)+'<span class="lbl">'+(lastUpd?'Updated '+esc(rptFmtD(lastUpd.ts)):'Sent '+esc(rptFmtD(q.createdAt)))+'</span></div>'
+    +'<span class="chev" aria-hidden="true">›</span></summary>'
+    +'<div class="body">'
+      +(opt.notes&&latestNote?'<div class="note"><span class="lbl">Latest from the venue</span>'+esc(latestNote.note)+'<span class="note-date">'+esc(rptFmtD(latestNote.ts))+'</span></div>':'')
+      +(ev?'<div class="booked">✓ Show added'+(ev.date?' for '+esc(rptFmtD(ev.date+'T12:00:00')):'')+'</div>':'')
+      +'<div class="grid">'+rptVenuePanel(v)
+        +'<div class="panel"><h3>Inquiry</h3>'+rptKV('Dates asked',esc(q.range||'—'))+rptKV('Expected attendance',q.attendance?'~'+esc(q.attendance):'')
+          +rptKV('Sent',esc(rptFmtD(q.createdAt)))+rptKV('Tour',t?esc(t.name):'')+(opt.tplcol?rptKV('Email used',esc(q.template||'Plain text inquiry')):'')
+          +rptKV('Status',rptInqChip(q.status))
+          +(opt.emails?rptKV('Venue contact',esc(v.contactName||''))+rptKV('Email',q.to?'<a href="mailto:'+esc(q.to)+'">'+esc(q.to)+'</a>':''):'')+'</div>'
+      +'</div>'
+      +(opt.history?'<div class="panel"><h3>Contact history</h3><ol class="timeline">'+hist.slice().reverse().map(h=>
+          '<li><span class="t-date">'+esc(rptFmtD(h.ts))+'</span>'+rptInqChip(h.status)+(h.note&&(opt.notes||RPT_SYS_NOTE.test(h.note))?'<span class="t-note">'+esc(h.note)+'</span>':'')+'</li>').join('')+'</ol>'
+        +(others.length?'<h3 style="margin-top:14px">Other inquiries to this venue</h3><ol class="timeline">'+others.map(x=>'<li><span class="t-date">'+esc(rptFmtD(x.createdAt))+'</span>'+rptInqChip(x.status)+'<span class="t-note">'+esc(x.range||'')+'</span></li>').join('')+'</ol>':'')
+        +'</div>':'')
+    +'</div></details>';
+}
+// Tickets sold, as a count only (never dollars): settlement actuals first, then the sales tracker
+function rptTicketsSold(e){
+  const s=+(e.settlement&&e.settlement.ticketsSold)||0; if(s) return s;
+  const st=e.projection&&e.projection.salesTracker;
+  if(st&&st.tierSold){ const n=Object.values(st.tierSold).reduce((a,x)=>a+(+x||0),0); if(n) return n; }
+  return 0;
+}
+// One show as an expandable card. ctx: {artist, tour, opt, today}
+function rptShowCard(e,ctx){
+  const opt=ctx.opt, v=get(DB.venues,e.venueId)||{}, t=e.tourId?get(DB.tours,e.tourId):null;
+  const st=eventDisplayStatus(e);
+  const upcoming=!!e.date&&e.date>=ctx.today, played=!!e.date&&e.date<ctx.today, tbd=!e.date;
+  const where=rptWhere(v);
+  const name=v.name||e.name||'Show';
+  const search=(name+' '+where+' '+(v.hall||'')+' '+st+' '+(e.holdStatus||'')+' '+(e.name||'')).toLowerCase();
+  const itin=opt.itinerary?eventItinerary(e):[];
+  const notes=opt.notes?(e.notesLog||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||'')):[];
+  const inqs=opt.history&&ctx.artist?dbInquiries().filter(q=>q.venueId===e.venueId&&q.artistId===ctx.artist.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')):[];
+  const sold=opt.tickets?rptTicketsSold(e):0, cap=+e.capacityAlloc||+v.capacity||0;
+  const showT=normTime(e.showTime)?fmtTime(e.showTime):'';
+  const when=upcoming?'Upcoming':played?'Played':'Date to be set';
+  return '<details class="card show" data-kind="show" data-status="'+esc(st)+'" data-group="show '+(upcoming?'upcoming':played?'played':'tbd')+'" data-search="'+esc(search)+'"'
+    +rptLocAttrs(v)+' data-order="0" data-upd="'+esc(e.statusNoteAt||'')+'" data-date="'+esc(e.date||'')+'">'
+    +'<summary><div class="sum-main"><div class="vname">'+esc(name)+'</div>'
+    +'<div class="vsub">'+esc(where)+(v.capacity?' · '+(+v.capacity).toLocaleString()+' seats':'')+(!ctx.tour&&t?' · '+esc(t.name):'')+'</div></div>'
+    +'<div class="sum-dates"><span class="lbl">Show date</span>'+esc(rptShowDate(e.date))+(showT?'<span class="sum-time">'+esc(showT)+'</span>':'')+'</div>'
+    +'<div class="sum-status"><span>'+rptChip(st,statusColor(st))+(e.holdStatus&&e.holdStatus!==st?' '+rptChip(e.holdStatus,holdStatusColor(e.holdStatus)||'gray'):'')+'</span><span class="lbl">'+esc(when)+'</span></div>'
+    +'<span class="chev" aria-hidden="true">›</span></summary>'
+    +'<div class="body">'
+      +(opt.notes&&e.statusNote?'<div class="note"><span class="lbl">Latest update</span>'+esc(e.statusNote)+(e.statusNoteAt?'<span class="note-date">'+esc(rptFmtD(e.statusNoteAt))+'</span>':'')+'</div>':'')
+      +'<div class="grid">'+rptVenuePanel(v)
+        +'<div class="panel"><h3>Show</h3>'+rptKV('Date',esc(rptShowDate(e.date)))+rptKV('Show time',esc(showT))
+          +rptKV('Load-in',normTime(e.loadIn)?esc(fmtTime(e.loadIn)):'')+rptKV('Tour',t?esc(t.name):'')
+          +rptKV('Status',rptChip(st,statusColor(st)))+rptKV('Hold',e.holdStatus&&e.holdStatus!==st?rptChip(e.holdStatus,holdStatusColor(e.holdStatus)||'gray'):'')
+          +(opt.tickets?rptKV('Capacity',cap?esc(cap.toLocaleString()):'')+rptKV('Tickets sold',sold?esc(sold.toLocaleString())+(cap?' of '+esc(cap.toLocaleString())+' ('+Math.round(sold/cap*100)+'%)':''):''):'')
+          +(opt.emails?rptKV('Venue contact',esc(v.contactName||''))+rptKV('Email',v.contactEmail?'<a href="mailto:'+esc(v.contactEmail)+'">'+esc(v.contactEmail)+'</a>':''):'')+'</div>'
+      +'</div>'
+      +(itin.length?'<div class="panel"><h3>Show day</h3><ol class="timeline">'+itin.map(it=>'<li><span class="t-date">'+esc(it.time?fmtTime(it.time):'—')+'</span><span class="t-note"><b>'+esc(it.label||'')+'</b>'+(it.note?' · '+esc(it.note):'')+'</span></li>').join('')+'</ol></div>':'')
+      +(notes.length?'<div class="panel"><h3>Notes</h3><ol class="timeline">'+notes.map(n=>'<li><span class="t-date">'+esc(rptFmtD(n.ts))+'</span><span class="t-note" style="white-space:pre-wrap">'+esc(n.text||'')+'</span></li>').join('')+'</ol></div>':'')
+      +(inqs.length?'<div class="panel"><h3>Outreach to this venue</h3><ol class="timeline">'+inqs.map(x=>'<li><span class="t-date">'+esc(rptFmtD(x.createdAt))+'</span>'+rptInqChip(x.status)+'<span class="t-note">'+esc(x.range||'')+(x.eventId===e.id?' · became this show':'')+'</span></li>').join('')+'</ol></div>':'')
+    +'</div></details>';
+}
+const RPT_CSS=`
 :root{--ink:#243f56;--ink2:#5c7086;--ink3:#8a97a3;--bg:#faf8f4;--card:#ffffff;--line:#e3dccb;--soft:#f4f0e8;--acc:#c9971c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5}
 .wrap{max-width:960px;margin:0 auto;padding:28px 16px 48px}
 header{display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:2px solid var(--ink);margin-bottom:18px;flex-wrap:wrap}
 header img{height:40px;width:auto;max-width:120px;object-fit:contain}
 h1{font-size:24px;margin:0;line-height:1.2}.sub{color:var(--ink2);font-size:13px;margin-top:3px}
-.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:16px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 8px;text-align:center;cursor:pointer;font:inherit;color:inherit}
 .stat b{display:block;font-size:22px}.stat span{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2)}
 .stat.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}.stat.blue b{color:#2f6690}.stat.amber b{color:#a8721c}.stat.green b{color:#397044}
@@ -10876,16 +10935,21 @@ h1{font-size:24px;margin:0;line-height:1.2}.sub{color:var(--ink2);font-size:13px
 .toolbar input{flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--ink)}
 .btn{padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
 .btn:hover{border-color:var(--ink3)}
+.toolbar select{padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:inherit;font-size:13px;color:var(--ink);max-width:100%}
+.toolbar.loc select{flex:1;min-width:130px}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .fbtn{border:1px solid var(--line);background:var(--card);border-radius:100px;padding:4px 11px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2)}
 .fbtn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sec-h{display:flex;align-items:baseline;gap:8px;margin:22px 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2)}
+.sec-h b{font-size:15px;color:var(--ink);letter-spacing:.3px}.sec-n{font-size:12px;color:var(--ink3);text-transform:none;letter-spacing:0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}
+.card.show{border-left:3px solid var(--ink)}
 .card[open]{box-shadow:0 2px 10px rgba(36,63,86,.08)}
 summary{list-style:none;display:grid;grid-template-columns:1fr 190px 170px 18px;gap:12px;align-items:center;padding:12px 14px;cursor:pointer}
 summary::-webkit-details-marker{display:none}summary:hover{background:#fcfbf8}
 .vname{font-weight:600;font-size:15px}.vsub{font-size:12px;color:var(--ink2)}
 .lbl{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink3)}
-.sum-dates{font-size:13px}.sum-status{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.sum-dates{font-size:13px}.sum-time{display:block;font-size:12px;color:var(--ink2)}.sum-status{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 .chev{font-size:22px;color:var(--ink3);transition:transform .15s;justify-self:end}.card[open] .chev{transform:rotate(90deg)}
 .chip{display:inline-block;padding:2px 9px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap}
 .s-green{background:#e7f0e6;color:#397044}.s-amber{background:#faf1de;color:#a8721c}.s-blue{background:#e7eef3;color:#2f6690}.s-red{background:#fbe8ea;color:#c81e3a}.s-gray{background:#f0ede6;color:#5c7086}
@@ -10896,26 +10960,73 @@ summary::-webkit-details-marker{display:none}summary:hover{background:#fcfbf8}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .panel{background:var(--soft);border-radius:10px;padding:10px 12px;margin-top:10px}.grid .panel{margin-top:0}
 h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2)}
-.kv{display:flex;gap:10px;font-size:13px;padding:2px 0}.kv span{color:var(--ink3);min-width:120px}.kv b{font-weight:500}
+.kv{display:flex;gap:10px;font-size:13px;padding:2px 0}.kv>span{color:var(--ink3);min-width:120px;flex-shrink:0}.kv b{font-weight:500}
 .kv a{color:#2f6690}
 .tags{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap}.tag{font-size:11px;background:#fff;border:1px solid var(--line);border-radius:100px;padding:1px 8px;color:var(--ink2)}
 .timeline{list-style:none;margin:0;padding:0}.timeline li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
-.timeline li:last-child{border-bottom:none}.t-date{color:var(--ink3);min-width:92px;font-size:12px}.t-note{flex:1;min-width:160px}
+.timeline li:last-child{border-bottom:none}.t-date{color:var(--ink3);min-width:92px;font-size:12px}.t-note{flex:1;min-width:160px}.t-note b{font-weight:600}
 .empty{text-align:center;color:var(--ink3);padding:30px 0;display:none}
 footer{margin-top:22px;font-size:11px;color:var(--ink3)}
-@media(max-width:680px){.stats{grid-template-columns:repeat(3,1fr)}summary{grid-template-columns:1fr 18px}.sum-dates,.sum-status{grid-column:1}.sum-status{flex-direction:row;align-items:center;gap:8px}.chev{grid-row:1;grid-column:2}.grid{grid-template-columns:1fr}.kv span{min-width:100px}}
+@media(max-width:680px){.stats{grid-template-columns:repeat(3,1fr)}summary{grid-template-columns:1fr 18px}.sum-dates,.sum-status{grid-column:1}.sum-status{flex-direction:row;align-items:center;gap:8px}.chev{grid-row:1;grid-column:2}.grid{grid-template-columns:1fr}.kv>span{min-width:100px}}
 @media print{.toolbar,.filters,.chev{display:none}body{background:#fff}.card{break-inside:avoid;box-shadow:none}.stat{border-color:#ccc}}`;
-  const script=`
+const RPT_SCRIPT=`
 (function(){
   var cards=[].slice.call(document.querySelectorAll('.card'));
-  var state={group:'all',status:'all',q:''};
+  var secs=[].slice.call(document.querySelectorAll('.sec'));
+  var state={group:'all',status:'all',q:'',country:'',province:'',city:'',sort:'status'};
+  var A=function(c,k){return c.getAttribute('data-'+k)||'';};
+  var fC=document.getElementById('f-country'),fP=document.getElementById('f-province'),fCi=document.getElementById('f-city'),fS=document.getElementById('sort');
+  function uniq(list,k){var s={};list.forEach(function(c){var v=A(c,k);if(v)s[v]=1;});return Object.keys(s).sort();}
+  function fill(sel,label,vals,cur){
+    sel.innerHTML='<option value="">'+label+'</option>'+vals.map(function(v){var e=v.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');return '<option value="'+e+'"'+(v===cur?' selected':'')+'>'+e+'</option>';}).join('');
+  }
+  function fillLoc(){
+    var cs=uniq(cards,'country'); if(cs.indexOf(state.country)<0) state.country='';
+    var pPool=cards.filter(function(c){return !state.country||A(c,'country')===state.country;});
+    var ps=uniq(pPool,'province'); if(ps.indexOf(state.province)<0) state.province='';
+    var ciPool=pPool.filter(function(c){return !state.province||A(c,'province')===state.province;});
+    var cis=uniq(ciPool,'city'); if(cis.indexOf(state.city)<0) state.city='';
+    fill(fC,'All countries',cs,state.country); fill(fP,'All provinces/states',ps,state.province); fill(fCi,'All cities',cis,state.city);
+  }
+  function cmp(a,b,keys){for(var i=0;i<keys.length;i++){var k=keys[i],x=A(a,k).toLowerCase(),y=A(b,k).toLowerCase();if(x!==y){if(!x)return 1;if(!y)return -1;return x<y?-1:1;}}return 0;}
+  function num(a,b,k,dir){var x=+A(a,k),y=+A(b,k);if(!x!==!y)return x?-1:1;return dir*(x-y);}
+  function desc(a,b,k){var x=A(a,k),y=A(b,k);return x<y?1:x>y?-1:0;}
+  var SORTS={
+    status:function(a,b){ if(A(a,'kind')==='show') return A(a,'group').indexOf('played')>=0?(desc(a,b,'date')||cmp(a,b,['name'])):cmp(a,b,['date','name']); return (+A(a,'order'))-(+A(b,'order'))||desc(a,b,'upd'); },
+    date:function(a,b){ return cmp(a,b,['date','name']); },
+    location:function(a,b){return cmp(a,b,['country','province','city','date','name']);},
+    country:function(a,b){return cmp(a,b,['country','date','name']);},
+    province:function(a,b){return cmp(a,b,['province','city','date','name']);},
+    city:function(a,b){return cmp(a,b,['city','date','name']);},
+    name:function(a,b){return cmp(a,b,['name','date']);},
+    'cap-desc':function(a,b){return num(a,b,'cap',-1)||cmp(a,b,['name']);},
+    'cap-asc':function(a,b){return num(a,b,'cap',1)||cmp(a,b,['name']);},
+    updated:function(a,b){return desc(a,b,'upd');}
+  };
+  function sortCards(){
+    [].forEach.call(document.querySelectorAll('.list'),function(l){
+      [].slice.call(l.children).filter(function(c){return c.classList.contains('card');}).sort(SORTS[state.sort]||SORTS.status).forEach(function(c){l.appendChild(c);});
+    });
+  }
+  fC.addEventListener('change',function(){state.country=fC.value;fillLoc();apply();});
+  fP.addEventListener('change',function(){state.province=fP.value;fillLoc();apply();});
+  fCi.addEventListener('change',function(){state.city=fCi.value;apply();});
+  fS.addEventListener('change',function(){state.sort=fS.value;sortCards();});
+  fillLoc();
   function apply(){
     var shown=0;
     cards.forEach(function(c){
       var ok=(state.group==='all'||(' '+c.getAttribute('data-group')+' ').indexOf(' '+state.group+' ')>=0)
         &&(state.status==='all'||c.getAttribute('data-status')===state.status)
+        &&(!state.country||A(c,'country')===state.country)
+        &&(!state.province||A(c,'province')===state.province)
+        &&(!state.city||A(c,'city')===state.city)
         &&(!state.q||c.getAttribute('data-search').indexOf(state.q)>=0);
       c.style.display=ok?'':'none'; if(ok) shown++;
+    });
+    secs.forEach(function(s){
+      var all=s.querySelectorAll('.card'),n=0;[].forEach.call(all,function(c){if(c.style.display!=='none')n++;});
+      s.style.display=n?'':'none'; var lab=s.querySelector('.sec-n'); if(lab) lab.textContent=n===all.length?n+'':n+' of '+all.length;
     });
     document.getElementById('empty').style.display=shown?'none':'block';
     document.getElementById('count').textContent=shown+' of '+cards.length+' shown';
@@ -10939,21 +11050,152 @@ footer{margin-top:22px;font-size:11px;color:var(--ink3)}
   });
   apply();
 })();`;
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'+esc(title)+'</title><style>'+css+'</style></head><body><div class="wrap">'
-    +'<header><img src="'+currentLogoUrl()+'" alt=""><div><h1>'+esc(title)+'</h1><div class="sub">'+(tour?esc(tour.name)+' · ':'')+esc(period)+' · Prepared by '+esc(company)+'</div></div></header>'
-    +(opt.summary?'<div class="stats">'+stat(venuesN,'Venues contacted','all')+stat(respondedN,'Responses','responded','blue')
-      +stat(cnt('Hold offered')+cnt('Available')+cnt('Booked'),'Holds, available & booked','positive','amber')+stat(cnt('Booked'),'Booked','booked','green')
-      +stat(cnt('Sent')+cnt('Waiting'),'Awaiting reply','waiting')+'</div>':'')
-    +'<div class="toolbar"><input id="q" type="search" placeholder="Search venue or city…" aria-label="Search">'
+function rptStat(n,l,g,cls){ return '<button class="stat '+(cls||'')+'" data-filter="'+g+'"><b>'+n+'</b><span>'+esc(l)+'</span></button>'; }
+// p: {title, sub, stats (html or ''), chips [[status,count]], sorts [[key,label]], hint, sections [{title, html, n}], placeholder}
+function rptPage(p){
+  const company=DB.settings.companyName||'Langer Performing Arts';
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'+esc(p.title)+'</title><style>'+RPT_CSS+'</style></head><body><div class="wrap">'
+    +'<header><img src="'+currentLogoUrl()+'" alt=""><div><h1>'+esc(p.title)+'</h1><div class="sub">'+p.sub+' · Prepared by '+esc(company)+'</div></div></header>'
+    +(p.stats?'<div class="stats">'+p.stats+'</div>':'')
+    +'<div class="toolbar"><input id="q" type="search" placeholder="'+esc(p.placeholder||'Search venue or city…')+'" aria-label="Search">'
       +'<button class="btn" id="expand">Expand all</button><button class="btn" id="collapse">Collapse all</button>'
       +'<button class="btn" id="print">Print / PDF</button><button class="btn" id="download">Download</button></div>'
-    +'<div class="filters"><button class="fbtn" data-status="all">All</button>'+statuses.map(s=>'<button class="fbtn" data-status="'+esc(s)+'">'+esc(s)+' · '+cnt(s)+'</button>').join('')
+    +'<div class="toolbar loc"><select id="f-country" aria-label="Country"></select><select id="f-province" aria-label="Province or state"></select><select id="f-city" aria-label="City"></select>'
+      +'<select id="sort" aria-label="Sort">'+p.sorts.map(s=>'<option value="'+s[0]+'">Sort: '+esc(s[1])+'</option>').join('')+'</select></div>'
+    +'<div class="filters"><button class="fbtn" data-status="all">All</button>'+p.chips.map(c=>'<button class="fbtn" data-status="'+esc(c[0])+'">'+esc(c[0])+' · '+c[1]+'</button>').join('')
       +'<span id="count" style="margin-left:auto;font-size:12px;color:#8a97a3;align-self:center"></span></div>'
-    +'<p style="font-size:12px;color:#8a97a3;margin:0 0 10px">Click a venue to see its details, notes and contact history.</p>'
-    +cards
+    +'<p style="font-size:12px;color:#8a97a3;margin:0 0 10px">'+esc(p.hint)+'</p>'
+    +p.sections.map(s=>'<section class="sec">'+(s.title?'<div class="sec-h"><b>'+esc(s.title)+'</b><span class="sec-n"></span></div>':'')+'<div class="list">'+s.html+'</div></section>').join('')
     +'<div class="empty" id="empty">Nothing matches.</div>'
     +'<footer>Prepared by '+esc(company)+' · '+esc(new Date().toLocaleDateString('en-CA'))+' · Generated by TourDesk</footer>'
-    +'</div><script>'+script+'<\/script></body></html>';
+    +'</div><script>'+RPT_SCRIPT+'<\/script></body></html>';
+}
+function rptOpen(html){
+  const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+  window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url),120000);
+}
+const RPT_INQ_SORTS=[['status','Status (booked first)'],['location','Location'],['country','Country'],['province','Province/State'],['city','City'],['name','Venue A–Z'],['cap-desc','Capacity ↓'],['cap-asc','Capacity ↑'],['updated','Recently updated']];
+
+// Contact report: outreach only
+function buildContactReportHTML(list,o){
+  const ar=o.artist, tour=o.tour, opt=o.opt;
+  const rows=list.slice().sort((a,b)=>rptInqOrder(a.status)-rptInqOrder(b.status)||(b.createdAt||'').localeCompare(a.createdAt||''));
+  const cnt=s=>list.filter(q=>q.status===s).length;
+  const dates=list.map(q=>q.createdAt).filter(Boolean).sort();
+  const period=(o.from||o.to)?((o.from?rptFmtD(o.from+'T12:00:00'):'Start')+' – '+(o.to?rptFmtD(o.to+'T12:00:00'):'today')):(rptFmtD(dates[0])+' – '+rptFmtD(dates[dates.length-1]));
+  const stats=opt.summary?rptStat(new Set(list.map(q=>q.venueId)).size,'Venues contacted','all')+rptStat(list.filter(q=>INQ_RESPONDED.includes(q.status)).length,'Responses','responded','blue')
+    +rptStat(cnt('Hold offered')+cnt('Available')+cnt('Booked'),'Holds, available & booked','positive','amber')+rptStat(cnt('Booked'),'Booked','booked','green')
+    +rptStat(cnt('Sent')+cnt('Waiting'),'Awaiting reply','waiting'):'';
+  return rptPage({title:(ar?ar.name:'Artist')+' — Venue Outreach',sub:(tour?esc(tour.name)+' · ':'')+esc(period),stats,
+    chips:INQ_STATUSES.filter(s=>cnt(s)).map(s=>[s,cnt(s)]),sorts:RPT_INQ_SORTS,
+    hint:'Click a venue to see its details, notes and contact history.',
+    sections:[{title:'',html:rows.map(q=>rptInquiryCard(q,{tour,opt})).join('')}]});
+}
+
+/* ============================================================
+   ARTIST REPORT: shows + venue outreach in one click-through page
+   ============================================================ */
+// Same scoping as the artist page: shows on the artist's tours, plus one-offs where the artist is tagged as talent
+function artistAllEvents(ar){
+  if(!ar) return [];
+  const tours=DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===(ar.name||'').toLowerCase());
+  return DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(ar.contactId&&e.talentIds&&e.talentIds.includes(ar.contactId)));
+}
+const AR_SHOW_STATUSES=['Confirmed','Routing','Completed','Settled','Draft'];
+function artistReportModal(artistId){
+  if(!canDo('admin')) return;
+  const arId=artistId||(DB.artists.find(a=>artistAllEvents(a).length)||DB.artists[0]||{}).id||'';
+  const cb=(id,label,on)=>'<label class="bk-check"><input type="checkbox" id="'+id+'" '+(on?'checked':'')+' onchange="arCount()"> '+label+'</label>';
+  openModal('Artist report',
+    '<div class="row2"><div class="field"><label>Artist</label><select id="ar-artist" onchange="arArtistChanged()">'
+      +DB.artists.map(a=>'<option value="'+a.id+'" '+(a.id===arId?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Tour</label><select id="ar-tour" onchange="arCount()"></select></div></div>'
+    +'<div class="row2"><div class="field"><label>From</label><input id="ar-from" type="date" onchange="arCount()"></div>'
+    +'<div class="field"><label>To</label><input id="ar-to" type="date" onchange="arCount()"></div></div>'
+    +'<p class="muted" style="font-size:11px;margin:-4px 0 10px">Dates filter shows by show date and outreach by the date it was sent. Leave them empty for everything.</p>'
+    +'<div class="field"><label>Shows</label><div class="cr-statuses">'
+      +cb('ar-up','Upcoming',true)+cb('ar-past','Past',true)+cb('ar-tbd','Date not set',true)+'</div>'
+      +'<div class="cr-statuses" style="margin-top:6px">'+AR_SHOW_STATUSES.map(s=>'<label class="bk-check"><input type="checkbox" class="ar-st" value="'+s+'" checked onchange="arCount()"> <span class="badge '+statusColor(s)+'">'+s+'</span></label>').join('')+'</div></div>'
+    +'<div class="field"><label>Venue outreach</label><div class="cr-statuses">'+cb('ar-inq','Include outreach',true)+'</div>'
+      +'<div class="cr-statuses" id="ar-inq-sts" style="margin-top:6px">'+INQ_STATUSES.map(s=>'<label class="bk-check"><input type="checkbox" class="ar-ist" value="'+esc(s)+'" '+(s==='Closed'?'':'checked')+' onchange="arCount()"> '+inqBadge(s)+'</label>').join('')+'</div>'
+      +'<p class="muted" style="font-size:11px;margin-top:6px">Inquiries that became a show in this report are shown with that show, not twice.</p></div>'
+    +'<div class="field"><label>Show in the report</label><div class="cr-statuses">'
+      +cb('ar-summary','Summary numbers',true)+cb('ar-itin','Show times &amp; show-day schedule',true)+cb('ar-notes','Notes &amp; status updates',true)
+      +cb('ar-history','Contact history',true)+cb('ar-tickets','Ticket counts (no dollar amounts)',false)+cb('ar-emails','Venue contact names &amp; emails',false)+cb('ar-tplcol','Which email was used',false)+'</div>'
+      +'<p class="muted" style="font-size:11px;margin-top:6px">The report opens in a new tab and never shows dollar figures. Notes are your own wording: if they mention rates or other terms, untick them before sharing.</p></div>'
+    +'<div id="ar-count" style="font-size:13px;font-weight:500;min-height:18px"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="generateArtistReport()">📄 Open report</button>');
+  arArtistChanged();
+}
+function arArtistChanged(){
+  const ar=get(DB.artists,fv('ar-artist'));
+  const ts=document.getElementById('ar-tour'); if(!ts) return;
+  const tours=ar?DB.tours.filter(t=>(t.artist&&t.artist.toLowerCase()===(ar.name||'').toLowerCase())||dbInquiries().some(q=>q.artistId===ar.id&&q.tourId===t.id)):[];
+  ts.innerHTML='<option value="">All shows &amp; outreach</option>'+tours.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+  arCount();
+}
+function arChecked(id){ const el=document.getElementById(id); return !!(el&&el.checked); }
+function arSelection(){
+  const ar=get(DB.artists,fv('ar-artist')), tourId=fv('ar-tour'), from=fv('ar-from'), to=fv('ar-to'), today=todayStr();
+  const sts=[...document.querySelectorAll('.ar-st:checked')].map(x=>x.value);
+  const shows=artistAllEvents(ar).filter(e=>{
+    if(tourId&&e.tourId!==tourId) return false;
+    if(!sts.includes(eventDisplayStatus(e))) return false;
+    if(!e.date) return arChecked('ar-tbd')&&!from&&!to;
+    if(from&&e.date<from) return false; if(to&&e.date>to) return false;
+    return e.date>=today?arChecked('ar-up'):arChecked('ar-past');
+  });
+  const showIds=new Set(shows.map(e=>e.id));
+  const ists=[...document.querySelectorAll('.ar-ist:checked')].map(x=>x.value);
+  const inqs=!ar||!arChecked('ar-inq')?[]:dbInquiries().filter(q=>q.artistId===ar.id&&(!tourId||q.tourId===tourId)
+    &&(!from||(q.createdAt||'').slice(0,10)>=from)&&(!to||(q.createdAt||'').slice(0,10)<=to)
+    &&ists.includes(q.status)&&!(q.eventId&&showIds.has(q.eventId)));
+  return {ar,tourId,from,to,shows,inqs};
+}
+function arCount(){
+  const el=document.getElementById('ar-count'); if(!el) return;
+  const box=document.getElementById('ar-inq-sts'); if(box) box.style.opacity=arChecked('ar-inq')?'1':'.45';
+  const s=arSelection(), n=s.shows.length, m=s.inqs.length;
+  el.style.color=(n||m)?'var(--txt)':'var(--amber)';
+  el.textContent=(n||m)?n+' show'+(n===1?'':'s')+' and '+m+' inquir'+(m===1?'y':'ies')+' will be in the report.':'Nothing matches these choices yet.';
+}
+function generateArtistReport(){
+  const s=arSelection();
+  if(!s.shows.length&&!s.inqs.length){ arCount(); return; }
+  const tour=s.tourId?get(DB.tours,s.tourId):null;
+  const opt={summary:arChecked('ar-summary'),itinerary:arChecked('ar-itin'),notes:arChecked('ar-notes'),history:arChecked('ar-history'),
+    tickets:arChecked('ar-tickets'),emails:arChecked('ar-emails'),tplcol:arChecked('ar-tplcol')};
+  const html=buildArtistReportHTML(s.shows,s.inqs,{artist:s.ar,tour,from:s.from,to:s.to,opt});
+  logActivity('created an artist report for','Artist',(s.ar?s.ar.name:'')+(tour?' ('+tour.name+')':''));
+  persist();
+  closeModal();
+  rptOpen(html);
+}
+function buildArtistReportHTML(shows,inqs,o){
+  const ar=o.artist, tour=o.tour, opt=o.opt, today=todayStr();
+  const byDate=(a,b)=>(!a.date&&!b.date)?0:!a.date?1:!b.date?-1:a.date.localeCompare(b.date);
+  const up=shows.filter(e=>e.date&&e.date>=today).sort(byDate);
+  const past=shows.filter(e=>e.date&&e.date<today).sort((a,b)=>b.date.localeCompare(a.date));
+  const tbd=shows.filter(e=>!e.date);
+  const inqRows=inqs.slice().sort((a,b)=>rptInqOrder(a.status)-rptInqOrder(b.status)||(b.createdAt||'').localeCompare(a.createdAt||''));
+  const ctx={artist:ar,tour,opt,today};
+  const card=e=>rptShowCard(e,ctx);
+  const icnt=s=>inqs.filter(q=>q.status===s).length;
+  const scnt=s=>shows.filter(e=>eventDisplayStatus(e)===s).length;
+  const period=(o.from||o.to)?((o.from?rptFmtD(o.from+'T12:00:00'):'Start')+' – '+(o.to?rptFmtD(o.to+'T12:00:00'):'today')):'As of '+rptFmtD(new Date().toISOString());
+  const stats=opt.summary?rptStat(shows.length,'Shows','show')+rptStat(up.length,'Upcoming','upcoming','green')+rptStat(past.length,'Played','played','blue')
+    +(inqs.length?rptStat(new Set(inqs.map(q=>q.venueId)).size,'Venues in outreach','inq')+rptStat(inqs.filter(q=>INQ_RESPONDED.includes(q.status)).length,'Responses','responded','blue')
+      +rptStat(icnt('Hold offered')+icnt('Available')+icnt('Booked'),'Holds & availability','positive','amber'):''):'';
+  const chips=AR_SHOW_STATUSES.filter(s=>scnt(s)).map(s=>[s,scnt(s)]).concat(INQ_STATUSES.filter(s=>icnt(s)).map(s=>[s,icnt(s)]));
+  const sections=[];
+  if(up.length) sections.push({title:'Upcoming shows',html:up.map(card).join('')});
+  if(tbd.length) sections.push({title:'Shows with dates to be set',html:tbd.map(card).join('')});
+  if(past.length) sections.push({title:'Past shows',html:past.map(card).join('')});
+  if(inqRows.length) sections.push({title:'Venue outreach',html:inqRows.map(q=>rptInquiryCard(q,{tour,opt})).join('')});
+  return rptPage({title:(ar?ar.name:'Artist')+' — Artist Report',sub:(tour?esc(tour.name)+' · ':'')+esc(period),stats,chips,
+    sorts:[['status','Date (shows) · status (outreach)'],['date','Date'],['location','Location'],['country','Country'],['province','Province/State'],['city','City'],['name','Venue A–Z'],['cap-desc','Capacity ↓'],['cap-asc','Capacity ↑'],['updated','Recently updated']],
+    hint:'Click any show or venue to see details, show-day times, notes and contact history.',sections});
 }
 
 let _viEdited={subject:false,body:false};
