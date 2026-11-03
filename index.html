@@ -247,6 +247,9 @@ a{color:var(--blue);text-decoration:none}
 .ev-card-figs label{display:block;font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px}
 .ev-card-figs span{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
 .inq-list{display:flex;flex-direction:column;gap:8px}
+.li-link{background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:7px 10px;font-size:12px;margin-bottom:10px}
+.prop-out{border:1px solid var(--bord);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--surf)}
+.prop-out-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin-bottom:6px}
 .inq-row{display:flex;gap:12px;align-items:flex-start;background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:10px 12px}
 .inq-main{flex:1;min-width:0}
 .inq-venue{font-weight:600;font-size:13px}.inq-venue a{color:var(--txt);cursor:pointer}
@@ -1943,6 +1946,7 @@ VIEWS.venues={
     const contact=get(DB.contacts,v.contactId);
     const evts=DB.events.filter(e=>e.venueId===id);
     a.innerHTML=canDo('admin')?`<button class="btn sm primary" onclick="venueInquiryModal('${id}')">✉ Send inquiry</button>
+      <button class="btn sm" onclick="logInquiryModal({venueId:'${id}'})">📝 Log inquiry</button>
       <button class="btn sm" onclick="venueForm('${id}')">Edit</button>
       <button class="btn sm danger" onclick="deleteVenue('${id}')">Delete</button>`:'';
     const t=v.terms||{};
@@ -6069,10 +6073,11 @@ VIEWS.proposals={
     if(route.id&&route.tab==='show') return this.showDetail(c,a,route.id,route.ref);
     if(route.id) return this.detail(c,a,route.id);
     a.innerHTML=`<button class="btn primary" onclick="proposalNew()">+ New proposal</button>${canDo('admin')?' <button class="btn ghost sm" onclick="goToPitchSlideEditor()">✎ Customize pitch deck slides</button>':''}`;
-    let list=(DB.proposals||[]).filter(p=>p.status!=='Accepted');
+    let list=(DB.proposals||[]).filter(p=>p.status!=='Accepted'&&p.status!=='Declined');
+    const declined=(DB.proposals||[]).filter(p=>p.status==='Declined'&&(!inArtistView()||p.artistId===ARTIST_VIEW));
     if(inArtistView()) list=list.filter(p=>p.artistId===ARTIST_VIEW);
     const accepted=(DB.proposals||[]).filter(p=>p.status==='Accepted');
-    if(!list.length&&!accepted.length){ c.innerHTML=emptyState('◈','No proposals yet'); return; }
+    if(!list.length&&!accepted.length&&!declined.length){ c.innerHTML=emptyState('◈','No proposals yet'); return; }
     c.innerHTML=`
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
         <img src="${currentLogoUrl()}" alt="" style="height:28px;width:auto;max-width:80px;object-fit:contain">
@@ -6082,6 +6087,10 @@ VIEWS.proposals={
       ${accepted.length?`<div style="margin-top:20px">
         <div class="sec-label" style="margin-bottom:10px">Accepted proposals</div>
         <div class="cards-grid">${accepted.map(proposalCard).join('')}</div>
+      </div>`:''}
+      ${declined.length?`<div style="margin-top:20px">
+        <div class="sec-label" style="margin-bottom:10px">Not going ahead</div>
+        <div class="cards-grid">${declined.map(proposalCard).join('')}</div>
       </div>`:''}`;
   },
   detail(c,a,id){
@@ -6103,16 +6112,18 @@ VIEWS.proposals={
       <button class="btn sm" onclick="exportProposalHTML('${id}')">⬇ Export for artist</button>
       <button class="btn sm" onclick="exportPitchDeck('${id}')">⬇ Export pitch deck</button>
       ${isAdmin?`<button class="btn ghost sm" onclick="goToPitchSlideEditor()" title="Add, edit, reorder, or remove the slides that appear in every exported pitch deck">✎ Customize slides</button>`:''}
-      ${isAdmin&&!isAccepted?`<button class="btn primary" onclick="acceptProposal('${id}')">✓ Accept</button>`:''}
+      ${isAdmin&&!isAccepted&&p.status!=='Declined'?`<button class="btn sm" onclick="declineProposalModal('${id}')">✗ Not going ahead</button> <button class="btn primary" onclick="acceptProposalModal('${id}')">✓ Accept</button>`:''}
+      ${isAdmin&&p.status==='Declined'?`<button class="btn primary sm" onclick="declineProposal('${id}',true)">↺ Reopen</button>`:''}
       ${!isAdmin&&isOwner&&!isAccepted?`<button class="btn ${isReady?'':'primary'} sm" onclick="markProposalReady('${id}')">${isReady?'✓ Ready for review':'Mark ready for review'}</button>`:''}
       ${(isAdmin||isOwner)&&!isAccepted?`<button class="btn sm danger" onclick="deleteProposal('${id}')">Delete</button>`:''}`;
-    const _tabs=[['overview','Overview'],['projections','Projections'],['expenses','Expenses']].map(([tb,lbl])=>
+    const _nInq=dbInquiries().filter(q=>q.proposalId===id).length;
+    const _tabs=[['overview','Overview'],...(isAdmin?[['outreach','Outreach'+(_nInq?' ('+_nInq+')':'')]]:[]),['projections','Projections'],['expenses','Expenses']].map(([tb,lbl])=>
       '<div class="tab '+(tab===tb?'active':'')+'" onclick="proposalMainTab(\''+id+'\',\''+tb+'\')">'+lbl+'</div>').join('');
     c.innerHTML=`
       <div class="detail-head">
         <span class="back" onclick="go('proposals')">← Proposals</span>
         <span class="detail-title">${esc(p.title)}</span>
-        <span class="badge ${isAccepted?'green':isReady?'amber':p.kind==='tour'?'blue':'gray'}">${isAccepted?'Accepted':isReady?'Ready for review':p.kind==='tour'?'Tour':'Single show'}</span>
+        <span class="badge ${isAccepted?'green':p.status==='Declined'?'red':isReady?'amber':p.kind==='tour'?'blue':'gray'}">${isAccepted?'Accepted':p.status==='Declined'?'Not going ahead':isReady?'Ready for review':p.kind==='tour'?'Tour':'Single show'}</span>
         <img src="${currentLogoUrl()}" alt="" style="height:24px;width:auto;max-width:70px;object-fit:contain;margin-left:auto">
       </div>
       <div class="stats">
@@ -6124,7 +6135,9 @@ VIEWS.proposals={
       <div class="tabs">${_tabs}</div>
       <div id="prop-main-tab"></div>`;
     const host=document.getElementById('prop-main-tab');
-    if(tab==='projections'){
+    if(tab==='outreach'&&isAdmin){
+      proposalOutreachTab(host,p,shows,isAccepted);
+    } else if(tab==='projections'){
       proposalTourProjections(host,p,shows,tcps);
     } else if(tab==='expenses'){
       proposalExpensesTab(host,p,shows,isAccepted);
@@ -6142,6 +6155,7 @@ VIEWS.proposals={
         ${p.intro?`<p style="font-size:13px;color:var(--txt2);margin-top:12px;line-height:1.6">${esc(p.intro)}</p>`:''}
       </div>
       <div class="sec"><div class="sec-label">Shows — click a row for full detail</div>
+        ${propPipelineChips(p)}
         ${shows.length?proposalShowsTable(p,shows,isAccepted):'<p class="muted" style="font-size:13px">No shows yet. Click <strong>+ Add show</strong> to build the show list.</p>'}
       </div>
       ${isAccepted&&p.createdTourId?('<div class="sec"><div class="sec-label">Created records</div><p style="font-size:13px;color:var(--txt2)">Accepted and converted. <a onclick="go(\'tours\',\''+p.createdTourId+'\')" style="cursor:pointer">View tour →</a></p></div>'):''}
@@ -6169,11 +6183,18 @@ VIEWS.proposals={
       <div class="tabs">${_tabs}</div>
       <div id="prop-show-tab"></div>`;
     const host=document.getElementById('prop-show-tab');
-    if(tab==='overview') propShowOverview(host,p,s,f,v,sliderVal);
+    if(tab==='overview'){ propShowOverview(host,p,s,f,v,sliderVal); if(canDo('admin')) host.insertAdjacentHTML('afterbegin',propShowOutreachHTML(p,s,isAccepted)); }
     else if(tab==='projections') propShowProjections(host,p,s);
   }
 };
 
+function propShowOutreachHTML(p,s,isAccepted){
+  const list=propShowInquiries(p,s), st=propShowStatus(s);
+  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Status &amp; venue inquiries</span>'
+    +(isAccepted?'':'<span style="font-size:12px;text-transform:none;letter-spacing:0">'+propShowLinks(p,s)+'</span>')+'</div>'
+    +'<div style="margin-bottom:8px">'+propShowStatusCell(p,s,isAccepted,true)+'</div>'
+    +(list.length?list.map(q=>inquiryRowHTML(q,{hideVenue:true,hideArtist:true,hideProposal:true,inProposal:true})).join(''):'<p class="muted" style="font-size:13px">No inquiry sent to this venue yet.</p>')+'</div>';
+}
 function propShowTab(pid,sid,tab){
   route.tab2=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -6987,7 +7008,7 @@ function proposalShowsTable(p,shows,isAccepted){
   const tcps=proposalTourCostPerShow(p);
   return `<div style="overflow-x:auto">
     <table class="tbl" style="min-width:660px"><thead><tr>
-      <th>Venue</th><th>Date</th><th>Hold</th><th class="num">Ticket</th><th class="num">Est. sold</th>
+      <th>Venue</th><th>Date</th><th>Status &amp; inquiry</th><th class="num">Ticket</th><th class="num">Est. sold</th>
       <th class="num">Gross</th><th class="num">Commission</th><th class="num">Artist net</th>
       ${!isAccepted?'<th></th>':''}
     </tr></thead><tbody>
@@ -6999,11 +7020,7 @@ function proposalShowsTable(p,shows,isAccepted){
           ${v?.city?`<div style="font-size:11px;color:var(--txt3)">${esc(v.city)}</div>`:''}
         </td>
         <td>${esc(s.date||'TBD')}</td>
-        <td onclick="event.stopPropagation()">
-          <select onchange="setShowHoldStatus('${p.id}','${s._sid}',this.value)" style="font-size:11px;padding:3px 5px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt)">
-            ${HOLD_STATUSES.map(hs=>`<option value="${hs}" ${(s.holdStatus||'')===hs?'selected':''}>${hs||'— not set —'}</option>`).join('')}
-          </select>
-        </td>
+        <td onclick="event.stopPropagation()">${propShowStatusCell(p,s,isAccepted)}</td>
         <td class="num">${(s.tiers&&s.tiers.length>0) ? s.tiers.map(t=>esc(t.name)+' '+money0(t.base)).join(', ') : money0(s.ticketBase)}</td>
         <td class="num">${s.ticketsEst||'—'} <span class="muted">(${Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)}%)</span></td>
         <td class="num">${money0(f.grossBoxOffice)}</td>
@@ -7024,6 +7041,72 @@ function proposalShowsTable(p,shows,isAccepted){
     </tr>
     </tbody></table></div>`;
 }
+/* ---------- Proposal show pipeline: status per show, fed by its inquiries ---------- */
+const PROP_SHOW_STATUSES=['Not contacted','Inquiry sent','In discussion','Hold','Confirmed','Not available'];
+const PROP_SHOW_COLOR={'Not contacted':'gray','Inquiry sent':'blue','In discussion':'amber','Hold':'amber','Confirmed':'green','Not available':'red'};
+const INQ_TO_SHOW={'Sent':'Inquiry sent','Waiting':'Inquiry sent','Replied':'In discussion','Available':'In discussion','Hold offered':'Hold','Booked':'Confirmed','Not available':'Not available','Closed':'Not available'};
+function propShowStatus(s){
+  if(PROP_SHOW_STATUSES.includes(s.showStatus)) return s.showStatus;
+  return {'1st Hold':'Hold','2nd Hold':'Hold','3rd Hold':'Hold','Confirmed':'Confirmed','Inquiry':'Inquiry sent'}[s.holdStatus]||'Not contacted';
+}
+function propShowInquiries(p,s){
+  return dbInquiries().filter(q=>q.proposalId===p.id&&q.showSid===s._sid).sort((a,b)=>(b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||''));
+}
+function propShowAsDates(pid,sid){
+  const p=get(DB.proposals,pid), s=p&&(p.shows||[]).find(x=>x._sid===sid);
+  return s?{date:s.date||'',capacityAlloc:s.capacity||''}:null;
+}
+// An inquiry's status moves its proposal show along (you can still change the show status by hand)
+function syncProposalShowFromInquiry(q){
+  if(!q||!q.proposalId) return;
+  const p=get(DB.proposals,q.proposalId), s=p&&(p.shows||[]).find(x=>x._sid===q.showSid);
+  if(s&&INQ_TO_SHOW[q.status]) s.showStatus=INQ_TO_SHOW[q.status];
+}
+function setProposalShowStatus(pid,sid,value){
+  const p=get(DB.proposals,pid); if(!p) return;
+  const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
+  s.showStatus=value;
+  logActivity('edited','Proposal',p.title+' (show status: '+value+')');
+  persist(); render();
+}
+function proposalArtist(p){
+  return get(DB.artists,p.artistId)||DB.artists.find(a=>p.artistName&&(a.name||'').toLowerCase()===p.artistName.toLowerCase())||null;
+}
+function propShowLinks(p,s){
+  const pa=proposalArtist(p);
+  if(!canDo('admin')||!s.venueId) return '';
+  return '<a onclick="event.stopPropagation();venueInquiryModal(\''+s.venueId+'\',\''+(pa?pa.id:'')+'\',\'\',\'\',\''+p.id+'\',\''+s._sid+'\')">✉ Send</a> · '
+    +'<a onclick="event.stopPropagation();logInquiryModal({venueId:\''+s.venueId+'\',artistId:\''+(pa?pa.id:'')+'\',proposalId:\''+p.id+'\',sid:\''+s._sid+'\',start:\''+(s.date||'')+'\',end:\''+(s.date||'')+'\'})">📝 Log</a>';
+}
+function propShowStatusCell(p,s,isAccepted,bare){
+  const st=propShowStatus(s), q=propShowInquiries(p,s)[0];
+  const sel=isAccepted?'<span class="badge '+PROP_SHOW_COLOR[st]+'">'+esc(st)+'</span>'
+    :'<select class="inq-status '+PROP_SHOW_COLOR[st]+'" onchange="setProposalShowStatus(\''+p.id+'\',\''+s._sid+'\',this.value)" aria-label="Show status" style="font-size:11px;padding:3px 5px">'
+      +PROP_SHOW_STATUSES.map(x=>'<option '+(x===st?'selected':'')+'>'+x+'</option>').join('')+'</select>';
+  const info=q?'<div style="font-size:11px;color:var(--txt3);margin-top:3px">'+INQ_METHOD_ICON[inqMethod(q)]+' '+esc(q.status)+' · '+esc(inqTimeAgo(q.updatedAt||q.createdAt))+'</div>':'';
+  const links=(!isAccepted&&canDo('admin'))?'<div style="font-size:11px;margin-top:3px;white-space:nowrap">'+propShowLinks(p,s)+'</div>':'';
+  return bare?sel:sel+info+links;
+}
+function propPipelineChips(p){
+  const shows=p.shows||[]; if(!shows.length) return '';
+  const c={}; shows.forEach(s=>{const st=propShowStatus(s); c[st]=(c[st]||0)+1;});
+  return '<div class="inq-chips" style="margin-bottom:10px">'+PROP_SHOW_STATUSES.filter(x=>c[x]).map(x=>'<span class="inq-chip '+PROP_SHOW_COLOR[x]+'"><b>'+c[x]+'</b> '+esc(x.toLowerCase())+'</span>').join('')+'</div>';
+}
+// Proposal "Outreach" tab: every show with its status and inquiries
+function proposalOutreachTab(host,p,shows,isAccepted){
+  host.innerHTML='<div class="sec"><div class="sec-label">Venue outreach for this proposal</div>'
+    +'<p class="muted" style="font-size:12px;margin:-4px 0 10px">Send an inquiry from TourDesk, or log one you sent through a venue\'s website form, by phone or from your own email. Each inquiry\'s status moves its show along.</p>'
+    +propPipelineChips(p)
+    +(shows.length?shows.map(s=>{
+      const v=get(DB.venues,s.venueId), list=propShowInquiries(p,s), st=propShowStatus(s);
+      return '<div class="prop-out">'
+        +'<div class="prop-out-head"><div><b>'+esc(v?v.name:'Venue')+'</b><span class="muted"> · '+esc(v&&v.city?v.city+(v.province?', '+v.province:''):'')+' · '+esc(s.date||'Date TBD')+'</span></div>'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+propShowStatusCell(p,s,isAccepted,true)+'</div></div>'
+        +(list.length?list.map(q=>inquiryRowHTML(q,{hideVenue:true,hideArtist:true,hideProposal:true,inProposal:true})).join(''):'<p class="muted" style="font-size:12px;margin:6px 0 0">No inquiry yet.</p>')
+        +'</div>';
+    }).join(''):'<p class="muted" style="font-size:13px">Add shows to this proposal first.</p>')
+    +'</div>';
+}
 function setShowHoldStatus(pid,sid,value){
   const p=get(DB.proposals,pid); if(!p) return;
   const s=(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
@@ -7043,10 +7126,10 @@ function proposalCard(p){
     <div class="card-top">
       <div><div class="card-title">${esc(p.title)}</div>
       <div class="card-sub">${artist?esc(artist.name):esc(p.artistName||'')}</div></div>
-      <span class="badge ${isAccepted?'green':isReady?'amber':p.kind==='tour'?'blue':'gray'}">${isAccepted?'Accepted':isReady?'Ready':p.kind==='tour'?'Tour':'Show'}</span>
+      <span class="badge ${isAccepted?'green':p.status==='Declined'?'red':isReady?'amber':p.kind==='tour'?'blue':'gray'}">${isAccepted?'Accepted':p.status==='Declined'?'Not going ahead':isReady?'Ready':p.kind==='tour'?'Tour':'Show'}</span>
     </div>
     <div class="card-meta">
-      <div class="meta"><label>Venues</label><span>${shows.length}</span></div>
+      <div class="meta"><label>Venues</label><span>${shows.length}${shows.some(s=>propShowStatus(s)==='Confirmed')?' <span class="muted" style="font-size:11px">('+shows.filter(s=>propShowStatus(s)==='Confirmed').length+' confirmed)</span>':''}</span></div>
       <div class="meta"><label>Commission</label><span class="pos">${money0(comm)}</span></div>
       <div class="meta"><label>Artist net</label><span class="${net>=0?'pos':'neg'}">${money0(net)}</span></div>
     </div></div>`;
@@ -8851,11 +8934,39 @@ function deleteProposal(id){
   persist(); go('proposals');
 }
 
-function acceptProposal(id){
+function acceptProposalModal(id){
   const p=get(DB.proposals,id); if(!p) return;
-  const shows=p.shows||[];
-  if(!shows.length){alert('Add at least one show before accepting.');return;}
-  if(!confirm(`Accept this proposal and create ${p.kind==='tour'?'a tour + ':''}${shows.length} real event${shows.length!==1?'s':''}?`)) return;
+  const shows=(p.shows||[]).slice().sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
+  if(!shows.length){ openModal('Accept proposal','<p style="font-size:13px">Add at least one show before accepting.</p>','<button class="btn" onclick="closeModal()">OK</button>'); return; }
+  openModal('Accept proposal',
+    '<p style="font-size:13px;color:var(--txt2);margin-bottom:10px">Tick the shows that are going ahead. Each becomes an event'+(p.kind==='tour'?' on a new tour':'')+', and its inquiries move with it. Unticked shows stay in the proposal.</p>'
+    +'<div class="cr-statuses" style="flex-direction:column;align-items:stretch">'+shows.map(s=>{const v=get(DB.venues,s.venueId), st=propShowStatus(s);
+      return '<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" class="acc-show" value="'+s._sid+'" '+(st==='Not available'?'':'checked')+' onchange="accCount()"> <b style="font-weight:500">'+esc(v?v.name:'Show')+'</b> <span class="muted">'+esc(s.date||'Date TBD')+'</span> <span class="badge '+PROP_SHOW_COLOR[st]+'">'+esc(st)+'</span></label>';}).join('')+'</div>'
+    +'<p class="muted" style="font-size:11px;margin-top:8px">New events start as Contract Discussions when the venue has confirmed, offered a hold or is in discussion, and as Inquiry otherwise.</p>'
+    +'<div id="acc-count" style="font-size:13px;font-weight:500;margin-top:8px"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="acc-go" onclick="acceptProposal(\''+id+'\',[...document.querySelectorAll(\'.acc-show:checked\')].map(x=>x.value))">✓ Accept &amp; create events</button>');
+  accCount();
+}
+function accCount(){
+  const n=document.querySelectorAll('.acc-show:checked').length, el=document.getElementById('acc-count'), b=document.getElementById('acc-go');
+  if(el) el.textContent=n?n+' event'+(n===1?'':'s')+' will be created.':'Tick at least one show.';
+  if(b) b.disabled=!n;
+}
+function declineProposal(id,reopen){
+  const p=get(DB.proposals,id); if(!p) return;
+  p.status=reopen?'Draft':'Declined'; p.declinedAt=reopen?'':new Date().toISOString();
+  logActivity(reopen?'reopened':'marked as not going ahead','Proposal',p.title);
+  persist(); closeModal(); render();
+}
+function declineProposalModal(id){
+  openModal('Not going ahead?','<p style="font-size:13px;color:var(--txt2)">The proposal and its inquiries are kept, and you can reopen it any time. No events are created.</p>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="declineProposal(\''+id+'\')">Mark as not going ahead</button>');
+}
+function acceptProposal(id,sids){
+  const p=get(DB.proposals,id); if(!p) return;
+  const shows=(p.shows||[]).filter(s=>!sids||sids.includes(s._sid));
+  if(!shows.length) return;
+  closeModal();
   const createdEventIds=[];
   let tourId=null;
   if(p.kind==='tour'){
@@ -8880,7 +8991,7 @@ function acceptProposal(id){
       name:v?(esc(v.city||v.name)+' — '+esc(v.name)):'Untitled show',
       tourId:tourId||'',venueId:s.venueId||'',
       date:s.date||'',showTime:s.showTime||'',loadIn:s.loadIn||'',
-      status:['1st Hold','2nd Hold','3rd Hold','Confirmed'].includes(s.holdStatus)?'Contract Discussions':'Inquiry',capacityAlloc:s.capacity||0,presales:0,comps:0,
+      status:['Confirmed','Hold','In discussion'].includes(propShowStatus(s))?'Contract Discussions':'Inquiry',capacityAlloc:s.capacity||0,presales:0,comps:0,
       mgmtPct:s.mgmtPct||DB.settings.mgmtPct,
       pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
         taxRate:+s.taxRate||DB.settings.taxRate,taxOn:s.taxOn||'base',
@@ -8895,6 +9006,8 @@ function acceptProposal(id){
     };
     DB.events.push(eventRec);
     createdEventIds.push(eventRec.id);
+    s.eventId=eventRec.id;
+    propShowInquiries(p,s).forEach(q=>{ q.eventId=eventRec.id; if(tourId&&!q.tourId) q.tourId=tourId; });
     logActivity('created','Event',eventRec.name+' (from proposal)');
     // Same auto-apply for event-level default-checked templates.
     const defaultEventTpls=(DB.settings.todoTemplates||[]).filter(x=>(x.appliesTo==='event'||x.appliesTo==='both')&&x.defaultChecked).map(x=>x.id);
@@ -10402,28 +10515,48 @@ function migrateVenueInquiries(){
   });
   return moved;
 }
+const INQ_METHODS={email:'Email via TourDesk',form:'Website form','email-other':'Email (outside TourDesk)',phone:'Phone','in-person':'In person',other:'Other'};
+const INQ_METHOD_ICON={email:'✉',form:'🌐','email-other':'✉',phone:'☎','in-person':'🤝',other:'•'};
+function inqMethod(q){ return INQ_METHODS[q.method]?q.method:'email'; }
+function inqUrlHTML(u){
+  if(!u) return '';
+  if(/^https?:\/\//i.test(u)) return '<a href="'+esc(u)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open form ↗</a>';
+  if(/^www\./i.test(u)) return '<a href="https://'+esc(u)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open form ↗</a>';
+  return esc(u);
+}
 function createInquiry(o){
   const ar=get(DB.artists,o.artistId);
   const now=new Date().toISOString();
+  const method=INQ_METHODS[o.method]?o.method:'email';
+  const by=(AUTH_USER&&AUTH_USER.displayName)||'';
+  // a date typed in for an inquiry sent outside TourDesk (today keeps the current time)
+  const sentTs=(o.sentAt&&o.sentAt!==todayStr())?new Date(o.sentAt+'T12:00:00').toISOString():now;
+  const sysNote=method==='email'?'Inquiry email opened in Gmail'+(o.template?' ("'+o.template+'")':''):'Inquiry logged: sent by '+INQ_METHODS[method].toLowerCase();
   // Re-opening the same inquiry (same venue, artist, tour and dates) adds to the existing record instead of making a duplicate
   const same=dbInquiries().find(x=>x.venueId===o.venueId&&(x.artistId||'')===(o.artistId||'')&&(x.tourId||'')===(o.tourId||'')
     &&(x.start||'')===(o.start||'')&&(x.end||'')===(o.end||'')&&x.status!=='Closed');
   if(same){
     same.history=same.history||[];
-    same.history.push({ts:now,status:same.status,note:'Inquiry email opened again in Gmail'+(o.template?' ("'+o.template+'")':''),by:(AUTH_USER&&AUTH_USER.displayName)||''});
+    same.history.push({ts:now,status:same.status,note:method==='email'?'Inquiry email opened again in Gmail'+(o.template?' ("'+o.template+'")':''):'Inquiry logged again: sent by '+INQ_METHODS[method].toLowerCase(),by});
+    if(o.proposalId&&!same.proposalId){ same.proposalId=o.proposalId; same.showSid=o.showSid||''; }
+    if(o.url) same.url=o.url; if(method!=='email') same.method=method;
+    if((o.status&&o.status!==same.status)||o.note){ same.status=o.status||same.status; same.history.push({ts:now,status:same.status,note:o.note||'',by}); }
     if(o.to) same.to=o.to; if(o.template) same.template=o.template; if(o.subject) same.subject=o.subject;
     if(o.attendance) same.attendance=o.attendance; if(o.batchId&&!same.batchId) same.batchId=o.batchId; if(o.eventId&&!same.eventId) same.eventId=o.eventId;
     same.updatedAt=now;
+    syncProposalShowFromInquiry(same);
     return same;
   }
-  const q={id:'iq'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),venueId:o.venueId,artistId:o.artistId||'',artistName:ar?ar.name:'',
+  const q={id:'iq'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),venueId:o.venueId,artistId:o.artistId||'',artistName:ar?ar.name:(o.artistName||''),
     tourId:o.tourId||'',start:o.start||'',end:o.end||'',range:inquiryRange(o.start,o.end),attendance:o.attendance||'',to:o.to||'',
-    template:o.template||'',subject:o.subject||'',status:'Sent',
-    history:[{ts:now,status:'Sent',note:'Inquiry email opened in Gmail'+(o.template?' ("'+o.template+'")':''),by:(AUTH_USER&&AUTH_USER.displayName)||''}],
-    batchId:o.batchId||'',eventId:o.eventId||'',createdAt:now,updatedAt:now};
+    template:o.template||'',subject:o.subject||'',status:'Sent',method,url:o.url||'',
+    history:[{ts:sentTs,status:'Sent',note:sysNote,by}],
+    batchId:o.batchId||'',eventId:o.eventId||'',proposalId:o.proposalId||'',showSid:o.showSid||'',createdAt:sentTs,updatedAt:now};
+  if((o.status&&o.status!=='Sent')||o.note){ q.status=o.status||'Sent'; q.history.push({ts:now,status:q.status,note:o.note||'',by}); }
   dbInquiries().push(q);
+  syncProposalShowFromInquiry(q);
   const v=get(DB.venues,o.venueId);
-  logActivity('sent an inquiry to','Venue',(v?v.name:'venue')+' ('+(q.artistName||'')+', '+q.range+')');
+  logActivity(method==='email'?'sent an inquiry to':'logged an inquiry to','Venue',(v?v.name:'venue')+' ('+(q.artistName||'')+', '+q.range+')');
   return q;
 }
 function setInquiryStatus(id,status,note){
@@ -10432,6 +10565,7 @@ function setInquiryStatus(id,status,note){
   q.status=status; q.updatedAt=new Date().toISOString();
   q.history=q.history||[];
   q.history.push({ts:q.updatedAt,status,note:note||'',by:(AUTH_USER&&AUTH_USER.displayName)||''});
+  syncProposalShowFromInquiry(q);
   const v=get(DB.venues,q.venueId);
   logActivity('updated an inquiry to "'+status+'" for','Venue',(v?v.name:'')+' ('+(q.artistName||'')+')');
   persist();
@@ -10442,7 +10576,7 @@ function inqTimeAgo(ts){
   if(days<1) return 'today'; if(days===1) return 'yesterday'; if(days<30) return days+' days ago';
   return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 }
-function inqLastNote(q){ const h=(q.history||[]).slice().reverse().find(x=>x.note&&!/^(Inquiry email opened|Turned into a show|Linked to show)/.test(x.note)); return h?h.note:''; }
+function inqLastNote(q){ const h=(q.history||[]).slice().reverse().find(x=>x.note&&!/^(Inquiry email opened|Inquiry logged|Turned into a show|Linked to show)/.test(x.note)); return h?h.note:''; }
 // One inquiry as a row (used on Outreach page, tour, artist and venue pages)
 function inquiryRowHTML(q,opts){
   opts=opts||{};
@@ -10456,8 +10590,10 @@ function inquiryRowHTML(q,opts){
     +(opts.hideArtist?'':'<span><b>'+esc(q.artistName||'—')+'</b>'+(t?' · <a onclick="go(\'tours\',\''+t.id+'\')">'+esc(t.name)+'</a>':'')+'</span>')
     +'<span>Dates: '+esc(q.range||'—')+'</span>'
     +(q.attendance?'<span>~'+esc(q.attendance)+' expected</span>':'')
-    +'<span>Sent '+esc(inqTimeAgo(q.createdAt))+'</span>'
+    +'<span>'+(inqMethod(q)==='email'?'Sent ':INQ_METHOD_ICON[inqMethod(q)]+' '+esc(INQ_METHODS[inqMethod(q)])+' · ')+esc(inqTimeAgo(q.createdAt))+'</span>'
+    +(q.url?'<span>'+inqUrlHTML(q.url)+'</span>':'')
     +(q.template?'<span>✉ '+esc(q.template)+'</span>':'')
+    +(!opts.hideProposal&&q.proposalId&&get(DB.proposals,q.proposalId)?'<span>Proposal: <a onclick="go(\'proposals\',\''+q.proposalId+'\')">'+esc(get(DB.proposals,q.proposalId).title)+'</a></span>':'')
     +'</div>'
     +(last?'<div class="inq-note">“'+esc(last)+'”</div>':'')
     +'</div>'
@@ -10465,8 +10601,10 @@ function inquiryRowHTML(q,opts){
     +'<select class="inq-status '+(INQ_COLOR[q.status]||'gray')+'" onchange="setInquiryStatus(\''+q.id+'\',this.value);render()" aria-label="Status">'
     +INQ_STATUSES.map(s=>'<option '+(s===q.status?'selected':'')+'>'+s+'</option>').join('')+'</select>'
     +'<div class="inq-acts"><a onclick="inquiryUpdateModal(\''+q.id+'\')">Update / notes</a>'
-    +(opts.linkEventId?(q.eventId===opts.linkEventId?' · <span class="muted">Linked to this show</span>':' · <a onclick="linkInquiryToEvent(\''+q.id+'\',\''+opts.linkEventId+'\')">Link to this show</a>')
-      :(ev?' · <a onclick="go(\'events\',\''+ev.id+'\')">View show</a>':' · <a onclick="turnInquiryIntoShow(\''+q.id+'\')">Turn into show</a>'))
+    +(opts.inProposal?''
+      :opts.linkEventId?(q.eventId===opts.linkEventId?' · <span class="muted">Linked to this show</span>':' · <a onclick="linkInquiryToEvent(\''+q.id+'\',\''+opts.linkEventId+'\')">Link to this show</a>')
+      :(ev?' · <a onclick="go(\'events\',\''+ev.id+'\')">View show</a>'
+        :(q.proposalId&&get(DB.proposals,q.proposalId)?' · <a onclick="go(\'proposals\',\''+q.proposalId+'\')">Open proposal</a>':' · <a onclick="turnInquiryIntoShow(\''+q.id+'\')">Turn into show</a>')))
     +'</div></div></div>';
 }
 function linkInquiryToEvent(qid,eid){
@@ -10480,8 +10618,9 @@ function eventOutreachHTML(e){
   if(!canDo('admin')||inArtistView()) return '';
   const list=eventInquiries(e);
   const ar=eventArtist(e);
+  const logBtn=e.venueId?'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="logInquiryModal({venueId:\''+e.venueId+'\',artistId:\''+(ar?ar.id:'')+'\',tourId:\''+(e.tourId||'')+'\',eventId:\''+e.id+'\',start:\''+(e.date||'')+'\',end:\''+(e.date||'')+'\'})">📝 Log inquiry</button>':'';
   const btn=e.venueId?'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="venueInquiryModal(\''+e.venueId+'\',\''+(ar?ar.id:'')+'\',\''+(e.tourId||'')+'\',\''+e.id+'\')">✉ Send inquiry</button>':'';
-  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Venue inquiries</span>'+btn+'</div>'
+  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Venue inquiries</span><span style="display:flex;gap:6px;flex-wrap:wrap">'+logBtn+btn+'</span></div>'
     +(list.length?list.map(q=>inquiryRowHTML(q,{hideVenue:true,linkEventId:e.id})).join(''):'<p class="muted" style="font-size:13px">No inquiry sent to this venue for this show yet.</p>')+'</div>';
 }
 function inquirySummaryChips(list){
@@ -10505,6 +10644,8 @@ function inquiryUpdateModal(id){
     '<p class="muted" style="font-size:12px;margin-bottom:12px">'+esc(q.artistName||'')+' · '+esc(q.range||'')+(q.to?' · '+esc(q.to):'')+'</p>'
     +'<div class="row2"><div class="field"><label>Status</label><select id="iq-status">'+INQ_STATUSES.map(s=>'<option '+(s===q.status?'selected':'')+'>'+s+'</option>').join('')+'</select></div>'
     +'<div class="field"><label>Tour (optional)</label><select id="iq-tour"><option value="">—</option>'+DB.tours.filter(t=>!q.artistName||!t.artist||t.artist.toLowerCase()===q.artistName.toLowerCase()).map(t=>'<option value="'+t.id+'" '+(t.id===q.tourId?'selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></div></div>'
+    +'<div class="row2"><div class="field"><label>How it was sent</label><select id="iq-method">'+Object.keys(INQ_METHODS).map(k=>'<option value="'+k+'" '+(k===inqMethod(q)?'selected':'')+'>'+esc(INQ_METHODS[k])+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Form link or contact</label><input id="iq-url" value="'+esc(q.url||'')+'" placeholder="https://venue.com/rentals"></div></div>'
     +'<div class="field"><label>Note</label><textarea id="iq-note" rows="3" placeholder="e.g. Gerry has Mar 12–14 open, $1,800 rental"></textarea></div>'
     +'<div class="sec-label" style="margin-top:6px">History</div>'+(hist||'<p class="muted" style="font-size:12px">No history.</p>'),
     '<button class="btn sm danger" style="margin-right:auto" onclick="deleteInquiry(\''+q.id+'\')">Delete</button><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveInquiryUpdate(\''+q.id+'\')">Save</button>');
@@ -10512,6 +10653,7 @@ function inquiryUpdateModal(id){
 function saveInquiryUpdate(id){
   const q=dbInquiries().find(x=>x.id===id); if(!q) return;
   q.tourId=fv('iq-tour');
+  if(document.getElementById('iq-method')){ q.method=fv('iq-method'); q.url=fv('iq-url').trim(); }
   const st=fv('iq-status'), note=fv('iq-note');
   if(st!==q.status||note) setInquiryStatus(id,st,note); else persist();
   closeModal(); render();
@@ -10551,7 +10693,7 @@ function outreachSectionHTML(filter,label){
   const list=dbInquiries().filter(q=>(filter.tourId?q.tourId===filter.tourId:true)&&(filter.artistId?q.artistId===filter.artistId:true));
   const pre=JSON.stringify(filter).replace(/"/g,'&quot;');
   return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>'+esc(label||'Outreach')+'</span>'
-    +'<span style="display:flex;gap:6px;flex-wrap:wrap">'+(list.length?'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="contactReportModal('+pre+')">📄 Report</button>':'')+'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="venueInquiryModal(\'\',\''+(filter.artistId||'')+'\',\''+(filter.tourId||'')+'\')">✉ Inquiry</button>'
+    +'<span style="display:flex;gap:6px;flex-wrap:wrap">'+(list.length?'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="contactReportModal('+pre+')">📄 Report</button>':'')+'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="logInquiryModal('+pre+')">📝 Log</button><button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="venueInquiryModal(\'\',\''+(filter.artistId||'')+'\',\''+(filter.tourId||'')+'\')">✉ Inquiry</button>'
     +'<button class="btn sm primary" style="text-transform:none;letter-spacing:0" onclick="bulkInquiryModal('+pre+')">✉ Bulk inquiry</button></span></div>'
     +(list.length?inquirySummaryChips(list):'')
     +inquiryListHTML(list,{hideArtist:!!filter.artistId&&!filter.tourId,empty:'No venue inquiries yet. Use Bulk inquiry to ask several venues at once.'})+'</div>';
@@ -10561,7 +10703,7 @@ function outreachSectionHTML(filter,label){
 VIEWS.outreach={
   render(c,a){
     if(!canDo('admin')){ c.innerHTML=emptyState('✉','Outreach is only available to administrators.'); return; }
-    a.innerHTML='<button class="btn sm" onclick="artistReportModal()">📄 Artist report</button> <button class="btn sm" onclick="contactReportModal({})">📄 Contact report</button> <button class="btn sm" onclick="venueInquiryModal()">✉ Inquiry</button> <button class="btn sm primary" onclick="bulkInquiryModal({})">✉ Bulk inquiry</button>';
+    a.innerHTML='<button class="btn sm" onclick="artistReportModal()">📄 Artist report</button> <button class="btn sm" onclick="contactReportModal({})">📄 Contact report</button> <button class="btn sm" onclick="logInquiryModal({})">📝 Log inquiry</button> <button class="btn sm" onclick="venueInquiryModal()">✉ Inquiry</button> <button class="btn sm primary" onclick="bulkInquiryModal({})">✉ Bulk inquiry</button>';
     const f=window._outreachFilter||(window._outreachFilter={artist:'',tour:'',status:'open',q:''});
     const all=dbInquiries();
     let list=all.filter(q=>(!f.artist||q.artistId===f.artist)&&(!f.tour||q.tourId===f.tour)
@@ -10898,7 +11040,7 @@ function rptChip(s,color){ return '<span class="chip s-'+esc(color||'gray')+'">'
 function rptInqChip(s){ return rptChip(s,INQ_COLOR[s]||'gray'); }
 function rptKV(k,v){ return v?'<div class="kv"><span>'+esc(k)+'</span><b>'+v+'</b></div>':''; }
 function rptWhere(v){ return [v.city,v.province].filter(Boolean).join(', ')+((v.country&&v.country!=='Canada')?', '+v.country:''); }
-const RPT_SYS_NOTE=/^(Inquiry email opened|Turned into a show|Linked to show)/;
+const RPT_SYS_NOTE=/^(Inquiry email opened|Inquiry logged|Turned into a show|Linked to show)/;
 const RPT_INQ_ORDER=['Booked','Hold offered','Available','Replied','Not available','Waiting','Sent','Closed'];
 function rptInqOrder(s){ const i=RPT_INQ_ORDER.indexOf(s); return i<0?99:i; }
 function rptInqGroup(s){ return INQ_RESPONDED.includes(s)?'responded':(s==='Sent'||s==='Waiting'?'waiting':'closed'); }
@@ -10934,7 +11076,7 @@ function rptInquiryCard(q,ctx){
       +(ev?'<div class="booked">✓ Show added'+(ev.date?' for '+esc(rptFmtD(ev.date+'T12:00:00')):'')+'</div>':'')
       +'<div class="grid">'+rptVenuePanel(v)
         +'<div class="panel"><h3>Inquiry</h3>'+rptKV('Dates asked',esc(q.range||'—'))+rptKV('Expected attendance',q.attendance?'~'+esc(q.attendance):'')
-          +rptKV('Sent',esc(rptFmtD(q.createdAt)))+rptKV('Tour',t?esc(t.name):'')+(opt.tplcol?rptKV('Email used',esc(q.template||'Plain text inquiry')):'')
+          +rptKV('Sent',esc(rptFmtD(q.createdAt)))+(inqMethod(q)!=='email'?rptKV('Sent by',esc(INQ_METHODS[inqMethod(q)])):'')+rptKV('Tour',t?esc(t.name):'')+(opt.tplcol?rptKV('Email used',esc(q.template||'Plain text inquiry')):'')
           +rptKV('Status',rptInqChip(q.status))
           +(opt.emails?rptKV('Venue contact',esc(v.contactName||''))+rptKV('Email',q.to?'<a href="mailto:'+esc(q.to)+'">'+esc(q.to)+'</a>':''):'')+'</div>'
       +'</div>'
@@ -11265,11 +11407,76 @@ function buildArtistReportHTML(shows,inqs,o){
 }
 
 let _viEdited={subject:false,body:false};
-function venueInquiryModal(preVenueId,preArtistId,preTourId,preEventId){
+/* ---------- Log an inquiry sent outside TourDesk (website form, phone, own email) ---------- */
+let _liLink={};
+function logInquiryModal(pre){
+  if(!canDo('admin')) return;
+  pre=pre||{};
+  const prop=pre.proposalId?get(DB.proposals,pre.proposalId):null;
+  const show=prop?(prop.shows||[]).find(x=>x._sid===pre.sid):null;
+  _liLink={eventId:pre.eventId||'',proposalId:prop?prop.id:'',showSid:show?show._sid:'',artistName:prop?(prop.artistName||''):''};
+  const ev=pre.eventId?get(DB.events,pre.eventId):null;
+  const artists=DB.artists.slice().sort((a,b)=>((a.type==='roster'?0:1)-(b.type==='roster'?0:1))||(a.name||'').localeCompare(b.name||''));
+  const pa=prop?proposalArtist(prop):null;
+  const defArtist=(get(DB.artists,pre.artistId)?pre.artistId:'')||(pa?pa.id:'')||(ARTIST_VIEW||'')||'';
+  const link=prop?'<div class="li-link">For proposal <b>'+esc(prop.title)+'</b>'+(show?' · '+esc(show.date||'date TBD'):'')+'</div>'
+    :ev?'<div class="li-link">For show <b>'+esc(ev.name||'')+'</b>'+(ev.date?' · '+esc(ev.date):'')+'</div>':'';
+  openModal('Log an inquiry',
+    '<p class="muted" style="font-size:12px;margin:-4px 0 10px">For inquiries you sent through a venue\'s website form, by phone or from your own email. TourDesk tracks it like any other inquiry.</p>'+link
+    +'<div class="row3"><div class="field"><label>Country</label><select id="li-country" onchange="venueCascadeFilterChanged(\'li\',\'country\',liVenueChanged)"></select></div>'
+    +'<div class="field"><label>Province / State</label><select id="li-province" onchange="venueCascadeFilterChanged(\'li\',\'province\',liVenueChanged)"></select></div>'
+    +'<div class="field"><label>City</label><select id="li-city" onchange="venueCascadeFilterChanged(\'li\',\'city\',liVenueChanged)"></select></div></div>'
+    +'<div class="field"><label>Venue</label><select id="li" onchange="liVenueChanged()"></select></div>'
+    +'<div class="row2"><div class="field"><label>Artist</label><select id="li-artist" onchange="liArtistChanged()">'
+      +(prop&&!pa?'<option value="" selected>'+esc(prop.artistName||'—')+'</option>':(defArtist?'':'<option value="">— choose —</option>'))
+      +artists.map(a=>'<option value="'+a.id+'" '+(a.id===defArtist?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Tour (optional)</label><select id="li-tour" data-pre="'+esc(pre.tourId||'')+'"></select></div></div>'
+    +'<div class="row3"><div class="field"><label>Dates from</label><input id="li-start" type="date" value="'+esc(pre.start||'')+'"></div>'
+    +'<div class="field"><label>Dates to</label><input id="li-end" type="date" value="'+esc(pre.end||'')+'"></div>'
+    +'<div class="field"><label>Expected attendance</label><input id="li-att" type="number" min="0" value="'+esc((ev&&ev.capacityAlloc)||(show&&show.capacity)||'')+'"></div></div>'
+    +'<div class="row2"><div class="field"><label>How was it sent?</label><select id="li-method">'+Object.keys(INQ_METHODS).filter(k=>k!=='email').map(k=>'<option value="'+k+'">'+esc(INQ_METHODS[k])+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Date sent</label><input id="li-sent" type="date" value="'+todayStr()+'" max="'+todayStr()+'"></div></div>'
+    +'<div class="field"><label>Form link or contact <span class="muted" style="font-weight:400">(optional)</span></label><input id="li-url" placeholder="https://venue.com/rental-request or name / phone"></div>'
+    +'<div class="row2"><div class="field"><label>Status</label><select id="li-status">'+INQ_STATUSES.map(s=>'<option '+(s==='Sent'?'selected':'')+'>'+s+'</option>').join('')+'</select></div><div></div></div>'
+    +'<div class="field"><label>Note <span class="muted" style="font-weight:400">(optional)</span></label><textarea id="li-note" rows="2" placeholder="e.g. Submitted rental request form, confirmation #4821"></textarea></div>'
+    +'<div id="li-err" style="color:var(--red);font-size:12px;min-height:16px"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="li-go" onclick="saveLoggedInquiry()">Save inquiry</button>');
+  venueCascadeInit('li',pre.venueId||'',liVenueChanged);
+  liArtistChanged();
+  liVenueChanged();
+}
+function liVenueChanged(){
+  const v=get(DB.venues,fv('li')), u=document.getElementById('li-url');
+  if(u&&!u.dataset.typed) u.value=v?(v.inquiryUrl||''):'';
+  if(u&&!u.oninput) u.oninput=()=>{u.dataset.typed='1';};
+}
+function liArtistChanged(){
+  const ts=document.getElementById('li-tour'); if(!ts) return;
+  const keep=ts.value||ts.dataset.pre||''; ts.dataset.pre='';
+  const arId=fv('li-artist');
+  ts.innerHTML='<option value="">—</option>'+(arId?bulkToursFor(arId):[]).map(t=>'<option value="'+t.id+'" '+(t.id===keep?'selected':'')+'>'+esc(t.name)+'</option>').join('');
+  if(keep&&!ts.value){ const t=get(DB.tours,keep); if(t) ts.insertAdjacentHTML('beforeend','<option value="'+t.id+'" selected>'+esc(t.name)+'</option>'); }
+}
+function saveLoggedInquiry(){
+  const err=document.getElementById('li-err');
+  const vid=fv('li'), arId=fv('li-artist'), start=fv('li-start'), end=fv('li-end'), sent=fv('li-sent');
+  if(!vid){ err.textContent='Pick a venue.'; return; }
+  if(!arId&&!_liLink.artistName){ err.textContent='Pick an artist.'; return; }
+  if(!start&&!end){ err.textContent='Add the dates you asked about (at least a start date).'; return; }
+  if(start&&end&&end<start){ err.textContent='The end date is before the start date.'; return; }
+  if(sent&&sent>todayStr()){ err.textContent='The date sent can\'t be in the future.'; return; }
+  const url=fv('li-url').trim();
+  const v=get(DB.venues,vid); if(v&&url&&/^(https?:\/\/|www\.)/i.test(url)) v.inquiryUrl=url;
+  createInquiry({venueId:vid,artistId:arId,artistName:_liLink.artistName,tourId:fv('li-tour'),start,end:end||start,attendance:fv('li-att'),
+    method:fv('li-method'),sentAt:sent,url,status:fv('li-status'),note:fv('li-note').trim(),
+    eventId:_liLink.eventId,proposalId:_liLink.proposalId,showSid:_liLink.showSid});
+  persist(); closeModal(); render();
+}
+function venueInquiryModal(preVenueId,preArtistId,preTourId,preEventId,preProposalId,preSid){
   if(!canDo('admin')) return;
   _viEdited={subject:false,body:false};
-  _viTpl={id:'',values:{},edited:{},manual:false,logged:false,timer:null,eventId:preEventId||''};
-  const preEvent=preEventId?get(DB.events,preEventId):null;
+  _viTpl={id:'',values:{},edited:{},manual:false,logged:false,timer:null,eventId:preEventId||'',proposalId:preProposalId||'',showSid:preSid||''};
+  const preEvent=preEventId?get(DB.events,preEventId):(preProposalId?propShowAsDates(preProposalId,preSid):null);
   const artists=DB.artists.slice().sort((a,b)=>((a.type==='roster'?0:1)-(b.type==='roster'?0:1))||(a.name||'').localeCompare(b.name||''));
   const preTour=preTourId?get(DB.tours,preTourId):null;
   const tourArtist=preTour&&preTour.artist?DB.artists.find(x=>x.name&&x.name.toLowerCase()===preTour.artist.toLowerCase()):null;
@@ -11364,7 +11571,7 @@ function viOpenGmail(){
   if(!_viTpl.logged){
     // remember it on the venue, and keep a genre typed for an artist that had none
     const genre=fv('vi-genre'); if(ar&&!ar.genre&&genre) ar.genre=genre;
-    createInquiry({venueId:vid,artistId:arId,tourId:fv('vi-tour'),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to'),template:tpl?tpl.name:'',subject:fv('vi-subject'),eventId:(_viTpl&&_viTpl.eventId)||''});
+    createInquiry({venueId:vid,artistId:arId,tourId:fv('vi-tour'),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to'),template:tpl?tpl.name:'',subject:fv('vi-subject'),eventId:(_viTpl&&_viTpl.eventId)||'',proposalId:(_viTpl&&_viTpl.proposalId)||'',showSid:(_viTpl&&_viTpl.showSid)||'',artistName:(_viTpl&&_viTpl.proposalId&&(get(DB.proposals,_viTpl.proposalId)||{}).artistName)||''});
     _viTpl.logged=true;
   }
   if(tpl) viRememberValues();
