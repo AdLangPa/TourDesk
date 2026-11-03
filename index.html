@@ -6106,6 +6106,7 @@ VIEWS.proposals={
   },
   detail(c,a,id){
     const p=get(DB.proposals,id); if(!p){go('proposals');return;}
+    if(canDo('admin')&&propAutoLinkInquiries(p)) persist();
     const artist=p.artistId?get(DB.artists,p.artistId):null;
     const shows=(p.shows||[]).slice().sort((a,b)=>(!a.date&&!b.date?0:!a.date?1:!b.date?-1:a.date<b.date?-1:a.date>b.date?1:0));
     let totGross=0,totComm=0,totArtist=0;
@@ -7072,6 +7073,27 @@ function syncProposalShowFromInquiry(q){
   if(!q||!q.proposalId) return;
   const p=get(DB.proposals,q.proposalId), s=p&&(p.shows||[]).find(x=>x._sid===q.showSid);
   if(s&&INQ_TO_SHOW[q.status]) s.showStatus=INQ_TO_SHOW[q.status];
+}
+// Earlier correspondence: inquiries already sent or logged for this artist to a venue in the proposal
+// (and not tied to another proposal or a show) join the matching proposal show. Returns how many were linked.
+function propAutoLinkInquiries(p){
+  if(!p||p.status==='Accepted'||p.status==='Declined') return 0;
+  const ar=proposalArtist(p); if(!ar) return 0;
+  const shows=p.shows||[]; if(!shows.length) return 0;
+  let n=0;
+  dbInquiries().forEach(q=>{
+    if(q.proposalId||q.eventId||q.artistId!==ar.id||q.status==='Closed') return;
+    if((q.end||q.start)&&(q.end||q.start)<todayStr()) return; // asked about dates that have already passed
+    const at=shows.filter(s=>s.venueId===q.venueId); if(!at.length) return;
+    const s=at.find(x=>x.date&&q.start&&x.date>=q.start&&x.date<=(q.end||q.start))
+      ||at.find(x=>!dbInquiries().some(o=>o.proposalId===p.id&&o.showSid===x._sid))||at[0];
+    q.proposalId=p.id; q.showSid=s._sid; q.updatedAt=q.updatedAt||new Date().toISOString();
+    (q.history=q.history||[]).push({ts:new Date().toISOString(),status:q.status,note:'Linked to proposal '+(p.title||''),by:(AUTH_USER&&AUTH_USER.displayName)||''});
+    syncProposalShowFromInquiry(q);
+    n++;
+  });
+  if(n) logActivity('linked '+n+' earlier inquir'+(n===1?'y':'ies')+' to','Proposal',p.title||'');
+  return n;
 }
 function setProposalShowStatus(pid,sid,value){
   const p=get(DB.proposals,pid); if(!p) return;
@@ -8821,6 +8843,7 @@ function pavSaveMany(){
   });
   logActivity('edited','Proposal',p.title+' (added '+names.length+' show'+(names.length===1?'':'s')+': '+names.slice(0,5).join(', ')+(names.length>5?'…':'')+')');
   const pid=_pav.pid; _pav=null;
+  propAutoLinkInquiries(p);
   persist(); closeModal(); go('proposals',pid);
 }
 
@@ -10683,7 +10706,7 @@ function inqTimeAgo(ts){
   if(days<1) return 'today'; if(days===1) return 'yesterday'; if(days<30) return days+' days ago';
   return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 }
-function inqLastNote(q){ const h=(q.history||[]).slice().reverse().find(x=>x.note&&!/^(Inquiry email opened|Inquiry logged|Turned into a show|Linked to show)/.test(x.note)); return h?h.note:''; }
+function inqLastNote(q){ const h=(q.history||[]).slice().reverse().find(x=>x.note&&!/^(Inquiry email opened|Inquiry logged|Turned into a show|Linked to show|Linked to proposal)/.test(x.note)); return h?h.note:''; }
 // One inquiry as a row (used on Outreach page, tour, artist and venue pages)
 function inquiryRowHTML(q,opts){
   opts=opts||{};
@@ -11147,7 +11170,7 @@ function rptChip(s,color){ return '<span class="chip s-'+esc(color||'gray')+'">'
 function rptInqChip(s){ return rptChip(s,INQ_COLOR[s]||'gray'); }
 function rptKV(k,v){ return v?'<div class="kv"><span>'+esc(k)+'</span><b>'+v+'</b></div>':''; }
 function rptWhere(v){ return [v.city,v.province].filter(Boolean).join(', ')+((v.country&&v.country!=='Canada')?', '+v.country:''); }
-const RPT_SYS_NOTE=/^(Inquiry email opened|Inquiry logged|Turned into a show|Linked to show)/;
+const RPT_SYS_NOTE=/^(Inquiry email opened|Inquiry logged|Turned into a show|Linked to show|Linked to proposal)/;
 const RPT_INQ_ORDER=['Booked','Hold offered','Available','Replied','Not available','Waiting','Sent','Closed'];
 function rptInqOrder(s){ const i=RPT_INQ_ORDER.indexOf(s); return i<0?99:i; }
 function rptInqGroup(s){ return INQ_RESPONDED.includes(s)?'responded':(s==='Sent'||s==='Waiting'?'waiting':'closed'); }
