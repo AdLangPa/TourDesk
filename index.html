@@ -1766,7 +1766,7 @@ function tableEvents(list,opts){
       +(money?'<td class="num" data-label="Gross">'+money0(f.gross)+'</td>'
       +(hideComm?'':'<td class="num pos" data-label="My comm.">'+money0(f.commission)+'</td>')
       +'<td class="num '+(f.artistNet>=0?'pos':'neg')+'" data-label="Artist net">'+money0(f.artistNet)+'</td>':'')
-      +'<td class="tc-status"><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+holdStatusBadge(e.holdStatus)
+      +'<td class="tc-status"><span class="badge '+statusColor(eventDisplayStatus(e))+'">'+esc(eventDisplayStatus(e))+'</span>'+eventInquiryBadge(e)
       +(e.statusNote?'<div class="muted" style="font-size:11px;margin-top:3px;max-width:180px;white-space:normal">'+esc(e.statusNote)+'</div>':'')+'</td></tr>';
   }).join('');
   // Phone version: same data as simple cards (shown instead of the table under 760px)
@@ -1780,7 +1780,7 @@ function tableEvents(list,opts){
     return '<div class="ev-card" onclick="go(\'events\',\''+e.id+'\')">'
       +'<div class="ev-card-top"><div style="min-width:0"><div class="ev-card-name">'+esc(e.name)+'</div>'
       +'<div class="ev-card-sub">'+(e.date?esc(fmtDate(e.date)):'Date TBD')+(where?' · '+esc(where):'')+'</div></div>'
-      +'<div class="ev-card-badges"><span class="badge '+statusColor(ds)+'">'+esc(ds)+'</span>'+holdStatusBadge(e.holdStatus)+'</div></div>'
+      +'<div class="ev-card-badges"><span class="badge '+statusColor(ds)+'">'+esc(ds)+'</span>'+eventInquiryBadge(e)+'</div></div>'
       +(e.statusNote?'<div class="ev-card-note">'+esc(e.statusNote)+'</div>':'')
       +(itinSummaryHTML(e)?'<div class="ev-card-itin">'+itinSummaryHTML(e)+'</div>':'')
       +'<div class="ev-card-figs">'
@@ -1792,7 +1792,15 @@ function tableEvents(list,opts){
   }).join('');
   return hdr+rows+'</tbody></table><div class="ev-cards">'+cards+'</div>';
 }
+// Event lifecycle (one status per show; replaces the old Routing/Confirmed/Completed + separate hold status)
+const EVENT_STATUSES=['Inquiry','Contract Discussions','Contract Signed','On Sale','Complete'];
+const EVENT_FIRM=['Contract Signed','On Sale','Complete'];
 function statusColor(s){
+  if(s==='Inquiry') return 'gray';
+  if(s==='Contract Discussions') return 'amber';
+  if(s==='Contract Signed') return 'blue';
+  if(s==='On Sale') return 'green';
+  if(s==='Complete') return 'gray';
   if(s==='Confirmed') return 'green';
   if(s==='Routing') return 'amber';
   if(s==='Completed') return 'blue';
@@ -1800,8 +1808,51 @@ function statusColor(s){
   return 'gray';
 }
 function eventDisplayStatus(e){
-  if(e.settlementV2?.settled) return 'Settled';
-  return e.status||'Draft';
+  return EVENT_STATUSES.includes(e.status)?e.status:legacyEventStatus(e);
+}
+function eventIsFirm(e){ return EVENT_FIRM.includes(eventDisplayStatus(e)); }
+// Old statuses -> new: Completed/settled or a past Confirmed show = Complete; Confirmed with ticket sales = On Sale;
+// other Confirmed = Contract Signed; a hold with the venue = Contract Discussions; everything else = Inquiry
+function legacyEventStatus(e){
+  const st=e.status||'', hs=e.holdStatus||'';
+  if(st==='Completed'||st==='Settled'||e.settlementV2?.settled) return 'Complete';
+  if(st==='Confirmed'){
+    if(e.date&&e.date<todayStr()) return 'Complete';
+    const sold=(+(e.settlement&&e.settlement.ticketsSold)||0)+(+e.presales||0)
+      +Object.values((e.projection&&e.projection.salesTracker&&e.projection.salesTracker.tierSold)||{}).reduce((a,x)=>a+(+x||0),0);
+    return sold>0?'On Sale':'Contract Signed';
+  }
+  if(['1st Hold','2nd Hold','3rd Hold','Confirmed'].includes(hs)) return 'Contract Discussions';
+  return 'Inquiry';
+}
+// One-time move to the new statuses; the old values are kept on the event (legacyStatus) in case they're ever needed
+function migrateEventStatuses(){
+  let n=0;
+  (DB.events||[]).forEach(e=>{
+    if(EVENT_STATUSES.includes(e.status)&&!('holdStatus' in e)) return;
+    const ns=eventDisplayStatus(e);
+    if(!e.legacyStatus&&(e.status||e.holdStatus)) e.legacyStatus={status:e.status||'',holdStatus:e.holdStatus||''};
+    e.status=ns; delete e.holdStatus; n++;
+  });
+  return n;
+}
+// Artist for a show: its tour's artist, or the artist whose contact is tagged as talent
+function eventArtist(e){
+  const t=e.tourId?get(DB.tours,e.tourId):null;
+  if(t&&t.artist){ const a=DB.artists.find(x=>(x.name||'').toLowerCase()===t.artist.toLowerCase()); if(a) return a; }
+  return DB.artists.find(a=>a.contactId&&(e.talentIds||[]).includes(a.contactId))||null;
+}
+// Inquiries behind a show: linked to it, or sent to its venue for its artist
+function eventInquiries(e){
+  const ar=eventArtist(e);
+  return dbInquiries().filter(q=>q.eventId===e.id||(!q.eventId&&ar&&q.venueId===e.venueId&&q.artistId===ar.id&&q.status!=='Closed'))
+    .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+}
+function eventInquiryBadge(e){
+  const q=eventInquiries(e)[0]; if(!q) return '';
+  const d=q.createdAt?new Date(q.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+  const label=(q.status==='Sent'||q.status==='Waiting')?'✉ Inquiry sent'+(d?' '+d:''):'✉ '+q.status;
+  return '<span class="badge '+(INQ_COLOR[q.status]||'gray')+'" style="margin-left:6px" title="Venue inquiry sent '+esc(d)+' · '+esc(q.status)+'">'+esc(label)+'</span>';
 }
 function setEventStatusNote(id,value){
   const e=get(DB.events,id); if(!e) return;
@@ -2873,7 +2924,7 @@ VIEWS.events={
         <input id="ev-search" placeholder="Search events, venues, artists…" oninput="filterEventsList()" style="flex:2;min-width:200px;padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
         <select id="ev-filter-status" onchange="filterEventsList()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
           <option value="">All statuses</option>
-          ${['Routing','Confirmed','Settled','Completed'].map(s=>`<option>${s}</option>`).join('')}
+          ${EVENT_STATUSES.map(s=>`<option>${s}</option>`).join('')}<option value="Settled">Settled (money)</option>
         </select>
         <select id="ev-filter-artist" onchange="filterEventsList()" style="padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px">
           <option value="">All artists</option>
@@ -2900,7 +2951,9 @@ VIEWS.events={
     const backAction=refProp?`go('proposals','${refProp}')`:`go('events')`;
     const _refP=refProp||'';
     if(canDo('admin')){
-      a.innerHTML='<button class="btn sm" onclick="eventForm(\''+id+'\',null,null,null,\''+_refP+'\')">' + 'Edit deal</button>'
+      const _evAr=eventArtist(e);
+      a.innerHTML=(e.venueId?'<button class="btn sm" onclick="venueInquiryModal(\''+e.venueId+'\',\''+(_evAr?_evAr.id:'')+'\',\''+(e.tourId||'')+'\',\''+id+'\')">✉ Send inquiry</button> ':'')
+        +'<button class="btn sm" onclick="eventForm(\''+id+'\',null,null,null,\''+_refP+'\')">' + 'Edit deal</button>'
         +' <button class="btn sm" onclick="duplicateEvent(\''+id+'\')">' + 'Duplicate</button>'
         +(e.date?' <button class="btn ghost sm" onclick="exportEventToGoogleCalendar(\''+id+'\')">📅 Add to Google Calendar</button>':'')
         +' <button class="btn sm danger" onclick="deleteEvent(\''+id+'\')">' + 'Delete</button>';
@@ -2910,7 +2963,7 @@ VIEWS.events={
     c.innerHTML=`
       <div class="detail-head"><span class="back" onclick="${backAction}">${backLabel}</span>
         <span class="detail-title">${esc(e.name)}</span>
-        <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span>${holdStatusBadge(e.holdStatus)}
+        <span class="badge ${statusColor(eventDisplayStatus(e))}">${esc(eventDisplayStatus(e))}</span>${eventInquiryBadge(e)}
         <input type="text" class="detail-statusnote" id="ev-statusnote-${id}" value="${esc(e.statusNote||'')}" placeholder="Add a status update…" ${canDo('admin')?'':'disabled'}
           style="flex:1;min-width:140px;max-width:360px;margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--bord);border-radius:6px;background:var(--surf);color:var(--txt2)"
           onchange="setEventStatusNote('${id}',this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"></div>
@@ -3167,7 +3220,7 @@ function filterEventsList(){
     return (e.name||'').toLowerCase().includes(q)||(v?.name||'').toLowerCase().includes(q)||(t?.artist||'').toLowerCase().includes(q);
   });
   if(status==='Settled') list=list.filter(e=>e.settlementV2?.settled);
-  else if(status) list=list.filter(e=>e.status===status && !e.settlementV2?.settled);
+  else if(status) list=list.filter(e=>eventDisplayStatus(e)===status);
   if(artist) list=list.filter(e=>(get(DB.tours,e.tourId)?.artist||'')=== artist);
   if(venueId) list=list.filter(e=>e.venueId===venueId);
   list.sort((a,b)=>sort==='asc'?(a.date||'').localeCompare(b.date||''):(b.date||'').localeCompare(a.date||''));
@@ -3463,8 +3516,8 @@ function lgAdd(eid){
 
 // Split events into confirmed/completed vs routing and sum financials
 function splitTotals(events){
-  const firm=events.filter(e=>['Confirmed','Completed'].includes(e.status));
-  const routing=events.filter(e=>!['Confirmed','Completed'].includes(e.status));
+  const firm=events.filter(e=>eventIsFirm(e));
+  const routing=events.filter(e=>!eventIsFirm(e));
   const sum=list=>{let gross=0,comm=0,net=0; list.forEach(e=>{const f=eventBest(e);gross+=f.gross;comm+=f.commission;net+=f.artistNet;}); return {gross,comm,net,count:list.length};};
   return {firm:sum(firm),routing:sum(routing),all:sum(events)};
 }
@@ -3492,7 +3545,7 @@ function eventOverview(host,e,v,t){
     </tr>`;
   };
 
-  host.innerHTML='<div class="sec itin-sec" id="itin-host">'+itineraryHTML(e)+'</div>'+`
+  host.innerHTML='<div class="sec itin-sec" id="itin-host">'+itineraryHTML(e)+'</div>'+eventOutreachHTML(e)+`
     <div class="stats">
       <div class="stat"><div class="stat-val ${(hasActuals?sf.artistNet:pf.artistNet)>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
       <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.commission):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'Your commission (actual)':'To you (projected)'}</div></div>
@@ -4842,7 +4895,7 @@ function deleteFile(eid,idx){
 function eventVenueHistory(host,e,v){
   if(!v){ host.innerHTML='<p class="muted" style="padding:16px;font-size:13px">No venue linked to this event.</p>'; return; }
   // All past events at this venue (excluding this event itself)
-  const past=DB.events.filter(ev=>ev.venueId===v.id && ev.id!==e.id && ((+ev.settlementV2?.venuePayout>0) || ev.status==='Completed'));
+  const past=DB.events.filter(ev=>ev.venueId===v.id && ev.id!==e.id && ((+ev.settlementV2?.venuePayout>0) || eventDisplayStatus(ev)==='Complete'));
   const routing=DB.events.filter(ev=>ev.venueId===v.id && ev.id!==e.id && !past.includes(ev));
   const thisF=projectionFigures(e);
   const thisPricing=e.pricing||{};
@@ -4949,9 +5002,7 @@ function eventForm(id, tourId, prefill, proposalId, refProp){
     <div id="ef-availability-warn" style="font-size:12px;margin:-6px 0 10px;min-height:16px"></div>
     <div class="row3">
       <div class="field"><label>Status</label><select id="ef-status">
-        ${['Routing','Confirmed','Completed'].map(s=>`<option ${e.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
-      <div class="field"><label>Hold status <span class="muted" style="font-weight:400">(with venue)</span></label><select id="ef-hold">
-        ${HOLD_STATUSES.map(s=>`<option value="${s}" ${(e.holdStatus||'')===s?'selected':''}>${s||'— not set —'}</option>`).join('')}</select></div>
+        ${EVENT_STATUSES.map(s=>`<option ${eventDisplayStatus(e)===s?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label>Capacity allocated</label><input id="ef-cap" type="number" value="${e.capacityAlloc||''}"></div>
     </div>
     <div class="row2">
@@ -5178,7 +5229,7 @@ function applyPastedShow(){
   const prefill={
     name:d.name||'',tourId:tourId,venueId:venueId,
     date:d.date||'',showTime:d.showTime||'',loadIn:d.loadIn||'',
-    status:d.status||'Confirmed',
+    status:EVENT_STATUSES.includes(d.status)?d.status:'Contract Signed',
     capacityAlloc:d.capacity||'',presales:d.presales||0,comps:d.comps||0,
     mgmtPct:d.mgmtPct!=null?d.mgmtPct:DB.settings.mgmtPct,
     pricing:{
@@ -5318,7 +5369,7 @@ function reopenEventForm(){
   // Preserve form state then re-render with updated cost lines
   const cur={
     id:_curEventFormId,tourId:fv('ef-tour'),venueId:fv('ef-venue'),name:fv('ef-name'),
-    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),statusNote:fv('ef-statusnote'),
+    date:fv('ef-date'),showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),statusNote:fv('ef-statusnote'),
     capacityAlloc:fv('ef-cap'),presales:fv('ef-pre'),comps:fv('ef-comps'),mgmtPct:fv('ef-mgmt'),
     pricing:{base:fv('ef-base'),serviceFee:fv('ef-fee'),feeType:fv('ef-feetype'),
       ccFee:fv('ef-cc'),taxRate:fv('ef-tax'),taxOn:fv('ef-taxon')},
@@ -5375,7 +5426,7 @@ function toggleDealFields(seeds){
 function saveEvent(id){
   const rec={
     name:fv('ef-name'),tourId:fv('ef-tour'),venueId:fv('ef-venue'),date:fv('ef-date'),
-    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),holdStatus:fv('ef-hold'),statusNote:fv('ef-statusnote'),
+    showTime:fv('ef-show'),loadIn:fv('ef-load'),status:fv('ef-status'),statusNote:fv('ef-statusnote'),
     capacityAlloc:fvn('ef-cap'),presales:fvn('ef-pre'),comps:fvn('ef-comps'),
     mgmtPct:fvn('ef-mgmt'),
     pricing:(()=>{
@@ -7232,7 +7283,6 @@ function printArtistStatusReport(artistId){
       </div>
       <div style="margin-top:10px">
         ${reportChip(dispStatus,statusColor(dispStatus))}
-        ${e.holdStatus?reportChip(e.holdStatus,holdStatusColor(e.holdStatus)):''}
       </div>
       ${e.statusNote?`<div style="margin-top:10px;font-size:13px;color:#243f56;line-height:1.5"><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#8a97a3">Latest update${e.statusNoteAt?' \u00b7 '+esc(reportDate(e.statusNoteAt)):''}</span><br>${esc(e.statusNote)}</div>`:''}
       ${notes.length?`<div style="margin-top:10px;padding-left:10px;border-left:2px solid #e3dccb">${notes.map(n=>`<div style="font-size:12px;color:#5c7086;line-height:1.5;margin-bottom:6px;white-space:pre-wrap"><span style="color:#8a97a3">${esc(reportDate(n.ts))}</span> \u2014 ${esc(n.text)}</div>`).join('')}</div>`:''}
@@ -8830,7 +8880,7 @@ function acceptProposal(id){
       name:v?(esc(v.city||v.name)+' — '+esc(v.name)):'Untitled show',
       tourId:tourId||'',venueId:s.venueId||'',
       date:s.date||'',showTime:s.showTime||'',loadIn:s.loadIn||'',
-      status:'Routing',holdStatus:s.holdStatus||'',capacityAlloc:s.capacity||0,presales:0,comps:0,
+      status:['1st Hold','2nd Hold','3rd Hold','Confirmed'].includes(s.holdStatus)?'Contract Discussions':'Inquiry',capacityAlloc:s.capacity||0,presales:0,comps:0,
       mgmtPct:s.mgmtPct||DB.settings.mgmtPct,
       pricing:{base:+s.ticketBase||0,serviceFee:0,feeType:'fixed',ccFee:0,
         taxRate:+s.taxRate||DB.settings.taxRate,taxOn:s.taxOn||'base',
@@ -9966,7 +10016,7 @@ function finMonthChart(events,artistMode){
   events.filter(e=>e.date).forEach(e=>{
     const k=e.date.slice(0,7);
     months[k]=months[k]||{firm:0,routing:0,count:0};
-    const firm=['Confirmed','Completed'].includes(e.status)||e.settlementV2?.settled;
+    const firm=eventIsFirm(e)||e.settlementV2?.settled;
     months[k][firm?'firm':'routing']+=Math.max(0,metric(e)); months[k].count++;
   });
   const keys=Object.keys(months).sort();
@@ -10362,7 +10412,7 @@ function createInquiry(o){
     same.history=same.history||[];
     same.history.push({ts:now,status:same.status,note:'Inquiry email opened again in Gmail'+(o.template?' ("'+o.template+'")':''),by:(AUTH_USER&&AUTH_USER.displayName)||''});
     if(o.to) same.to=o.to; if(o.template) same.template=o.template; if(o.subject) same.subject=o.subject;
-    if(o.attendance) same.attendance=o.attendance; if(o.batchId&&!same.batchId) same.batchId=o.batchId;
+    if(o.attendance) same.attendance=o.attendance; if(o.batchId&&!same.batchId) same.batchId=o.batchId; if(o.eventId&&!same.eventId) same.eventId=o.eventId;
     same.updatedAt=now;
     return same;
   }
@@ -10370,7 +10420,7 @@ function createInquiry(o){
     tourId:o.tourId||'',start:o.start||'',end:o.end||'',range:inquiryRange(o.start,o.end),attendance:o.attendance||'',to:o.to||'',
     template:o.template||'',subject:o.subject||'',status:'Sent',
     history:[{ts:now,status:'Sent',note:'Inquiry email opened in Gmail'+(o.template?' ("'+o.template+'")':''),by:(AUTH_USER&&AUTH_USER.displayName)||''}],
-    batchId:o.batchId||'',eventId:'',createdAt:now,updatedAt:now};
+    batchId:o.batchId||'',eventId:o.eventId||'',createdAt:now,updatedAt:now};
   dbInquiries().push(q);
   const v=get(DB.venues,o.venueId);
   logActivity('sent an inquiry to','Venue',(v?v.name:'venue')+' ('+(q.artistName||'')+', '+q.range+')');
@@ -10392,7 +10442,7 @@ function inqTimeAgo(ts){
   if(days<1) return 'today'; if(days===1) return 'yesterday'; if(days<30) return days+' days ago';
   return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 }
-function inqLastNote(q){ const h=(q.history||[]).slice().reverse().find(x=>x.note&&!/^(Inquiry email opened|Turned into a show)/.test(x.note)); return h?h.note:''; }
+function inqLastNote(q){ const h=(q.history||[]).slice().reverse().find(x=>x.note&&!/^(Inquiry email opened|Turned into a show|Linked to show)/.test(x.note)); return h?h.note:''; }
 // One inquiry as a row (used on Outreach page, tour, artist and venue pages)
 function inquiryRowHTML(q,opts){
   opts=opts||{};
@@ -10415,8 +10465,24 @@ function inquiryRowHTML(q,opts){
     +'<select class="inq-status '+(INQ_COLOR[q.status]||'gray')+'" onchange="setInquiryStatus(\''+q.id+'\',this.value);render()" aria-label="Status">'
     +INQ_STATUSES.map(s=>'<option '+(s===q.status?'selected':'')+'>'+s+'</option>').join('')+'</select>'
     +'<div class="inq-acts"><a onclick="inquiryUpdateModal(\''+q.id+'\')">Update / notes</a>'
-    +(ev?' · <a onclick="go(\'events\',\''+ev.id+'\')">View show</a>':' · <a onclick="turnInquiryIntoShow(\''+q.id+'\')">Turn into show</a>')
+    +(opts.linkEventId?(q.eventId===opts.linkEventId?' · <span class="muted">Linked to this show</span>':' · <a onclick="linkInquiryToEvent(\''+q.id+'\',\''+opts.linkEventId+'\')">Link to this show</a>')
+      :(ev?' · <a onclick="go(\'events\',\''+ev.id+'\')">View show</a>':' · <a onclick="turnInquiryIntoShow(\''+q.id+'\')">Turn into show</a>'))
     +'</div></div></div>';
+}
+function linkInquiryToEvent(qid,eid){
+  const q=dbInquiries().find(x=>x.id===qid), e=get(DB.events,eid); if(!q||!e) return;
+  q.eventId=eid; q.updatedAt=new Date().toISOString();
+  (q.history=q.history||[]).push({ts:q.updatedAt,status:q.status,note:'Linked to show '+(e.name||''),by:(AUTH_USER&&AUTH_USER.displayName)||''});
+  persist(); render();
+}
+// Venue inquiries behind a show, on its Overview tab
+function eventOutreachHTML(e){
+  if(!canDo('admin')||inArtistView()) return '';
+  const list=eventInquiries(e);
+  const ar=eventArtist(e);
+  const btn=e.venueId?'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="venueInquiryModal(\''+e.venueId+'\',\''+(ar?ar.id:'')+'\',\''+(e.tourId||'')+'\',\''+e.id+'\')">✉ Send inquiry</button>':'';
+  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Venue inquiries</span>'+btn+'</div>'
+    +(list.length?list.map(q=>inquiryRowHTML(q,{hideVenue:true,linkEventId:e.id})).join(''):'<p class="muted" style="font-size:13px">No inquiry sent to this venue for this show yet.</p>')+'</div>';
 }
 function inquirySummaryChips(list){
   const counts={}; list.forEach(q=>{counts[q.status]=(counts[q.status]||0)+1;});
@@ -10460,7 +10526,7 @@ function turnInquiryIntoShow(id){
   const q=dbInquiries().find(x=>x.id===id); if(!q) return;
   const v=get(DB.venues,q.venueId);
   const prefill={name:v?((v.city&&v.city!==v.name?v.city+' — ':'')+v.name):'',venueId:q.venueId,date:q.start||'',tourId:q.tourId||'',
-    status:'Routing',holdStatus:q.status==='Hold offered'?'1st Hold':(q.status==='Booked'?'Confirmed':''),capacityAlloc:v&&v.capacity?v.capacity:'',
+    status:q.status==='Booked'?'Contract Signed':(['Hold offered','Available'].includes(q.status)?'Contract Discussions':'Inquiry'),capacityAlloc:v&&v.capacity?v.capacity:'',
     pricing:{feeType:'fixed',taxOn:'base',taxRate:DB.settings.taxRate},terms:{},showCosts:{crew:[],equipment:[],fees:[]},mgmtPct:DB.settings.mgmtPct};
   eventForm(null,q.tourId||null,prefill);
   _curInquiryLink=q.id;
@@ -10832,7 +10898,7 @@ function rptChip(s,color){ return '<span class="chip s-'+esc(color||'gray')+'">'
 function rptInqChip(s){ return rptChip(s,INQ_COLOR[s]||'gray'); }
 function rptKV(k,v){ return v?'<div class="kv"><span>'+esc(k)+'</span><b>'+v+'</b></div>':''; }
 function rptWhere(v){ return [v.city,v.province].filter(Boolean).join(', ')+((v.country&&v.country!=='Canada')?', '+v.country:''); }
-const RPT_SYS_NOTE=/^(Inquiry email opened|Turned into a show)/;
+const RPT_SYS_NOTE=/^(Inquiry email opened|Turned into a show|Linked to show)/;
 const RPT_INQ_ORDER=['Booked','Hold offered','Available','Replied','Not available','Waiting','Sent','Closed'];
 function rptInqOrder(s){ const i=RPT_INQ_ORDER.indexOf(s); return i<0?99:i; }
 function rptInqGroup(s){ return INQ_RESPONDED.includes(s)?'responded':(s==='Sent'||s==='Waiting'?'waiting':'closed'); }
@@ -10892,7 +10958,7 @@ function rptShowCard(e,ctx){
   const upcoming=!!e.date&&e.date>=ctx.today, played=!!e.date&&e.date<ctx.today, tbd=!e.date;
   const where=rptWhere(v);
   const name=v.name||e.name||'Show';
-  const search=(name+' '+where+' '+(v.hall||'')+' '+st+' '+(e.holdStatus||'')+' '+(e.name||'')).toLowerCase();
+  const search=(name+' '+where+' '+(v.hall||'')+' '+st+' '+(e.name||'')).toLowerCase();
   const itin=opt.itinerary?eventItinerary(e):[];
   const notes=opt.notes?(e.notesLog||[]).slice().sort((a,b)=>(b.ts||'').localeCompare(a.ts||'')):[];
   const inqs=opt.history&&ctx.artist?dbInquiries().filter(q=>q.venueId===e.venueId&&q.artistId===ctx.artist.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')):[];
@@ -10904,14 +10970,14 @@ function rptShowCard(e,ctx){
     +'<summary><div class="sum-main"><div class="vname">'+esc(name)+'</div>'
     +'<div class="vsub">'+esc(where)+(v.capacity?' · '+(+v.capacity).toLocaleString()+' seats':'')+(!ctx.tour&&t?' · '+esc(t.name):'')+'</div></div>'
     +'<div class="sum-dates"><span class="lbl">Show date</span>'+esc(rptShowDate(e.date))+(showT?'<span class="sum-time">'+esc(showT)+'</span>':'')+'</div>'
-    +'<div class="sum-status"><span>'+rptChip(st,statusColor(st))+(e.holdStatus&&e.holdStatus!==st?' '+rptChip(e.holdStatus,holdStatusColor(e.holdStatus)||'gray'):'')+'</span><span class="lbl">'+esc(when)+'</span></div>'
+    +'<div class="sum-status"><span>'+rptChip(st,statusColor(st))+'</span><span class="lbl">'+esc(when)+'</span></div>'
     +'<span class="chev" aria-hidden="true">›</span></summary>'
     +'<div class="body">'
       +(opt.notes&&e.statusNote?'<div class="note"><span class="lbl">Latest update</span>'+esc(e.statusNote)+(e.statusNoteAt?'<span class="note-date">'+esc(rptFmtD(e.statusNoteAt))+'</span>':'')+'</div>':'')
       +'<div class="grid">'+rptVenuePanel(v)
         +'<div class="panel"><h3>Show</h3>'+rptKV('Date',esc(rptShowDate(e.date)))+rptKV('Show time',esc(showT))
           +rptKV('Load-in',normTime(e.loadIn)?esc(fmtTime(e.loadIn)):'')+rptKV('Tour',t?esc(t.name):'')
-          +rptKV('Status',rptChip(st,statusColor(st)))+rptKV('Hold',e.holdStatus&&e.holdStatus!==st?rptChip(e.holdStatus,holdStatusColor(e.holdStatus)||'gray'):'')
+          +rptKV('Status',rptChip(st,statusColor(st)))
           +(opt.tickets?rptKV('Capacity',cap?esc(cap.toLocaleString()):'')+rptKV('Tickets sold',sold?esc(sold.toLocaleString())+(cap?' of '+esc(cap.toLocaleString())+' ('+Math.round(sold/cap*100)+'%)':''):''):'')
           +(opt.emails?rptKV('Venue contact',esc(v.contactName||''))+rptKV('Email',v.contactEmail?'<a href="mailto:'+esc(v.contactEmail)+'">'+esc(v.contactEmail)+'</a>':''):'')+'</div>'
       +'</div>'
@@ -11102,7 +11168,7 @@ function artistAllEvents(ar){
   const tours=DB.tours.filter(t=>t.artist&&t.artist.toLowerCase()===(ar.name||'').toLowerCase());
   return DB.events.filter(e=>tours.some(t=>t.id===e.tourId)||(ar.contactId&&e.talentIds&&e.talentIds.includes(ar.contactId)));
 }
-const AR_SHOW_STATUSES=['Confirmed','Routing','Completed','Settled','Draft'];
+const AR_SHOW_STATUSES=EVENT_STATUSES;
 function artistReportModal(artistId){
   if(!canDo('admin')) return;
   const arId=artistId||(DB.artists.find(a=>artistAllEvents(a).length)||DB.artists[0]||{}).id||'';
@@ -11199,10 +11265,11 @@ function buildArtistReportHTML(shows,inqs,o){
 }
 
 let _viEdited={subject:false,body:false};
-function venueInquiryModal(preVenueId,preArtistId,preTourId){
+function venueInquiryModal(preVenueId,preArtistId,preTourId,preEventId){
   if(!canDo('admin')) return;
   _viEdited={subject:false,body:false};
-  _viTpl={id:'',values:{},edited:{},manual:false,logged:false,timer:null};
+  _viTpl={id:'',values:{},edited:{},manual:false,logged:false,timer:null,eventId:preEventId||''};
+  const preEvent=preEventId?get(DB.events,preEventId):null;
   const artists=DB.artists.slice().sort((a,b)=>((a.type==='roster'?0:1)-(b.type==='roster'?0:1))||(a.name||'').localeCompare(b.name||''));
   const preTour=preTourId?get(DB.tours,preTourId):null;
   const tourArtist=preTour&&preTour.artist?DB.artists.find(x=>x.name&&x.name.toLowerCase()===preTour.artist.toLowerCase()):null;
@@ -11245,6 +11312,8 @@ function venueInquiryModal(preVenueId,preArtistId,preTourId){
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn primary" id="vi-go" onclick="viOpenGmail()">✉ Open in Gmail</button>`);
   venueCascadeInit('vi',preVenueId||'',viVenueChanged);
+  if(preEvent&&preEvent.date){ document.getElementById('vi-start').value=preEvent.date; document.getElementById('vi-end').value=preEvent.date; }
+  if(preEvent&&preEvent.capacityAlloc){ const at=document.getElementById('vi-att'); if(at&&!at.value) at.value=preEvent.capacityAlloc; }
   viArtistChanged();
   viTemplateChanged(false);
 }
@@ -11295,7 +11364,7 @@ function viOpenGmail(){
   if(!_viTpl.logged){
     // remember it on the venue, and keep a genre typed for an artist that had none
     const genre=fv('vi-genre'); if(ar&&!ar.genre&&genre) ar.genre=genre;
-    createInquiry({venueId:vid,artistId:arId,tourId:fv('vi-tour'),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to'),template:tpl?tpl.name:'',subject:fv('vi-subject')});
+    createInquiry({venueId:vid,artistId:arId,tourId:fv('vi-tour'),start:fv('vi-start'),end:fv('vi-end'),attendance:fv('vi-att'),to:fv('vi-to'),template:tpl?tpl.name:'',subject:fv('vi-subject'),eventId:(_viTpl&&_viTpl.eventId)||''});
     _viTpl.logged=true;
   }
   if(tpl) viRememberValues();
@@ -11366,7 +11435,7 @@ if(AUTH_USER) {
     sanitizeSeqCounters();
     if(!Array.isArray(DB.tasks)) DB.tasks=[];
     if(!Array.isArray(DB.inquiries)) DB.inquiries=[];
-    if(migrateVenueInquiries()) persist();
+    if(migrateVenueInquiries()+migrateEventStatuses()) persist();
     syncUsersFromDB();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
