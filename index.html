@@ -266,6 +266,13 @@ a{color:var(--blue);text-decoration:none}
 .inq-hist{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:7px 0;border-bottom:1px solid var(--bord);font-size:12px}
 .inq-hist-date{color:var(--txt3);min-width:84px}.inq-hist-note{color:var(--txt)}
 .modal:has(#bk-body){width:720px}
+.pav-sel{border:1px solid var(--bord);border-radius:var(--rad);max-height:240px;overflow-y:auto}
+.pav-sel-row{display:grid;grid-template-columns:1fr 150px 30px;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--bord);font-size:13px}
+.pav-sel-row:last-child{border-bottom:none}
+.pav-sel-row input[type=date]{padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt);font-size:12px;min-width:0}
+.pav-sel-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pav-sel-warn{grid-column:1/-1;font-size:11px}.pav-sel-warn:empty{display:none}
+@media(max-width:600px){.pav-sel-row{grid-template-columns:1fr 30px}.pav-sel-row input[type=date]{grid-column:1}}
 .bk-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .bk-filters input,.bk-filters select{padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;min-width:0}
 .bk-filters input{flex:1;min-width:150px}
@@ -1933,8 +1940,10 @@ VIEWS.venues={
           <option value="name">Sort: Name A–Z</option>
           <option value="cap-asc">Sort: Capacity ↑</option>
           <option value="cap-desc">Sort: Capacity ↓</option>
-          <option value="prov">Sort: Province/State</option>
+          <option value="location">Sort: Country → Province → City</option>
           <option value="country">Sort: Country</option>
+          <option value="prov">Sort: Province/State</option>
+          <option value="city">Sort: City</option>
         </select>
       </div>
       <div id="vn-list" class="cards-grid">${renderVenueCards(DB.venues)}</div>`;
@@ -2098,8 +2107,10 @@ function filterVenues(){
       if(!aHas && !bHas) return (a.name||'').localeCompare(b.name||'');
       return sort==='cap-asc' ? (+a.capacity-+b.capacity) : (+b.capacity-+a.capacity);
     }
-    if(sort==='prov') return (a.province||'').localeCompare(b.province||'');
-    if(sort==='country') return (a.country||'Canada').localeCompare(b.country||'Canada');
+    if(sort==='prov') return bulkCmp(a,b,['province','city','name']);
+    if(sort==='country') return bulkCmp(a,b,['country','name']);
+    if(sort==='city') return bulkCmp(a,b,['city','name']);
+    if(sort==='location') return bulkCmp(a,b,['country','province','city','name']);
     return 0;
   });
   const host=document.getElementById('vn-list');
@@ -8320,9 +8331,14 @@ function pnRenderTiers(){
     </div>`).join('');
 }
 
+function pnPayerChanged(which){
+  const cur=pnReadExps(which,true);
+  if(which==='pershow') _pnPershowExps=cur; else _pnTourwideExps=cur;
+  pnRenderExps(which);
+}
 function pnAddExp(which){
   // Read current DOM values before re-rendering so nothing is lost
-  const cur=pnReadExps(which);
+  const cur=pnReadExps(which,true);
   if(which==='pershow') _pnPershowExps=cur;
   else _pnTourwideExps=cur;
   const arr=which==='pershow'?_pnPershowExps:_pnTourwideExps;
@@ -8341,9 +8357,8 @@ function pnRenderExps(which){
     return `<div style="display:grid;grid-template-columns:1fr 90px 130px 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
       <input placeholder="e.g. Social marketing" value="${esc(x.desc||'')}" id="pn-exp-${which}-desc-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
       <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pn-exp-${which}-amt-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-      <select id="pn-exp-${which}-payer-${i}" onchange="pnRenderExps('${which}')" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
-        <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (LPA)</option>
+      <select id="pn-exp-${which}-payer-${i}" onchange="pnPayerChanged('${which}')" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        ${EXPENSE_PAYERS.filter(([v])=>which==='pershow'||v!=='venue').map(([v,l])=>`<option value="${v}" ${(x.payer||'producer')===v?'selected':''}>${l}</option>`).join('')}
       </select>
       <input type="number" step="0.5" value="${x.markupPct||0}" id="pn-exp-${which}-markup-${i}" ${isProd?'':'disabled'}
         style="width:100%;min-width:0;box-sizing:border-box;padding:5px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
@@ -8355,14 +8370,14 @@ function pnRenderExps(which){
 }
 function pnRemoveExp(which,i){
   // Read current DOM values before splicing
-  const cur=pnReadExps(which);
+  const cur=pnReadExps(which,true);
   if(which==='pershow') _pnPershowExps=cur;
   else _pnTourwideExps=cur;
   const arr=which==='pershow'?_pnPershowExps:_pnTourwideExps;
   arr.splice(i,1);
   pnRenderExps(which);
 }
-function pnReadExps(which){
+function pnReadExps(which,keepBlank){
   const prefix=`pn-exp-${which}`;
   // Count actual expense rows via their description-input IDs, not raw child divs
   // (the header row is also a <div>, so counting all direct children overcounts by one).
@@ -8372,7 +8387,7 @@ function pnReadExps(which){
     amount:+document.getElementById(`${prefix}-amt-${i}`)?.value||0,
     payer:document.getElementById(`${prefix}-payer-${i}`)?.value||'artist',
     markupPct:+document.getElementById(`${prefix}-markup-${i}`)?.value||0
-  })).filter(x=>x.desc||x.amount>0);
+  })).filter(x=>keepBlank||x.desc||x.amount>0);
 }
 
 function saveProposalNew(){
@@ -8501,15 +8516,21 @@ function proposalEditMeta(id){
 }
 
 let _pemPershowExps=[], _pemTourwideExps=[];
+// Keep the in-memory rows in step with what's typed, so a re-render never throws edits away
+function pemSync(which){
+  const cur=pemReadExps(which,true);
+  if(which==='pershow') _pemPershowExps=cur; else _pemTourwideExps=cur;
+}
+function pemPayerChanged(which){ pemSync(which); pemRenderExps(which); }
 function pemAddExp(which){
-  const cur=pemReadExps(which);
+  const cur=pemReadExps(which,true);
   if(which==='pershow') _pemPershowExps=cur; else _pemTourwideExps=cur;
   const arr=which==='pershow'?_pemPershowExps:_pemTourwideExps;
   arr.push({desc:'',amount:0,payer:'producer',markupPct:0});
   pemRenderExps(which);
 }
 function pemRemoveExp(which,i){
-  const cur=pemReadExps(which);
+  const cur=pemReadExps(which,true);
   if(which==='pershow') _pemPershowExps=cur; else _pemTourwideExps=cur;
   (which==='pershow'?_pemPershowExps:_pemTourwideExps).splice(i,1);
   pemRenderExps(which);
@@ -8525,12 +8546,11 @@ function pemRenderExps(which){
     const billsOut=isProd?(+x.amount||0)*(1+(+x.markupPct||0)/100):0;
     return `<div style="display:grid;grid-template-columns:1fr 90px 130px 70px 80px 28px;gap:6px;margin-bottom:6px;align-items:center">
       <input placeholder="Description" value="${esc(x.desc||'')}" id="pem-exp-${which}-desc-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pem-exp-${which}-amt-${i}" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
-      <select id="pem-exp-${which}-payer-${i}" onchange="pemRenderExps('${which}')" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
-        <option value="artist" ${x.payer==='artist'?'selected':''}>Artist (direct)</option>
-        <option value="producer" ${x.payer==='producer'?'selected':''}>Producer (LPA)</option>
+      <input type="number" step="0.01" placeholder="$" value="${x.amount||''}" id="pem-exp-${which}-amt-${i}" oninput="pemBills('${which}',${i})" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 7px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right">
+      <select id="pem-exp-${which}-payer-${i}" onchange="pemPayerChanged('${which}')" style="width:100%;min-width:0;box-sizing:border-box;padding:5px 5px;border:1px solid var(--bord2);border-radius:6px;font-size:12px">
+        ${EXPENSE_PAYERS.filter(([v])=>which==='pershow'||v!=='venue').map(([v,l])=>`<option value="${v}" ${(x.payer||'producer')===v?'selected':''}>${l}</option>`).join('')}
       </select>
-      <input type="number" step="0.5" value="${x.markupPct||0}" id="pem-exp-${which}-markup-${i}" ${isProd?'':'disabled'}
+      <input type="number" step="0.5" value="${x.markupPct||0}" id="pem-exp-${which}-markup-${i}" ${isProd?'':'disabled'} oninput="pemBills('${which}',${i})"
         style="width:100%;min-width:0;box-sizing:border-box;padding:5px 6px;border:1px solid var(--bord2);border-radius:6px;font-size:12px;text-align:right;${isProd?'':'background:var(--surf2);color:var(--txt3)'}">
       <span id="pem-exp-${which}-bills-${i}" style="text-align:right;font-size:12px;color:${isProd?'var(--txt)':'var(--txt3)'}">${isProd?money0(billsOut):'—'}</span>
       <button class="btn ghost sm" style="padding:2px 6px" onclick="pemRemoveExp('${which}',${i})">×</button>
@@ -8538,15 +8558,21 @@ function pemRenderExps(which){
   }).join('');
   host.innerHTML=hdr+rows;
 }
-function pemReadExps(which){
+function pemReadExps(which,keepBlank){
   const prefix=`pem-exp-${which}`;
   const rows=[...document.querySelectorAll(`[id^="${prefix}-desc-"]`)];
-  return rows.map((_,i)=>({
+  const list=rows.map((_,i)=>({
     desc:document.getElementById(`${prefix}-desc-${i}`)?.value||'',
     amount:+document.getElementById(`${prefix}-amt-${i}`)?.value||0,
     payer:document.getElementById(`${prefix}-payer-${i}`)?.value||'artist',
     markupPct:+document.getElementById(`${prefix}-markup-${i}`)?.value||0
-  })).filter(x=>x.desc||x.amount>0);
+  }));
+  return keepBlank?list:list.filter(x=>x.desc||x.amount>0);
+}
+function pemBills(which,i){
+  const prefix=`pem-exp-${which}`, span=document.getElementById(`${prefix}-bills-${i}`); if(!span) return;
+  const payer=document.getElementById(`${prefix}-payer-${i}`)?.value, amt=+document.getElementById(`${prefix}-amt-${i}`)?.value||0, mk=+document.getElementById(`${prefix}-markup-${i}`)?.value||0;
+  span.textContent=payer==='producer'?money0(amt*(1+mk/100)):'—';
 }
 
 function ptToggleTourFields(){
@@ -8681,40 +8707,121 @@ function saveProposalMeta(id){
   persist(); closeModal(); go('proposals',id);
 }
 
+// Add shows: filter, sort and tick as many venues as you like, then set dates
+let _pav=null;
 function proposalAddVenue(pid){
   const p=get(DB.proposals,pid); if(!p) return;
-  // No longer excludes venues already used in this proposal — a tour can
-  // legitimately play the same venue more than once (e.g. a return date).
   const lastShow=(p.shows||[])[((p.shows||[]).length||1)-1];
   const lastVenue=lastShow?get(DB.venues,lastShow.venueId):null;
-  const defCountry=lastVenue?.country||'';
-  const defProvince=lastVenue?.province||'';
-  const defCity=lastVenue?.city||'';
-  openModal('Add show',`
-    <p class="muted" style="font-size:12px;margin-bottom:10px">Narrow down by location, then pick the venue. You can add the same venue more than once if the tour returns to it.</p>
-    <div class="row2">
-      <div class="field"><label>Country</label><select id="pav-country" onchange="pavFilterChanged('${pid}','country')"></select></div>
-      <div class="field"><label>Province / State</label><select id="pav-province" onchange="pavFilterChanged('${pid}','province')"></select></div>
-    </div>
-    <div class="row2">
-      <div class="field"><label>City</label><select id="pav-city" onchange="pavFilterChanged('${pid}','city')"></select></div>
-      <div class="field"><label>Venue</label><select id="pav-venue" onchange="pavPreview('${pid}')"></select></div>
-    </div>
-    <div id="pav-preview"></div>
-    <div id="pav-availability-warn" style="font-size:12px;margin-top:6px;min-height:16px"></div>
-    <div id="pav-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:4px"></div>
-    <div class="row2" style="margin-top:12px">
-      <div class="field"><label>Date (optional)</label><input id="pav-date" type="date" onchange="pavPreview('${pid}')"></div>
-      <div class="field"><label>Capacity (leave blank to use venue default)</label><input id="pav-cap" type="number"></div>
-    </div>
-    <div class="field"><label>Hold status <span class="muted" style="font-weight:400">(with venue)</span></label><select id="pav-hold">
-      ${HOLD_STATUSES.map(hs=>`<option value="${hs}">${hs||'— not set —'}</option>`).join('')}
-    </select></div>
-    <p class="muted" style="font-size:11px;margin-top:4px">Ticket tiers and prices are set at the tour level. Tax rate comes from the venue's location.</p>`,
-    `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="pavSave('${pid}')">Add to proposal</button>`);
-  pavPopulateFilters(defCountry, defProvince, defCity);
-  pavPopulateVenues(pid);
+  _pav={pid,selected:new Map(),sort:'location',status:'Not contacted',
+    filters:{q:'',country:lastVenue?(lastVenue.country||'Canada'):'',province:lastVenue?.province||'',city:'',size:''}};
+  openModal('Add shows','<div id="pav-body"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="pav-go" onclick="pavSaveMany()">Add shows</button>');
+  pavRender();
+}
+function pavFiltered(){
+  const f=_pav.filters, q=(f.q||'').toLowerCase();
+  return DB.venues.filter(v=>(!q||((v.name||'')+' '+(v.city||'')+' '+(v.hall||'')).toLowerCase().includes(q))
+    &&(!f.country||(v.country||'Canada')===f.country)&&(!f.province||v.province===f.province)&&(!f.city||v.city===f.city)&&bulkSizeOk(v,f.size))
+    .sort((BULK_SORTS[_pav.sort]||BULK_SORTS.location)[1]);
+}
+function pavSetFilter(k,v){
+  _pav.filters[k]=v;
+  if(k==='country'){ _pav.filters.province=''; _pav.filters.city=''; }
+  if(k==='province') _pav.filters.city='';
+  pavRender();
+}
+function pavRender(){
+  const host=document.getElementById('pav-body'); if(!host||!_pav) return;
+  const f=_pav.filters;
+  const countries=[...new Set(DB.venues.map(v=>v.country||'Canada'))].sort();
+  const provPool=DB.venues.filter(v=>!f.country||(v.country||'Canada')===f.country);
+  const provinces=[...new Set(provPool.map(v=>v.province).filter(Boolean))].sort();
+  const cities=[...new Set(provPool.filter(v=>!f.province||v.province===f.province).map(v=>v.city).filter(Boolean))].sort();
+  host.innerHTML='<p class="muted" style="font-size:12px;margin-bottom:8px">Filter and sort the list, tick every venue you want, then add dates below (optional). A venue can be added more than once.</p>'
+    +'<div class="bk-filters">'
+      +'<input id="pav-q" placeholder="Search name or city…" value="'+esc(f.q)+'" oninput="_pav.filters.q=this.value;clearTimeout(window._pavT);window._pavT=setTimeout(pavRenderList,200)">'
+      +'<select aria-label="Country" onchange="pavSetFilter(\'country\',this.value)"><option value="">All countries</option>'+countries.map(c=>'<option '+(c===f.country?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select>'
+      +'<select aria-label="Province or state" onchange="pavSetFilter(\'province\',this.value)"><option value="">All provinces/states</option>'+provinces.map(x=>'<option '+(x===f.province?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
+      +'<select aria-label="City" onchange="pavSetFilter(\'city\',this.value)"><option value="">All cities</option>'+cities.map(x=>'<option '+(x===f.city?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>'
+      +'<select aria-label="Size" onchange="pavSetFilter(\'size\',this.value)">'+[['','Any size'],['small','Under 200'],['medium','200–500'],['large','500–1000'],['xlarge','1000+'],['none','No capacity listed']].map(([k,l])=>'<option value="'+k+'" '+(k===f.size?'selected':'')+'>'+l+'</option>').join('')+'</select>'
+      +'<select aria-label="Sort" onchange="_pav.sort=this.value;pavRenderList()">'+Object.keys(BULK_SORTS).map(k=>'<option value="'+k+'" '+(k===_pav.sort?'selected':'')+'>Sort: '+BULK_SORTS[k][0]+'</option>').join('')+'</select>'
+    +'</div>'
+    +'<div id="pav-list"></div>'
+    +'<div class="sec-label" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><span>Selected</span><span id="pav-n" style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--txt)"></span></div>'
+    +'<div id="pav-sel"></div>'
+    +'<div class="field" style="margin-top:10px;max-width:260px"><label>Status for these shows</label><select id="pav-status" onchange="_pav.status=this.value">'+PROP_SHOW_STATUSES.map(x=>'<option '+(x===_pav.status?'selected':'')+'>'+x+'</option>').join('')+'</select></div>'
+    +'<p class="muted" style="font-size:11px">Ticket tiers and prices come from the tour settings. Tax rate comes from each venue\'s location.</p>'
+    +'<div id="pav-err" style="color:var(--red);font-size:12px;min-height:16px"></div>';
+  pavRenderList(); pavRenderSel();
+}
+function pavRenderList(){
+  const host=document.getElementById('pav-list'); if(!host) return;
+  const p=get(DB.proposals,_pav.pid), inProp=new Set((p.shows||[]).map(x=>x.venueId));
+  const venues=pavFiltered(), shown=venues.slice(0,400);
+  const allSel=shown.length&&shown.every(v=>_pav.selected.has(v.id));
+  host.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0;font-size:12px;color:var(--txt3);gap:8px;flex-wrap:wrap"><span>'+venues.length+' venue'+(venues.length!==1?'s':'')+(venues.length>400?' (showing first 400, narrow with filters)':'')+'</span>'
+    +'<span><a onclick="pavSelectShown('+(allSel?'false':'true')+')" style="cursor:pointer">'+(allSel?'Clear shown':'Select all shown')+'</a>'+(_pav.selected.size?' · <a onclick="_pav.selected.clear();pavRenderList();pavRenderSel()" style="cursor:pointer">Clear all</a>':'')+'</span></div>'
+    +'<div class="bk-venues" style="max-height:340px">'+(shown.length?shown.map(v=>'<label class="bk-venue"><input type="checkbox" '+(_pav.selected.has(v.id)?'checked':'')+' onchange="pavToggle(\''+v.id+'\',this.checked)">'
+      +'<span class="bk-vname">'+esc(v.name)+'<span class="muted"> · '+esc(v.city||'')+(v.province?', '+esc(v.province):'')+((v.country||'Canada')!=='Canada'?', '+esc(v.country):'')+'</span></span>'
+      +'<span class="bk-vcap">'+(+v.capacity?(+v.capacity).toLocaleString()+' seats':'')+'</span>'
+      +'<span class="bk-vtags">'+(inProp.has(v.id)?'<span class="badge blue" style="font-size:10px">in proposal</span>':'')+'</span></label>').join('')
+      :'<p class="muted" style="font-size:12px;padding:10px">No venues match.</p>')+'</div>';
+}
+function pavToggle(id,on){ if(on) _pav.selected.set(id,_pav.selected.get(id)||{date:''}); else _pav.selected.delete(id); pavRenderSel(); }
+function pavSelectShown(on){ pavFiltered().slice(0,400).forEach(v=>{ if(on){ if(!_pav.selected.has(v.id)) _pav.selected.set(v.id,{date:''}); } else _pav.selected.delete(v.id); }); pavRenderList(); pavRenderSel(); }
+function pavSetDate(id,val){ const x=_pav.selected.get(id); if(x){ x.date=val; const w=document.getElementById('pav-w-'+id); if(w) w.innerHTML=pavAvailNote(id,val); } }
+function pavAvailNote(id,date){
+  const a=venueAvailabilityOn(id,date); if(!a) return '';
+  return '<span style="color:'+AVAIL_TYPE_COLOR[a.type]+'">'+(a.type==='available'?'✓ ':'⚠ ')+esc(AVAIL_TYPE_LABEL[a.type])+(a.note?': '+esc(a.note):'')+'</span>';
+}
+function pavRenderSel(){
+  const host=document.getElementById('pav-sel'); if(!host) return;
+  const n=_pav.selected.size;
+  const lab=document.getElementById('pav-n'); if(lab) lab.textContent=n+' selected';
+  const go=document.getElementById('pav-go'); if(go){ go.textContent=n?'Add '+n+' show'+(n===1?'':'s'):'Add shows'; go.disabled=!n; }
+  host.innerHTML=n?'<div class="pav-sel">'+[..._pav.selected.entries()].map(([id,x])=>{const v=get(DB.venues,id)||{};
+    return '<div class="pav-sel-row"><span class="pav-sel-name"><b>'+esc(v.name||'')+'</b><span class="muted"> · '+esc(v.city||'')+(v.province?', '+esc(v.province):'')+'</span></span>'
+      +'<input type="date" aria-label="Date for '+esc(v.name||'')+'" value="'+esc(x.date||'')+'" onchange="pavSetDate(\''+id+'\',this.value)">'
+      +'<button class="btn ghost sm" style="padding:2px 7px" aria-label="Remove" onclick="pavToggle(\''+id+'\',false);pavRenderList()">×</button>'
+      +'<span class="pav-sel-warn" id="pav-w-'+id+'">'+pavAvailNote(id,x.date)+'</span></div>';}).join('')+'</div>'
+    :'<p class="muted" style="font-size:12px">Tick venues in the list above.</p>';
+}
+// One proposal show for a venue, with tour tiers and VIP merch applied
+function pavBuildShow(p,vid,date,cap){
+  const s=proposalShowFromVenue(vid,0,p); if(!s) return null;
+  s.date=date||'';
+  s.capacity=(+cap||0)||get(DB.venues,vid)?.capacity||s.capacity;
+  if(p.tourTiers?.length && s.capacity){
+    s.tiers=applyTourTiers(p.tourTiers,s.capacity);
+    s.ticketsEst=s.tiers.reduce((t,r)=>t+r.count,0);
+    if(p.vipMerchCost>0){
+      const vipCount=s.tiers.find(t=>t.fixed)?.count||0;
+      const idx=s.expenses.findIndex(x=>x._tourMerch);
+      const amt=p.vipMerchCost*vipCount;
+      if(idx>=0) s.expenses[idx].amount=amt;
+      else s.expenses.push({desc:p.vipMerchDesc||'VIP merch bundle',amount:amt,payer:'artist',markupPct:0,_tourMerch:true});
+    }
+  } else {
+    s.ticketsEst=Math.round((+s.capacity||0)*0.6);
+  }
+  return s;
+}
+function pavSaveMany(){
+  const err=document.getElementById('pav-err');
+  if(!_pav||!_pav.selected.size){ if(err) err.textContent='Tick at least one venue.'; return; }
+  const p=get(DB.proposals,_pav.pid); if(!p) return;
+  p.shows=p.shows||[];
+  const names=[]; let i=0;
+  _pav.selected.forEach((x,vid)=>{
+    const s=pavBuildShow(p,vid,x.date,0); if(!s) return;
+    if(p.shows.some(o=>o._sid===s._sid)) s._sid=s._sid+'_'+(i++);
+    s.showStatus=_pav.status||'Not contacted';
+    p.shows.push(s); names.push(get(DB.venues,vid)?.name||'venue');
+  });
+  logActivity('edited','Proposal',p.title+' (added '+names.length+' show'+(names.length===1?'':'s')+': '+names.slice(0,5).join(', ')+(names.length>5?'…':'')+')');
+  const pid=_pav.pid; _pav=null;
+  persist(); closeModal(); go('proposals',pid);
 }
 
 // Rebuild the Country/Province/City select OPTIONS themselves (called on open,
