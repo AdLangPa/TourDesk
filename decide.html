@@ -58,6 +58,8 @@ input[type=date]{min-height:50px}
 .srow span{color:var(--ink2);font-size:15px;white-space:pre-wrap}
 .secondary{display:inline-block;margin-top:14px;padding:11px 18px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
 footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
+.opt .dt{display:block;font-weight:600}.opt .dsub{display:block;font-size:13px;color:var(--ink2);font-weight:400}
+.opt.none{border-style:dashed}
 .loading{padding:40px 0;text-align:center;color:var(--ink2)}
 </style>
 </head>
@@ -68,6 +70,8 @@ footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
   var SUPABASE_URL='https://rcxnqabfjcnmttoxhtpb.supabase.co';
   var SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjeG5xYWJmamNubXR0b3hodHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjg5NzYsImV4cCI6MjA5NjYwNDk3Nn0.T6vCvuHh-C6i1ctpV7n_fOEaUN-Q8sIdbmtjg4N_wAM';
   var app=document.getElementById('app');
+  var NONE='None of these work';
+  function isNone(v){ return v===NONE||(Array.isArray(v)&&v[0]===NONE); }
   var token=(new URLSearchParams(location.search).get('d')||'').trim();
   var card=null, prev=null, closed=false, state={values:{},notes:{},openNotes:{}};
 
@@ -85,10 +89,10 @@ footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
   function foot(){ return '<footer>Sent by '+esc((card&&card.company)||'your booking agent')+' · Your answers go straight to them.</footer>'; }
   function answerText(q){
     var v=state.values[q.id], n=state.notes[q.id];
-    var t=Array.isArray(v)?v.join(', '):(q.type==='date'&&v?fmtDate(v):(v||''));
+    var t=Array.isArray(v)?v.map(function(x){return q.type==='dates'&&x!==NONE?fmtDate(x):x;}).join(', '):((q.type==='date'||q.type==='dates')&&v&&v!==NONE?fmtDate(v):(v||''));
     return (t||'—')+(n?'\n“'+n+'”':'');
   }
-  function needsNote(q){ return q.type==='confirm'&&state.values[q.id]==='Needs a change'; }
+  function needsNote(q){ return (q.type==='confirm'&&state.values[q.id]==='Needs a change')||(q.type==='dates'&&isNone(state.values[q.id])); }
   function answered(q){
     var v=state.values[q.id];
     if(Array.isArray(v)) return v.length>0;
@@ -119,6 +123,14 @@ footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
         h+='<div class="opts two" role="radiogroup" aria-labelledby="ql-'+esc(q.id)+'">'
           +'<button type="button" class="opt big yes" aria-pressed="'+(v===a[0])+'" data-q="'+esc(q.id)+'" data-yn="'+esc(a[0])+'"><span class="mark"></span>'+(q.type==='confirm'?'✓ ':'')+esc(a[0])+'</button>'
           +'<button type="button" class="opt big no" aria-pressed="'+(v===a[1])+'" data-q="'+esc(q.id)+'" data-yn="'+esc(a[1])+'"><span class="mark"></span>'+esc(a[1])+'</button></div>';
+      } else if(q.type==='dates'){
+        var many=q.pick==='many', cur=Array.isArray(v)?v:(v?[v]:[]), none=isNone(v);
+        h+='<div class="opts" role="'+(many?'group':'radiogroup')+'" aria-labelledby="ql-'+esc(q.id)+'">'+(q.dates||[]).map(function(x,di){
+          var on=!none&&cur.indexOf(x.date)>=0;
+          return '<button type="button" class="opt'+(many?' multi':'')+'" role="'+(many?'checkbox':'radio')+'" aria-checked="'+on+'" data-q="'+esc(q.id)+'" data-d="'+di+'"><span class="mark" aria-hidden="true"></span><span><span class="dt">'+esc(fmtDate(x.date))+'</span>'+(x.label?'<span class="dsub">'+esc(x.label)+'</span>':'')+'</span></button>';
+        }).join('')
+          +'<button type="button" class="opt none" role="'+(many?'checkbox':'radio')+'" aria-checked="'+none+'" data-q="'+esc(q.id)+'" data-none="1"><span class="mark" aria-hidden="true"></span><span>'+NONE+'</span></button></div>';
+        if(many) h+='<div class="qh" style="margin:8px 0 0;font-size:13px">Pick every date that works for you.</div>';
       } else if(q.type==='date'){
         h+='<input type="date" data-q="'+esc(q.id)+'" data-kind="value" value="'+esc(v||'')+'" aria-labelledby="ql-'+esc(q.id)+'">';
       } else {
@@ -126,7 +138,7 @@ footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
       }
       var showNote=needsNote(q)||state.openNotes[q.id]||state.notes[q.id];
       if(q.type!=='text'){
-        if(showNote) h+='<div class="note"><label class="lbl" for="n-'+esc(q.id)+'">'+(needsNote(q)?'What needs to change?':'Note (optional)')+'</label><textarea id="n-'+esc(q.id)+'" data-q="'+esc(q.id)+'" data-kind="note" placeholder="'+(needsNote(q)?'Tell us what to change':'Anything to add?')+'">'+esc(state.notes[q.id]||'')+'</textarea></div>';
+        if(showNote) h+='<div class="note"><label class="lbl" for="n-'+esc(q.id)+'">'+(needsNote(q)?(q.type==='dates'?'Which dates would work instead?':'What needs to change?'):'Note (optional)')+'</label><textarea id="n-'+esc(q.id)+'" data-q="'+esc(q.id)+'" data-kind="note" placeholder="'+(needsNote(q)?(q.type==='dates'?'Tell us the dates that would work':'Tell us what to change'):'Anything to add?')+'">'+esc(state.notes[q.id]||'')+'</textarea></div>';
         else if(q.allowNote!==false) h+='<button type="button" class="linkbtn" data-addnote="'+esc(q.id)+'">+ Add a note</button>';
       }
       h+='</section>';
@@ -155,6 +167,18 @@ footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
         else state.values[q.id]=o;
         rerender(q.id);
       });
+    });
+    [].forEach.call(app.querySelectorAll('.opt[data-d]'),function(b){
+      b.addEventListener('click',function(){
+        keepTyping();
+        var q=findQ(b.getAttribute('data-q')), o=q.dates[+b.getAttribute('data-d')].date;
+        if(q.pick==='many'){ var a=Array.isArray(state.values[q.id])?state.values[q.id].filter(function(x){return x!==NONE;}):[]; var i=a.indexOf(o); if(i>=0)a.splice(i,1);else a.push(o); a.sort(); state.values[q.id]=a; }
+        else state.values[q.id]=o;
+        rerender(q.id);
+      });
+    });
+    [].forEach.call(app.querySelectorAll('.opt[data-none]'),function(b){
+      b.addEventListener('click',function(){ keepTyping(); var q=findQ(b.getAttribute('data-q')); state.values[q.id]=q.pick==='many'?[NONE]:NONE; rerender(q.id,'n-'+q.id); });
     });
     [].forEach.call(app.querySelectorAll('.opt[data-yn]'),function(b){
       b.addEventListener('click',function(){ keepTyping(); var id=b.getAttribute('data-q'); state.values[id]=b.getAttribute('data-yn'); rerender(id, needsNote(findQ(id))?'n-'+id:null); });
