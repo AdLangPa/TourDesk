@@ -64,9 +64,14 @@ a{color:var(--blue);text-decoration:none}
 .dot.ok{background:var(--green)}.dot.off{background:var(--bord2)}
 
 .main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-width:0}
-.topbar{padding:15px 22px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--surf)}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:min(100%,260px);flex:1 1 260px}
+.nav-back{display:inline-flex;align-items:center;gap:4px;max-width:260px;padding:5px 11px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt2);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.nav-back:hover{color:var(--txt);border-color:var(--txt3)}
+#nav-back-lbl{overflow:hidden;text-overflow:ellipsis}
+.venue-link{cursor:pointer}.venue-link:hover{text-decoration:underline}
+.topbar{padding:15px 22px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;flex-shrink:0;background:var(--surf)}
 .topbar-title{font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:-.1px}
-.topbar-actions{display:flex;gap:8px}
+.topbar-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .content{flex:1;overflow-y:auto;padding:22px;background:var(--bg)}
 
 /* Buttons */
@@ -273,6 +278,27 @@ a{color:var(--blue);text-decoration:none}
 .pav-sel-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .pav-sel-warn{grid-column:1/-1;font-size:11px}.pav-sel-warn:empty{display:none}
 @media(max-width:600px){.pav-sel-row{grid-template-columns:1fr 30px}.pav-sel-row input[type=date]{grid-column:1}}
+.dc-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dc-q{border:1px solid var(--bord);border-radius:var(--rad);padding:10px 12px;margin-bottom:8px;background:var(--surf)}
+.dc-q input{width:100%;padding:7px 9px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt);font:inherit;font-size:13px}
+.dc-q-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.dc-q-head select{padding:4px 6px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt);font-size:12px}
+.dc-q-n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--surf2);font-size:11px;font-weight:600}
+.dc-ico{padding:2px 7px!important;min-width:0}
+.dc-opts{margin-top:8px;display:grid;gap:5px}.dc-opt{display:flex;align-items:center;gap:6px}.dc-opt span{color:var(--txt3)}
+.dc-addopt{font-size:12px;cursor:pointer;color:var(--blue)}
+.dc-preview{font-size:12px;color:var(--txt3);margin-top:6px}
+.dc-flags{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--txt2)}.dc-flags label{display:flex;align-items:center;gap:5px}.dc-flags input{width:auto}
+.dc-showpick{border:1px dashed var(--bord2);border-radius:var(--rad);padding:10px 12px;margin-top:8px;max-height:260px;overflow-y:auto}
+.dc-link{display:flex;gap:6px}.dc-link input{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf2);color:var(--txt);font-size:12px}
+.dc-list{display:grid;gap:6px}
+.dc-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--bord);border-radius:var(--rad);background:var(--surf);cursor:pointer}
+.dc-row:hover{border-color:var(--bord2)}.dc-row.answered{border-left:3px solid var(--green)}
+.dc-row-title{font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis}.dc-row-sub{font-size:12px;color:var(--txt3)}
+.dc-ans{padding:9px 0;border-bottom:1px solid var(--bord)}.dc-ans:last-child{border-bottom:none}
+.dc-ans-q{font-size:13px;font-weight:500}.dc-ans-a{margin-top:4px;font-size:14px;padding:6px 10px;background:var(--surf2);border-radius:6px;white-space:pre-wrap}
+.dc-ans-a.green{color:var(--green)}.dc-ans-a.amber{color:var(--amber)}
+.dc-hist{list-style:none;margin:0;padding:0;font-size:12px}.dc-hist li{padding:3px 0}
 .bk-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .bk-filters input,.bk-filters select{padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;min-width:0}
 .bk-filters input{flex:1;min-width:150px}
@@ -306,6 +332,8 @@ a{color:var(--blue);text-decoration:none}
   .nav-item{padding:12px 18px;font-size:15px}
   .nav-toggle{display:block}
   .topbar{padding:calc(8px + env(safe-area-inset-top)) 12px 8px;flex-wrap:wrap;gap:6px 8px}
+  .topbar-left{gap:8px;flex:1 1 0;min-width:0}.nav-back{max-width:38vw;padding:4px 9px}
+  .topbar-actions{justify-content:flex-start}
   .topbar-title{font-size:17px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .topbar-right{display:contents!important}
   #user-info{display:none!important}
@@ -383,6 +411,7 @@ a{color:var(--blue);text-decoration:none}
       <div class="nav-section">Sales</div>
       <div class="nav-item" data-view="proposals"><span class="nav-ico">◈</span>Proposals</div>
       <div class="nav-item" data-view="outreach"><span class="nav-ico">✉</span>Outreach</div>
+      <div class="nav-item" data-view="decisions"><span class="nav-ico">☑</span>Decisions</div>
       <div class="nav-section">System</div>
       <div class="nav-item" data-view="activity"><span class="nav-ico">⟲</span>Activity</div>
       <div class="nav-item active" data-view="settings"><span class="nav-ico">⚙</span>Settings</div>
@@ -395,7 +424,7 @@ a{color:var(--blue);text-decoration:none}
   <main class="main">
     <div class="topbar">
       <button class="nav-toggle" onclick="toggleNav()" aria-label="Menu">&#9776;</button>
-      <div class="topbar-title" id="page-title">Settings</div>
+      <div class="topbar-left"><button class="nav-back" id="nav-back" onclick="navBack()" style="display:none"><span aria-hidden="true">←</span> <span id="nav-back-lbl">Back</span></button><div class="topbar-title" id="page-title">Settings</div></div>
       <div class="topbar-right" style="display:flex;align-items:center;gap:12px">
         <div id="artist-view-bar" style="display: flex; align-items: center; gap: 8px;"></div>
         <div style="position:relative">
@@ -1605,7 +1634,7 @@ const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 
 /* ---------- ROUTER ---------- */
 let route={view:'dashboard',id:null,tab:null};
-const NAV_TITLES={dashboard:'Dashboard',financial:'Financial',outreach:'Outreach',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
+const NAV_TITLES={dashboard:'Dashboard',financial:'Financial',outreach:'Outreach',decisions:'Decisions',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
 
 /* ---------- ARTIST VIEW MODE ---------- */
 let ARTIST_VIEW=null; // artist id when filtering the whole app to one artist
@@ -1639,7 +1668,7 @@ function applyArtistViewChrome(){
   // In artist view: only Dashboard, Tours, Events, Proposals visible
   const avAllowed=['dashboard','financial','tours','events','calendar','tasks','proposals'];
   // Producer cannot access settings, activity, artists, contacts, venues
-  const producerBlocked=['settings','activity','artists','contacts','venues','outreach'];
+  const producerBlocked=['settings','activity','artists','contacts','venues','outreach','decisions'];
   nav.querySelectorAll('.nav-item').forEach(n=>{
     const view=n.dataset.view;
     const blockedByAV=inArtistView()&&!avAllowed.includes(view);
@@ -1676,6 +1705,54 @@ function applyArtistViewChrome(){
 
 function toggleNav(){ document.body.classList.toggle('nav-open'); }
 function closeNav(){ document.body.classList.remove('nav-open'); }
+/* ---------- Site-wide Back: remembers the screens you came through ---------- */
+const NAV_STACK=[]; let _navRestoring=false;
+function navKey(r){ return [r.view,r.id||'',r.tab||'',r.ref||'',r.tab2||''].join('|'); }
+function navScroller(){ return document.getElementById('content'); }
+function navRemember(next){
+  if(_navRestoring||!AUTH_USER) return;
+  if(navKey(route)===navKey(next)) return;          // re-render of the same screen
+  const sc=navScroller();
+  NAV_STACK.push({route:{...route},scroll:sc?sc.scrollTop:0});
+  if(NAV_STACK.length>60) NAV_STACK.shift();
+  try{ history.pushState({tdNav:NAV_STACK.length},''); }catch(e){}
+}
+function navLabel(r){
+  const rec=r.id?(r.view==='proposals'?get(DB.proposals,r.id):r.view==='venues'?get(DB.venues,r.id):r.view==='events'?get(DB.events,r.id)
+    :r.view==='tours'?get(DB.tours,r.id):r.view==='decisions'?get(DB.decisions||[],r.id):r.view==='artists'?get(DB.artists,r.id):r.view==='contacts'?get(DB.contacts,r.id):null):null;
+  if(r.view==='proposals'&&r.tab==='show'&&rec){ const sh=(rec.shows||[]).find(x=>x._sid===r.ref); const v=sh&&get(DB.venues,sh.venueId); if(v) return v.name; }
+  return rec?(rec.title||rec.name||NAV_TITLES[r.view]):(NAV_TITLES[r.view]||'Back');
+}
+function navUpdateBack(){
+  const b=document.getElementById('nav-back'); if(!b) return;
+  const prev=NAV_STACK[NAV_STACK.length-1];
+  b.style.display=prev?'':'none';
+  if(prev){ const l=navLabel(prev.route); document.getElementById('nav-back-lbl').textContent=l; b.title='Back to '+l; }
+}
+function navBack(){
+  if(!NAV_STACK.length) return;
+  // let the browser's own history move too, so its Back button stays in step
+  try{ if(history.state&&history.state.tdNav){ history.back(); return; } }catch(e){}
+  navRestore();
+}
+function navRestore(){
+  const prev=NAV_STACK.pop(); if(!prev) return;
+  _navRestoring=true;
+  try{
+    closeModal();
+    route.tab2=prev.route.tab2;
+    go(prev.route.view,prev.route.id,prev.route.tab,null,prev.route.ref);
+    route.tab2=prev.route.tab2;
+  } finally { _navRestoring=false; }
+  const sc=navScroller(); if(sc) requestAnimationFrame(()=>{ sc.scrollTop=prev.scroll||0; });
+  navUpdateBack();
+}
+window.addEventListener('popstate',e=>{
+  const at=(e.state&&e.state.tdNav)||0;
+  if(at>=NAV_STACK.length) return;   // browser Forward: nothing to undo
+  while(NAV_STACK.length>at+1) NAV_STACK.pop();
+  if(NAV_STACK.length) navRestore();
+});
 function go(view,id=null,tab=null,_unused=null,ref=null){
   closeNav();
   // Block disallowed views for artist view
@@ -1683,15 +1760,17 @@ function go(view,id=null,tab=null,_unused=null,ref=null){
     view='dashboard'; id=null; tab=null; ref=null;
   }
   // Block disallowed views for producer role
-  const producerBlocked=['settings','activity','artists','contacts','venues','outreach'];
+  const producerBlocked=['settings','activity','artists','contacts','venues','outreach','decisions'];
   if(AUTH_USER?.role==='producer' && producerBlocked.includes(view)){
     view='dashboard'; id=null; tab=null; ref=null;
   }
+  navRemember({view,id,tab,ref});
   route={view,id,tab,ref};
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
   document.getElementById('page-title').textContent=(inArtistView()?(currentArtist()?.name+' · '):'')+(NAV_TITLES[view]||'TourDesk');
   applyArtistViewChrome();
   render();
+  navUpdateBack();
 }
 
 function render(){
@@ -5617,6 +5696,7 @@ VIEWS.artists={
     const statusReportBtn='<button class="btn sm" onclick="printArtistStatusReport(\''+id+'\')">' + '📋 Status update</button>';
     if(canDo('admin')){
       a.innerHTML=(ar.type==='roster'?'<button class="btn sm primary" onclick="enterArtistView(\''+id+'\')">' + 'View as '+esc(ar.name.split(' ')[0])+'</button> ':'')
+        +'<button class="btn sm" onclick="decisionForm(null,{artistId:\''+id+'\'})">☑ Decision card</button> '
         +'<button class="btn sm" onclick="artistReportModal(\''+id+'\')">' + '📄 Artist report</button> '
         +statusReportBtn+' '
         +'<button class="btn sm" onclick="artistForm(\''+id+'\')">' + 'Edit</button>'
@@ -5632,7 +5712,7 @@ VIEWS.artists={
         ${ar.status?`<span class="badge gray">${esc(ar.status)}</span>`:''}
       </div>
       <div class="tabs">
-        ${[['overview','Overview'],['deals','Deals & tours'],...(canDo('admin')?[['outreach','Outreach']]:[]),['notes','Notes & scouting']].map(([tb,lbl])=>
+        ${[['overview','Overview'],['deals','Deals & tours'],...(canDo('admin')?[['outreach','Outreach'],['decisions','Decisions'+(dbDecisions().filter(d=>d.artistId===ar.id&&decStatus(d)==='Answered').length?' ●':'')]]:[]),['notes','Notes & scouting']].map(([tb,lbl])=>
           `<div class="tab ${tab===tb?'active':''}" onclick="go('artists','${id}','${tb}')">${lbl}</div>`).join('')}
       </div>
       <div id="artist-tab"></div>`;
@@ -5641,6 +5721,7 @@ VIEWS.artists={
     else if(tab==='deals') artistDeals(host,ar,tours,allEvents);
     else if(tab==='notes') artistNotes(host,ar);
     else if(tab==='outreach'&&canDo('admin')) host.innerHTML=outreachSectionHTML({artistId:ar.id},'Venue outreach for '+ar.name);
+    else if(tab==='decisions'&&canDo('admin')) host.innerHTML=artistDecisionsHTML(ar);
   }
 };
 
@@ -6191,6 +6272,7 @@ VIEWS.proposals={
         <span class="back" onclick="go('proposals','${pid}')">← ${esc(p.title)}</span>
         <span class="detail-title">${v?esc(v.name):'Show'}</span>
         <span class="badge gray">${esc(s.date||'Date TBD')}</span>
+        ${v&&!inArtistView()&&AUTH_USER?.role!=='producer'?`<a class="venue-link" style="font-size:12px" onclick="go('venues','${v.id}')">Venue card →</a>`:''}
       </div>
       <div class="tabs">${_tabs}</div>
       <div id="prop-show-tab"></div>`;
@@ -7028,7 +7110,7 @@ function proposalShowsTable(p,shows,isAccepted){
       const v=get(DB.venues,s.venueId);
       const f=proposalShowFigures(s,undefined,tcps);
       return `<tr style="cursor:pointer" onclick="go('proposals','${p.id}','show',null,'${s._sid}')">
-        <td><div style="font-weight:500">${v?esc(v.name):'—'}</div>
+        <td><div style="font-weight:500">${v&&!inArtistView()&&AUTH_USER?.role!=='producer'?`<a class="venue-link" onclick="event.stopPropagation();go('venues','${v.id}')">${esc(v.name)}</a>`:(v?esc(v.name):'—')}</div>
           ${v?.city?`<div style="font-size:11px;color:var(--txt3)">${esc(v.city)}</div>`:''}
         </td>
         <td>${esc(s.date||'TBD')}</td>
@@ -7133,7 +7215,7 @@ function proposalOutreachTab(host,p,shows,isAccepted){
     +(shows.length?shows.map(s=>{
       const v=get(DB.venues,s.venueId), list=propShowInquiries(p,s), st=propShowStatus(s);
       return '<div class="prop-out">'
-        +'<div class="prop-out-head"><div><b>'+esc(v?v.name:'Venue')+'</b><span class="muted"> · '+esc(v&&v.city?v.city+(v.province?', '+v.province:''):'')+' · '+esc(s.date||'Date TBD')+'</span></div>'
+        +'<div class="prop-out-head"><div><b>'+(v?'<a class="venue-link" onclick="go(\'venues\',\''+v.id+'\')">'+esc(v.name)+'</a>':'Venue')+'</b><span class="muted"> · '+esc(v&&v.city?v.city+(v.province?', '+v.province:''):'')+' · '+esc(s.date||'Date TBD')+'</span></div>'
         +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+propShowStatusCell(p,s,isAccepted,true)+'</div></div>'
         +(list.length?list.map(q=>inquiryRowHTML(q,{hideVenue:true,hideArtist:true,hideProposal:true,inProposal:true})).join(''):'<p class="muted" style="font-size:12px;margin:6px 0 0">No inquiry yet.</p>')
         +'</div>';
@@ -10830,6 +10912,396 @@ function outreachSectionHTML(filter,label){
 }
 
 /* ---------- VIEW: OUTREACH ---------- */
+/* ============================================================
+   DECISION CARDS
+   A short list of questions for an artist. TourDesk saves the card to Supabase
+   (table tourdesk_decisions, reached only through td_* functions), the artist
+   opens decide.html?d=<token> from an email, answers and submits, and TourDesk
+   picks the answers up and logs them here.
+   ============================================================ */
+const DEC_TYPES={choice:'Pick one',multi:'Pick any',yesno:'Yes / No',confirm:'Confirm',date:'Date',text:'Written answer'};
+const DEC_STATUS_COLOR={Draft:'gray',Waiting:'amber',Answered:'green',Closed:'gray'};
+function dbDecisions(){ DB.decisions=DB.decisions||[]; return DB.decisions; }
+function decStatus(d){ return d.closed?'Closed':d.answeredAt?'Answered':d.sentAt?'Waiting':'Draft'; }
+function decBadge(d){ const s=decStatus(d); return '<span class="badge '+DEC_STATUS_COLOR[s]+'">'+(s==='Waiting'?'Waiting for reply':s)+'</span>'; }
+function decNewToken(){
+  const a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', b=new Uint8Array(26);
+  (window.crypto||window.msCrypto).getRandomValues(b);
+  return [...b].map(x=>a[x%a.length]).join('');
+}
+function decQid(){ return 'q'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function decisionPageUrl(){
+  if(DB.settings.decisionUrl) return DB.settings.decisionUrl;
+  if(/^https?:/.test(location.protocol)) return location.href.split(/[?#]/)[0].replace(/[^/]*$/,'')+'decide.html';
+  return 'https://adlangpa.github.io/TourDesk/decide.html';
+}
+function decisionLink(d){ return decisionPageUrl()+'?d='+encodeURIComponent(d.token); }
+function decArtistEmail(ar){ const c=ar&&get(DB.contacts,ar.contactId); return (c&&c.email)||''; }
+// Talk to the td_* functions directly over Supabase's REST endpoint
+async function decRpc(fn,args){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/rpc/'+fn,{method:'POST',
+    headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify(args)});
+  const t=await r.text(); let j=null; try{ j=t?JSON.parse(t):null; }catch(e){}
+  if(!r.ok){
+    const msg=(j&&(j.message||j.hint))||('HTTP '+r.status);
+    const e=new Error(msg); e.setupNeeded=r.status===404||/function .* does not exist|Could not find the function/i.test(msg); throw e;
+  }
+  return j;
+}
+// What the artist's page receives: only what's written on the card, nothing else from TourDesk
+function decPublicCard(d){
+  const ar=get(DB.artists,d.artistId);
+  const logo=currentLogoUrl();
+  return {title:d.title||'Decisions',intro:d.intro||'',due:d.due||'',artistName:ar?ar.name:(d.artistName||''),
+    company:DB.settings.companyName||'Langer Performing Arts',logo:(logo&&logo.length<180000)?logo:'',
+    questions:(d.questions||[]).map(q=>({id:q.id,type:q.type,label:q.label,help:q.help||'',options:(q.type==='choice'||q.type==='multi')?(q.options||[]):undefined,required:!!q.required,allowNote:q.allowNote!==false}))};
+}
+async function decPush(d){
+  await decRpc('td_put_decision',{p_token:d.token,p_card:decPublicCard(d),p_closed:!!d.closed});
+  d.pushedAt=new Date().toISOString();
+}
+function decAnswerText(q,ans){
+  if(!ans) return '';
+  const v=ans.values?ans.values[q.id]:undefined, n=ans.notes?ans.notes[q.id]:'';
+  let t=Array.isArray(v)?v.join(', '):(v==null?'':String(v));
+  if(q.type==='date'&&t) t=new Date(t+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  return t+(n?(t?' · ':'')+'“'+n+'”':'');
+}
+// Bring in any new answers. Runs on start, every minute, and from "Check for answers"
+let _decPulling=false;
+async function decPull(manual){
+  const open=dbDecisions().filter(d=>d.sentAt&&!d.closed);
+  if(!open.length||_decPulling) return {changed:0};
+  _decPulling=true;
+  try{
+    const rows=await decRpc('td_get_answers',{p_tokens:open.map(d=>d.token)})||[];
+    let changed=0;
+    rows.forEach(r=>{
+      const d=open.find(x=>x.token===r.token); if(!d||!r.answers||!r.answered_at) return;
+      if(d.answeredAt&&new Date(d.answeredAt)>=new Date(r.answered_at)) return;
+      const first=!d.answeredAt;
+      d.answers=r.answers; d.answeredAt=r.answered_at;
+      (d.history=d.history||[]).push({ts:r.answered_at,what:first?'Answered':'Answers changed',by:r.answers.name||''});
+      decLogAnswers(d,first);
+      changed++;
+    });
+    if(changed){ persist(); if(route.view==='decisions'||route.view==='artists'||route.view==='events') render(); refreshNotifBadgeSafe(); }
+    return {changed};
+  } catch(e){
+    if(manual) throw e;
+    return {changed:0,error:e};
+  } finally { _decPulling=false; }
+}
+function refreshNotifBadgeSafe(){ try{ refreshNotifBadge(); }catch(e){} }
+// Answers land on the card, in the activity log, as a notification, and on any linked show's notes
+function decLogAnswers(d,first){
+  const ar=get(DB.artists,d.artistId);
+  const who=(d.answers&&d.answers.name)||(ar?ar.name:'The artist');
+  logActivity(first?'received answers to':'received changed answers to','Decision card',d.title+(ar?' ('+ar.name+')':''));
+  (DB.users||USERS).filter(u=>u.role==='admin').forEach(u=>{
+    DB.notifications=DB.notifications||[];
+    DB.notifications.unshift({id:'nt'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),forUsername:u.username,
+      message:who+(first?' answered ':' changed their answers to ')+'“'+d.title+'”',link:{view:'decisions',id:d.id},read:false,ts:new Date().toISOString()});
+  });
+  (d.questions||[]).forEach(q=>{
+    if(!q.eventId) return;
+    const e=get(DB.events,q.eventId); if(!e) return;
+    const a=decAnswerText(q,d.answers); if(!a) return;
+    e.notesLog=e.notesLog||[];
+    e.notesLog.unshift({id:'nl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:new Date().toISOString(),by:who,
+      text:'Decision card “'+d.title+'”: '+q.label+' → '+a});
+  });
+}
+function decStartPolling(){
+  if(window._decTimer) return;
+  window._decTimer=setInterval(()=>{ if(AUTH_USER&&AUTH_USER.role==='admin') decPull(false); },60000);
+  setTimeout(()=>{ if(AUTH_USER&&AUTH_USER.role==='admin') decPull(false); },2500);
+}
+
+/* ---------- Builder ---------- */
+let _dec=null; // the card being edited
+function decisionForm(id,pre){
+  if(!canDo('admin')) return;
+  pre=pre||{};
+  const ex=id?get(dbDecisions(),id):null;
+  if(ex&&ex.answeredAt){ decisionDuplicate(id); return; }
+  const arId=ex?ex.artistId:(pre.artistId||(DB.artists.find(a=>a.type==='roster')||DB.artists[0]||{}).id||'');
+  const ar=get(DB.artists,arId);
+  _dec=ex?JSON.parse(JSON.stringify(ex)):{id:'',artistId:arId,title:ar?'A few decisions for '+ar.name.split(' ')[0]:'A few decisions',intro:'',due:'',questions:[]};
+  if(!_dec.questions.length&&!ex) _dec.questions.push({id:decQid(),type:'choice',label:'',help:'',options:['',''],required:true,allowNote:true});
+  openModal(ex?'Edit decision card':'New decision card',
+    '<div class="row2"><div class="field"><label>Artist</label><select id="dc-artist" onchange="decSync();_dec.artistId=this.value">'
+      +DB.artists.map(a=>'<option value="'+a.id+'" '+(a.id===_dec.artistId?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Reply by <span class="muted" style="font-weight:400">(optional)</span></label><input type="date" id="dc-due" value="'+esc(_dec.due||'')+'"></div></div>'
+    +'<div class="field"><label>Title</label><input id="dc-title" value="'+esc(_dec.title)+'" placeholder="e.g. Spring tour: three quick decisions"></div>'
+    +'<div class="field"><label>Message <span class="muted" style="font-weight:400">(shown at the top)</span></label><textarea id="dc-intro" rows="2" placeholder="Hi! I need a few answers from you to lock in the spring run. Takes two minutes.">'+esc(_dec.intro||'')+'</textarea></div>'
+    +'<div class="sec-label" style="margin-top:4px">Questions</div>'
+    +'<div id="dc-qs"></div>'
+    +'<div class="dc-add"><button class="btn sm" onclick="decAddQ(\'choice\')">+ Pick one</button><button class="btn sm" onclick="decAddQ(\'yesno\')">+ Yes / No</button>'
+      +'<button class="btn sm" onclick="decAddQ(\'confirm\')">+ Confirm something</button><button class="btn sm" onclick="decAddShowsPicker()">+ Confirm shows</button>'
+      +'<button class="btn sm" onclick="decAddQ(\'date\')">+ Date</button><button class="btn sm" onclick="decAddQ(\'text\')">+ Written answer</button></div>'
+    +'<div id="dc-shows"></div>'
+    +'<p class="muted" style="font-size:11px;margin-top:10px">The artist sees only what\'s on this card: no money, notes or anything else from TourDesk. Answers to show questions are also added to that show\'s notes.</p>'
+    +'<div id="dc-err" style="color:var(--red);font-size:12px;min-height:16px"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="decSave(false)">Save draft</button><button class="btn primary" id="dc-go" onclick="decSave(true)">Save &amp; get link</button>');
+  decRenderQs();
+}
+function decSync(){
+  if(!_dec) return;
+  const v=id=>document.getElementById(id);
+  if(v('dc-title')){ _dec.title=v('dc-title').value; _dec.intro=v('dc-intro').value; _dec.due=v('dc-due').value; _dec.artistId=v('dc-artist').value; }
+  _dec.questions.forEach(q=>{
+    const g=k=>v('dcq-'+k+'-'+q.id);
+    if(!g('label')) return;
+    q.label=g('label').value; q.help=g('help').value; q.required=g('req').checked; q.allowNote=g('note').checked;
+    if(g('opts')) q.options=[...document.querySelectorAll('[data-opt-of="'+q.id+'"]')].map(x=>x.value);
+  });
+}
+function decRenderQs(){
+  const host=document.getElementById('dc-qs'); if(!host) return;
+  const n=_dec.questions.length;
+  host.innerHTML=n?_dec.questions.map((q,i)=>{
+    const ev=q.eventId?get(DB.events,q.eventId):null;
+    return '<div class="dc-q">'
+      +'<div class="dc-q-head"><span class="dc-q-n">'+(i+1)+'</span>'
+        +'<select aria-label="Question type" onchange="decSetType(\''+q.id+'\',this.value)">'+Object.entries(DEC_TYPES).map(([k,l])=>'<option value="'+k+'" '+(k===q.type?'selected':'')+'>'+l+'</option>').join('')+'</select>'
+        +(ev?'<span class="badge blue" style="font-size:10px">Show: '+esc(ev.date||'')+'</span>':'')
+        +'<span style="margin-left:auto;display:flex;gap:2px">'
+        +'<button class="btn ghost sm dc-ico" aria-label="Move up" '+(i?'':'disabled')+' onclick="decMove(\''+q.id+'\',-1)">↑</button>'
+        +'<button class="btn ghost sm dc-ico" aria-label="Move down" '+(i<n-1?'':'disabled')+' onclick="decMove(\''+q.id+'\',1)">↓</button>'
+        +'<button class="btn ghost sm dc-ico" aria-label="Remove question" onclick="decRemove(\''+q.id+'\')">×</button></span></div>'
+      +'<input id="dcq-label-'+q.id+'" value="'+esc(q.label)+'" placeholder="'+esc(decPlaceholder(q.type))+'" aria-label="Question">'
+      +'<input id="dcq-help-'+q.id+'" value="'+esc(q.help||'')+'" placeholder="Details (optional): context, links, what each option means" aria-label="Details" style="margin-top:6px;font-size:12px">'
+      +((q.type==='choice'||q.type==='multi')?'<div id="dcq-opts-'+q.id+'" class="dc-opts">'+(q.options||[]).map((o,oi)=>
+          '<div class="dc-opt"><span aria-hidden="true">'+(q.type==='multi'?'☐':'○')+'</span><input data-opt-of="'+q.id+'" value="'+esc(o)+'" placeholder="Option '+(oi+1)+'" aria-label="Option '+(oi+1)+'">'
+          +'<button class="btn ghost sm dc-ico" aria-label="Remove option" onclick="decOpt(\''+q.id+'\','+oi+')">×</button></div>').join('')
+        +'<a class="dc-addopt" onclick="decOpt(\''+q.id+'\',-1)">+ Add option</a></div>':'')
+      +(q.type==='yesno'?'<div class="dc-preview">Artist taps <b>Yes</b> or <b>No</b></div>':'')
+      +(q.type==='confirm'?'<div class="dc-preview">Artist taps <b>✓ Confirmed</b> or <b>Needs a change</b> (and says what)</div>':'')
+      +'<div class="dc-flags"><label><input type="checkbox" id="dcq-req-'+q.id+'" '+(q.required?'checked':'')+'> Required</label>'
+        +'<label><input type="checkbox" id="dcq-note-'+q.id+'" '+(q.allowNote!==false?'checked':'')+'> Let them add a note</label></div>'
+      +'</div>';
+  }).join(''):'<p class="muted" style="font-size:13px">Add a question below.</p>';
+}
+function decPlaceholder(t){
+  return {choice:'e.g. Which opener do you want for the spring run?',multi:'e.g. Which cities would you add a second show in?',yesno:'e.g. OK to add a 10pm show in Halifax?',
+    confirm:'e.g. Confirm your travel day is Thursday, March 11',date:'e.g. When do you need to be home by?',text:'e.g. Anything you want changed in the tech rider?'}[t]||'Question';
+}
+function decAddQ(type,extra){
+  decSync();
+  _dec.questions.push(Object.assign({id:decQid(),type,label:'',help:'',options:(type==='choice'||type==='multi')?['','']:[],required:true,allowNote:true},extra||{}));
+  decRenderQs();
+  const q=_dec.questions[_dec.questions.length-1];
+  if(!extra){ const el=document.getElementById('dcq-label-'+q.id); if(el) el.focus(); }
+}
+function decSetType(id,t){ decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q) return; q.type=t; if((t==='choice'||t==='multi')&&(!q.options||q.options.length<2)) q.options=(q.options||[]).concat(['','']).slice(0,Math.max(2,(q.options||[]).length)); decRenderQs(); }
+function decMove(id,dir){ decSync(); const i=_dec.questions.findIndex(x=>x.id===id), j=i+dir; if(i<0||j<0||j>=_dec.questions.length) return; const a=_dec.questions; [a[i],a[j]]=[a[j],a[i]]; decRenderQs(); }
+function decRemove(id){ decSync(); _dec.questions=_dec.questions.filter(x=>x.id!==id); decRenderQs(); }
+function decOpt(id,oi){
+  decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q) return;
+  if(oi<0){ q.options.push(''); decRenderQs(); const ins=document.querySelectorAll('[data-opt-of="'+id+'"]'); if(ins.length) ins[ins.length-1].focus(); }
+  else { q.options.splice(oi,1); decRenderQs(); }
+}
+// Quick-add: one "Confirm" question per upcoming show for this artist
+function decAddShowsPicker(){
+  decSync();
+  const ar=get(DB.artists,_dec.artistId), host=document.getElementById('dc-shows'); if(!host) return;
+  const today=todayStr();
+  const evs=artistAllEvents(ar).filter(e=>!e.date||e.date>=today).sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
+  host.innerHTML='<div class="dc-showpick"><div style="font-size:12px;font-weight:600;margin-bottom:6px">Tick shows to confirm with '+esc(ar?ar.name:'the artist')+'</div>'
+    +(evs.length?evs.map(e=>{const v=get(DB.venues,e.venueId)||{};return '<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" class="dc-ev" value="'+e.id+'"> '+esc(rptShowDate(e.date))+' · '+esc(v.name||e.name||'Show')+(v.city?' <span class="muted">'+esc(v.city)+'</span>':'')+'</label>';}).join('')
+      +'<div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm primary" onclick="decAddShows()">Add</button><button class="btn sm" onclick="document.getElementById(\'dc-shows\').innerHTML=\'\'">Cancel</button></div>'
+      :'<p class="muted" style="font-size:12px">No upcoming shows for this artist.</p>')+'</div>';
+}
+function decShowLine(e){
+  const v=get(DB.venues,e.venueId)||{};
+  const t=normTime(e.showTime)?' at '+fmtTime(e.showTime):'';
+  return rptShowDate(e.date)+t+' · '+(v.name||e.name||'Show')+(v.city?', '+v.city+(v.province?', '+v.province:''):'');
+}
+function decAddShows(){
+  const ids=[...document.querySelectorAll('.dc-ev:checked')].map(x=>x.value);
+  ids.forEach(id=>{ const e=get(DB.events,id); if(!e) return;
+    const v=get(DB.venues,e.venueId)||{};
+    const bits=[normTime(e.loadIn)?'Load-in '+fmtTime(e.loadIn):'',normTime(e.showTime)?'Show '+fmtTime(e.showTime):'',v.address||''].filter(Boolean).join(' · ');
+    decAddQ('confirm',{label:'Confirm: '+decShowLine(e),help:bits,eventId:e.id}); });
+  document.getElementById('dc-shows').innerHTML='';
+}
+async function decSave(andSend){
+  decSync();
+  const err=document.getElementById('dc-err');
+  const d=_dec;
+  d.title=(d.title||'').trim(); d.questions.forEach(q=>{ q.label=(q.label||'').trim(); if(q.options) q.options=q.options.map(o=>o.trim()).filter(Boolean); });
+  if(!d.title){ err.textContent='Give the card a title.'; return; }
+  if(!d.questions.length){ err.textContent='Add at least one question.'; return; }
+  const bad=d.questions.findIndex(q=>!q.label);
+  if(bad>=0){ err.textContent='Question '+(bad+1)+' needs wording.'; return; }
+  const few=d.questions.findIndex(q=>(q.type==='choice'||q.type==='multi')&&q.options.length<2);
+  if(few>=0){ err.textContent='Question '+(few+1)+' needs at least two options.'; return; }
+  const now=new Date().toISOString();
+  let rec=d.id?get(dbDecisions(),d.id):null;
+  const isNew=!rec;
+  if(!rec){ rec={id:'dc'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),token:decNewToken(),createdAt:now,history:[{ts:now,what:'Created',by:AUTH_USER?.displayName||''}]}; dbDecisions().unshift(rec);  d.id=rec.id; }
+  Object.assign(rec,{artistId:d.artistId,title:d.title,intro:(d.intro||'').trim(),due:d.due||'',questions:d.questions,updatedAt:now});
+  if(andSend||rec.sentAt){
+    const btn=document.getElementById('dc-go'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+    try{ await decPush(rec); }
+    catch(e){
+      if(btn){ btn.disabled=false; btn.textContent='Save & get link'; }
+      persist();
+      err.innerHTML=e.setupNeeded?'Decision cards need a one-time setup in Supabase first (run <b>tourdesk-decisions-setup.sql</b>). Your card is saved as a draft.':'Couldn\'t reach Supabase ('+esc(e.message)+'). Your card is saved as a draft; try again in a moment.';
+      if(rec.sentAt){ rec.dirty=true; }
+      return;
+    }
+    rec.dirty=false;
+    if(!rec.sentAt){ rec.sentAt=now; rec.history.push({ts:now,what:'Link created',by:AUTH_USER?.displayName||''}); }
+  }
+  logActivity(isNew?'created':'edited','Decision card',rec.title);
+  persist(); _dec=null;
+  if(andSend) decShareModal(rec.id); else { closeModal(); go('decisions',rec.id); }
+}
+function decisionDuplicate(id){
+  const d=get(dbDecisions(),id); if(!d) return;
+  decisionForm(null,{artistId:d.artistId});
+  _dec.title=d.title+' (follow-up)'; _dec.intro=d.intro; _dec.due='';
+  _dec.questions=JSON.parse(JSON.stringify(d.questions)).map(q=>Object.assign(q,{id:decQid()}));
+  document.getElementById('dc-title').value=_dec.title; document.getElementById('dc-intro').value=_dec.intro||'';
+  decRenderQs();
+}
+
+/* ---------- Sharing ---------- */
+function decShareModal(id){
+  const d=get(dbDecisions(),id); if(!d) return;
+  const ar=get(DB.artists,d.artistId), link=decisionLink(d), email=decArtistEmail(ar);
+  openModal('Send to '+(ar?ar.name:'the artist'),
+    '<p style="font-size:13px;color:var(--txt2);margin-bottom:10px">Send this link by email or text. It works on a phone or a computer, with no login. Answers show up here automatically.</p>'
+    +'<div class="dc-link"><input id="dc-link" readonly value="'+esc(link)+'" onclick="this.select()" aria-label="Decision card link"><button class="btn sm primary" onclick="decCopyLink(\''+id+'\')" id="dc-copy">Copy link</button></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+      +'<button class="btn sm" onclick="decEmail(\''+id+'\')">✉ Write email in Gmail'+(email?'':' (no email on file)')+'</button>'
+      +'<a class="btn sm" href="'+esc(link)+'" target="_blank" rel="noopener">Preview as artist ↗</a></div>',
+    '<button class="btn" onclick="closeModal();go(\'decisions\',\''+id+'\')">Done</button>');
+}
+function decCopyLink(id){
+  const d=get(dbDecisions(),id), link=decisionLink(d), b=document.getElementById('dc-copy');
+  const ok=()=>{ if(b){ b.textContent='Copied ✓'; setTimeout(()=>{ if(b) b.textContent='Copy link'; },1800); } };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(ok,()=>{ const i=document.getElementById('dc-link'); if(i){ i.select(); document.execCommand('copy'); ok(); } });
+  else { const i=document.getElementById('dc-link'); if(i){ i.select(); document.execCommand('copy'); ok(); } }
+}
+function decEmail(id){
+  const d=get(dbDecisions(),id), ar=get(DB.artists,d.artistId);
+  const first=ar?ar.name.split(' ')[0]:'';
+  const n=(d.questions||[]).length;
+  const body='Hi '+first+',\n\n'+(d.intro?d.intro+'\n\n':'')+'I need '+(n===1?'one quick answer':n+' quick answers')+' from you'+(d.due?' by '+new Date(d.due+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'')+'. It takes a couple of minutes and works on your phone:\n\n'+decisionLink(d)+'\n\nThanks!';
+  const url='https://mail.google.com/mail/?view=cm&fs=1&tf=1&to='+encodeURIComponent(decArtistEmail(ar))+'&su='+encodeURIComponent(d.title)+'&body='+encodeURIComponent(body);
+  window.open(url,'_blank');
+  d.history=d.history||[]; d.history.push({ts:new Date().toISOString(),what:'Email opened in Gmail',by:AUTH_USER?.displayName||''}); persist();
+}
+async function decSetClosed(id,closed){
+  const d=get(dbDecisions(),id); if(!d) return;
+  const was=d.closed; d.closed=closed;
+  try{ if(d.sentAt) await decPush(d); }
+  catch(e){ d.closed=was; openModal('Couldn\'t update','<p style="font-size:13px">'+esc(e.message)+'</p>','<button class="btn" onclick="closeModal()">OK</button>'); return; }
+  d.history=d.history||[]; d.history.push({ts:new Date().toISOString(),what:closed?'Closed':'Reopened',by:AUTH_USER?.displayName||''});
+  logActivity(closed?'closed':'reopened','Decision card',d.title); persist(); render();
+}
+function decDelete(id){
+  const d=get(dbDecisions(),id); if(!d) return;
+  openModal('Delete this card?','<p style="font-size:13px;color:var(--txt2)">“'+esc(d.title)+'” and its answers are removed from TourDesk, and the link stops accepting answers.</p>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn danger" onclick="decDeleteNow(\''+id+'\')">Delete</button>');
+}
+async function decDeleteNow(id){
+  const d=get(dbDecisions(),id); if(!d) return;
+  if(d.sentAt&&!d.closed){ d.closed=true; try{ await decPush(d); }catch(e){} }
+  DB.decisions=dbDecisions().filter(x=>x.id!==id);
+  logActivity('deleted','Decision card',d.title); persist(); closeModal(); go('decisions');
+}
+async function decCheckNow(btn){
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  let msg='';
+  try{ const r=await decPull(true); msg=r.changed?r.changed+' new answer'+(r.changed===1?'':'s'):'No new answers yet'; }
+  catch(e){ msg=e.setupNeeded?'Supabase setup needed':'Couldn\'t reach Supabase'; }
+  render();
+  const b=document.getElementById('dc-check'); if(b){ b.textContent=msg; setTimeout(()=>{ const x=document.getElementById('dc-check'); if(x){ x.textContent='↻ Check for answers'; x.disabled=false; } },2500); }
+}
+
+/* ---------- Lists & detail ---------- */
+function decRowHTML(d,opts){
+  opts=opts||{};
+  const ar=get(DB.artists,d.artistId), st=decStatus(d);
+  const n=(d.questions||[]).length;
+  const sub=[!opts.hideArtist&&ar?esc(ar.name):'',n+' question'+(n===1?'':'s'),
+    d.answeredAt?'Answered '+esc(inqTimeAgo(d.answeredAt)):d.sentAt?'Link made '+esc(inqTimeAgo(d.sentAt)):'Not sent yet',
+    d.due&&!d.answeredAt?'Reply by '+esc(new Date(d.due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})):''].filter(Boolean).join(' · ');
+  const overdue=d.due&&!d.answeredAt&&!d.closed&&d.due<todayStr();
+  return '<div class="dc-row'+(st==='Answered'?' answered':'')+'" onclick="go(\'decisions\',\''+d.id+'\')" role="link" tabindex="0" onkeydown="if(event.key===\'Enter\')go(\'decisions\',\''+d.id+'\')">'
+    +'<div style="min-width:0"><div class="dc-row-title">'+esc(d.title)+'</div><div class="dc-row-sub">'+sub+(overdue?' · <span style="color:var(--red)">overdue</span>':'')+'</div></div>'
+    +'<div>'+decBadge(d)+'</div></div>';
+}
+function decListHTML(list,opts){
+  return list.length?'<div class="dc-list">'+list.map(d=>decRowHTML(d,opts)).join('')+'</div>':'';
+}
+function decSort(a,b){
+  const rank=d=>({Answered:0,Waiting:1,Draft:2,Closed:3})[decStatus(d)];
+  return rank(a)-rank(b)||(b.answeredAt||b.updatedAt||b.createdAt||'').localeCompare(a.answeredAt||a.updatedAt||a.createdAt||'');
+}
+// Artist page tab
+function artistDecisionsHTML(ar){
+  const list=dbDecisions().filter(d=>d.artistId===ar.id).sort(decSort);
+  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Decision cards for '+esc(ar.name)+'</span>'
+    +'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="decisionForm(null,{artistId:\''+ar.id+'\'})">+ New decision card</button></div>'
+    +(list.length?decListHTML(list,{hideArtist:true}):'<p class="muted" style="font-size:13px">Send '+esc(ar.name.split(' ')[0])+' a short card of questions to answer from their phone. Answers are logged here.</p>')+'</div>';
+}
+VIEWS.decisions={
+  render(c,a){
+    if(route.id){ this.detail(c,a,route.id); return; }
+    if(!canDo('admin')){ go('dashboard'); return; }
+    a.innerHTML='<button class="btn sm" id="dc-check" onclick="decCheckNow(this)">↻ Check for answers</button> <button class="btn sm primary" onclick="decisionForm()">+ New decision card</button>';
+    const f=route.tab||'open';
+    const all=dbDecisions().slice().sort(decSort);
+    const groups={open:all.filter(d=>!d.closed),answered:all.filter(d=>decStatus(d)==='Answered'),waiting:all.filter(d=>decStatus(d)==='Waiting'),closed:all.filter(d=>d.closed)};
+    const list=groups[f]||groups.open;
+    c.innerHTML='<p class="muted" style="font-size:13px;margin:-4px 0 12px">Short cards of questions you send to artists. They answer from a link on their phone or computer, and the answers are logged here.</p>'
+      +'<div class="tabs">'+[['open','Open'],['waiting','Waiting'],['answered','Answered'],['closed','Closed']].map(([k,l])=>'<div class="tab '+(f===k?'active':'')+'" onclick="go(\'decisions\',null,\''+k+'\')">'+l+' ('+groups[k].length+')</div>').join('')+'</div>'
+      +(list.length?decListHTML(list):emptyState('☑',f==='open'?'No decision cards yet. Make one to get quick answers from an artist.':'Nothing here.'));
+  },
+  detail(c,a,id){
+    if(!canDo('admin')){ go('dashboard'); return; }
+    const d=get(dbDecisions(),id); if(!d){ go('decisions'); return; }
+    const ar=get(DB.artists,d.artistId), st=decStatus(d), ans=d.answers;
+    a.innerHTML=(d.sentAt?'<button class="btn sm primary" onclick="decShareModal(\''+id+'\')">🔗 Link &amp; email</button> ':'')
+      +(d.answeredAt?'':'<button class="btn sm" onclick="decisionForm(\''+id+'\')">Edit</button> ')
+      +(!d.sentAt?'<button class="btn sm primary" onclick="decisionForm(\''+id+'\')">Get link</button> ':'')
+      +(d.sentAt?(d.closed?'<button class="btn sm" onclick="decSetClosed(\''+id+'\',false)">Reopen</button> ':'<button class="btn sm" onclick="decSetClosed(\''+id+'\',true)">Close</button> '):'')
+      +'<button class="btn sm" onclick="decisionDuplicate(\''+id+'\')">Duplicate</button> '
+      +'<button class="btn sm danger" onclick="decDelete(\''+id+'\')">Delete</button>';
+    c.innerHTML='<div class="detail-head"><span class="back" onclick="go(\'decisions\')">← Decisions</span><span class="detail-title">'+esc(d.title)+'</span>'+decBadge(d)+'</div>'
+      +'<div class="meta-row" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--txt2);margin-bottom:14px">'
+        +(ar?'<span>Artist: <a class="venue-link" onclick="go(\'artists\',\''+ar.id+'\',\'decisions\')">'+esc(ar.name)+'</a></span>':'')
+        +(d.due?'<span>Reply by '+esc(new Date(d.due+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}))+'</span>':'')
+        +(d.answeredAt?'<span>Answered '+esc(new Date(d.answeredAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))+(ans&&ans.name?' by '+esc(ans.name):'')+'</span>':'')
+        +(d.dirty?'<span style="color:var(--amber)">Changes not sent to the link yet: edit and save again</span>':'')
+      +'</div>'
+      +(d.intro?'<div class="sec"><div class="sec-label">Message</div><p style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(d.intro)+'</p></div>':'')
+      +'<div class="sec"><div class="sec-label">'+(d.answeredAt?'Answers':'Questions')+'</div>'
+        +(d.questions||[]).map((q,i)=>{
+          const ev=q.eventId?get(DB.events,q.eventId):null, t=decAnswerText(q,ans);
+          const v=ans&&ans.values?ans.values[q.id]:undefined;
+          const tone=v==='Needs a change'||v==='No'?'amber':(v==='Confirmed'||v==='Yes')?'green':'';
+          return '<div class="dc-ans"><div class="dc-ans-q"><span class="muted">'+(i+1)+'.</span> '+esc(q.label)
+            +' <span class="muted" style="font-size:11px">'+esc(DEC_TYPES[q.type]||'')+(q.required?'':' · optional')+'</span>'
+            +(ev?' <a class="venue-link" style="font-size:11px" onclick="go(\'events\',\''+ev.id+'\')">View show →</a>':'')+'</div>'
+            +(q.help?'<div class="muted" style="font-size:12px">'+esc(q.help)+'</div>':'')
+            +((q.type==='choice'||q.type==='multi')&&!d.answeredAt?'<div class="muted" style="font-size:12px">Options: '+esc((q.options||[]).join(' · '))+'</div>':'')
+            +(d.answeredAt?'<div class="dc-ans-a'+(tone?' '+tone:'')+'">'+(t?esc(t):'<span class="muted">No answer</span>')+'</div>':'')
+            +'</div>';
+        }).join('')
+        +(ans&&ans.comment?'<div class="dc-ans"><div class="dc-ans-q">Anything else</div><div class="dc-ans-a">'+esc(ans.comment)+'</div></div>':'')
+      +'</div>'
+      +(d.sentAt?'<div class="sec"><div class="sec-label">Link</div><div class="dc-link"><input readonly value="'+esc(decisionLink(d))+'" onclick="this.select()" aria-label="Decision card link"><button class="btn sm" onclick="decShareModal(\''+id+'\')">Copy / email</button></div>'
+        +(d.closed?'<p class="muted" style="font-size:12px;margin-top:6px">Closed: the link shows the card but no longer accepts answers.</p>':'<p class="muted" style="font-size:12px;margin-top:6px">The artist can change their answers until you close the card.</p>')+'</div>':'')
+      +'<div class="sec"><div class="sec-label">History</div><ol class="dc-hist">'+(d.history||[]).slice().reverse().map(h=>'<li><span class="muted">'+esc(new Date(h.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))+'</span> '+esc(h.what)+(h.by?' · '+esc(h.by):'')+'</li>').join('')+'</ol></div>';
+  }
+};
+
 VIEWS.outreach={
   render(c,a){
     if(!canDo('admin')){ c.innerHTML=emptyState('✉','Outreach is only available to administrators.'); return; }
@@ -11773,6 +12245,7 @@ if(AUTH_USER) {
     if(!Array.isArray(DB.tasks)) DB.tasks=[];
     if(!Array.isArray(DB.inquiries)) DB.inquiries=[];
     if(migrateVenueInquiries()+migrateEventStatuses()) persist();
+    decStartPolling();
     syncUsersFromDB();
     // Migrate: seed default pitch deck slides for installs that predate this feature
     if(!DB.settings.pitchSlides || !Array.isArray(DB.settings.pitchSlides)) DB.settings.pitchSlides = defaultPitchSlides();
