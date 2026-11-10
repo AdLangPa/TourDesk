@@ -289,6 +289,15 @@ a{color:var(--blue);text-decoration:none}
 .dc-addopt{font-size:12px;cursor:pointer;color:var(--blue)}
 .dc-preview{font-size:12px;color:var(--txt3);margin-top:6px}
 .dc-flags{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--txt2)}.dc-flags label{display:flex;align-items:center;gap:5px}.dc-flags input{width:auto}
+.dc-links{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dc-links label{display:block;font-size:11px;color:var(--txt3);margin-bottom:2px}.dc-links select{width:100%;padding:7px 9px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt);font-size:12px}
+@media(max-width:600px){.dc-links{grid-template-columns:1fr}}
+.dc-dates{margin-top:8px;display:grid;gap:5px}
+.dc-dates .dc-opt input[type=date]{width:auto;min-width:140px;max-width:170px;flex:0 0 auto}
+.dc-flags select{padding:4px 6px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt);font-size:12px;max-width:100%}
+.dc-tie{margin-top:10px;font-size:12px;color:var(--txt2)}.dc-tie select{display:block;width:100%;min-width:0;margin-top:3px;padding:6px 8px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf);color:var(--txt);font-size:12px;text-overflow:ellipsis}
+.dc-range{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;margin-top:4px}.dc-range input{width:auto!important}
+.dc-apply{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center}
+.dc-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .dc-showpick{border:1px dashed var(--bord2);border-radius:var(--rad);padding:10px 12px;margin-top:8px;max-height:260px;overflow-y:auto}
 .dc-link{display:flex;gap:6px}.dc-link input{flex:1;min-width:0;padding:7px 9px;border:1px solid var(--bord2);border-radius:6px;background:var(--surf2);color:var(--txt);font-size:12px}
 .dc-list{display:grid;gap:6px}
@@ -2890,6 +2899,7 @@ VIEWS.tours={
       </div>
       <div id="todo-tab-tour-${id}"></div>
       ${canDo('admin')?outreachSectionHTML({tourId:id},'Venue outreach'):''}
+      ${decLinkedSection('tour',id)}
       <div class="sec"><div class="sec-label">Shows</div>
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No shows yet.</p>'}</div>`;
     renderTodoTab('tour',id);
@@ -3639,7 +3649,7 @@ function eventOverview(host,e,v,t){
     </tr>`;
   };
 
-  host.innerHTML='<div class="sec itin-sec" id="itin-host">'+itineraryHTML(e)+'</div>'+eventOutreachHTML(e)+`
+  host.innerHTML='<div class="sec itin-sec" id="itin-host">'+itineraryHTML(e)+'</div>'+eventOutreachHTML(e)+decLinkedSection('event',e.id)+`
     <div class="stats">
       <div class="stat"><div class="stat-val ${(hasActuals?sf.artistNet:pf.artistNet)>=0?'pos':'neg'}">${hasActuals?money0(sf.artistNet):money0(pf.artistNet)}</div><div class="stat-lbl">${hasActuals?'Artist net (actual)':'Artist net (projected)'}</div></div>
       <div class="stat"><div class="stat-val pos">${hasActuals?money0(sf.commission):money0(pf.yourTotal)}</div><div class="stat-lbl">${hasActuals?'Your commission (actual)':'To you (projected)'}</div></div>
@@ -6203,6 +6213,7 @@ VIEWS.proposals={
         <button class="btn primary sm" onclick="proposalAddVenue('${id}')">+ Add show</button>`:''}
       <button class="btn sm" onclick="printProposalDoc('${id}')">Print / PDF</button>
       <button class="btn sm" onclick="exportProposalHTML('${id}')">⬇ Export for artist</button>
+      ${isAdmin?`<button class="btn sm" onclick="decNewFor('proposal','${id}')">☑ Decision card</button>`:''}
       <button class="btn sm" onclick="exportPitchDeck('${id}')">⬇ Export pitch deck</button>
       ${isAdmin?`<button class="btn ghost sm" onclick="goToPitchSlideEditor()" title="Add, edit, reorder, or remove the slides that appear in every exported pitch deck">✎ Customize slides</button>`:''}
       ${isAdmin&&!isAccepted&&p.status!=='Declined'?`<button class="btn sm" onclick="declineProposalModal('${id}')">✗ Not going ahead</button> <button class="btn primary" onclick="acceptProposalModal('${id}')">✓ Accept</button>`:''}
@@ -7220,7 +7231,7 @@ function proposalOutreachTab(host,p,shows,isAccepted){
         +(list.length?list.map(q=>inquiryRowHTML(q,{hideVenue:true,hideArtist:true,hideProposal:true,inProposal:true})).join(''):'<p class="muted" style="font-size:12px;margin:6px 0 0">No inquiry yet.</p>')
         +'</div>';
     }).join(''):'<p class="muted" style="font-size:13px">Add shows to this proposal first.</p>')
-    +'</div>';
+    +'</div>'+decLinkedSection('proposal',p.id);
 }
 function setShowHoldStatus(pid,sid,value){
   const p=get(DB.proposals,pid); if(!p) return;
@@ -10817,6 +10828,7 @@ function inquiryRowHTML(q,opts){
       :opts.linkEventId?(q.eventId===opts.linkEventId?' · <span class="muted">Linked to this show</span>':' · <a onclick="linkInquiryToEvent(\''+q.id+'\',\''+opts.linkEventId+'\')">Link to this show</a>')
       :(ev?' · <a onclick="go(\'events\',\''+ev.id+'\')">View show</a>'
         :(q.proposalId&&get(DB.proposals,q.proposalId)?' · <a onclick="go(\'proposals\',\''+q.proposalId+'\')">Open proposal</a>':' · <a onclick="turnInquiryIntoShow(\''+q.id+'\')">Turn into show</a>')))
+    +decInqLink(q)
     +'</div></div></div>';
 }
 function linkInquiryToEvent(qid,eid){
@@ -10919,7 +10931,8 @@ function outreachSectionHTML(filter,label){
    opens decide.html?d=<token> from an email, answers and submits, and TourDesk
    picks the answers up and logs them here.
    ============================================================ */
-const DEC_TYPES={choice:'Pick one',multi:'Pick any',yesno:'Yes / No',confirm:'Confirm',date:'Date',text:'Written answer'};
+const DEC_TYPES={choice:'Pick one',multi:'Pick any',yesno:'Yes / No',confirm:'Confirm',dates:'Choose dates',date:'Date',text:'Written answer'};
+const DEC_NONE='None of these work';
 const DEC_STATUS_COLOR={Draft:'gray',Waiting:'amber',Answered:'green',Closed:'gray'};
 function dbDecisions(){ DB.decisions=DB.decisions||[]; return DB.decisions; }
 function decStatus(d){ return d.closed?'Closed':d.answeredAt?'Answered':d.sentAt?'Waiting':'Draft'; }
@@ -10954,7 +10967,9 @@ function decPublicCard(d){
   const logo=currentLogoUrl();
   return {title:d.title||'Decisions',intro:d.intro||'',due:d.due||'',artistName:ar?ar.name:(d.artistName||''),
     company:DB.settings.companyName||'Langer Performing Arts',logo:(logo&&logo.length<180000)?logo:'',
-    questions:(d.questions||[]).map(q=>({id:q.id,type:q.type,label:q.label,help:q.help||'',options:(q.type==='choice'||q.type==='multi')?(q.options||[]):undefined,required:!!q.required,allowNote:q.allowNote!==false}))};
+    questions:(d.questions||[]).map(q=>({id:q.id,type:q.type,label:q.label,help:q.help||'',options:(q.type==='choice'||q.type==='multi')?(q.options||[]):undefined,
+      dates:q.type==='dates'?(q.dates||[]).filter(x=>x&&x.date).map(x=>({date:x.date,label:x.label||''})):undefined,pick:q.type==='dates'?(q.pick==='many'?'many':'one'):undefined,
+      required:!!q.required,allowNote:q.allowNote!==false}))};
 }
 async function decPush(d){
   await decRpc('td_put_decision',{p_token:d.token,p_card:decPublicCard(d),p_closed:!!d.closed});
@@ -10963,8 +10978,8 @@ async function decPush(d){
 function decAnswerText(q,ans){
   if(!ans) return '';
   const v=ans.values?ans.values[q.id]:undefined, n=ans.notes?ans.notes[q.id]:'';
-  let t=Array.isArray(v)?v.join(', '):(v==null?'':String(v));
-  if(q.type==='date'&&t) t=new Date(t+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  let t=Array.isArray(v)?v.map(x=>q.type==='dates'?decNiceDate(x):x).join(', '):(v==null?'':String(v));
+  if((q.type==='date'||q.type==='dates')&&t&&!Array.isArray(v)) t=decNiceDate(t);
   return t+(n?(t?' · ':'')+'“'+n+'”':'');
 }
 // Bring in any new answers. Runs on start, every minute, and from "Check for answers"
@@ -11004,12 +11019,19 @@ function decLogAnswers(d,first){
       message:who+(first?' answered ':' changed their answers to ')+'“'+d.title+'”',link:{view:'decisions',id:d.id},read:false,ts:new Date().toISOString()});
   });
   (d.questions||[]).forEach(q=>{
-    if(!q.eventId) return;
-    const e=get(DB.events,q.eventId); if(!e) return;
+    const tg=decParseTarget(decQTarget(q)); if(!tg) return;
     const a=decAnswerText(q,d.answers); if(!a) return;
-    e.notesLog=e.notesLog||[];
-    e.notesLog.unshift({id:'nl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:new Date().toISOString(),by:who,
-      text:'Decision card “'+d.title+'”: '+q.label+' → '+a});
+    const now=new Date().toISOString();
+    if(tg.kind==='event'){
+      const e=get(DB.events,tg.id); if(!e) return;
+      e.notesLog=e.notesLog||[];
+      e.notesLog.unshift({id:'nl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:now,by:who,
+        text:'Decision card “'+d.title+'”: '+q.label+' → '+a});
+    } else if(tg.kind==='inquiry'){
+      const iq=dbInquiries().find(x=>x.id===tg.id); if(!iq) return;
+      (iq.history=iq.history||[]).push({ts:now,status:iq.status,note:'Decision card “'+d.title+'”: '+q.label+' → '+a,by:who});
+      iq.updatedAt=now;
+    }
   });
 }
 function decStartPolling(){
@@ -11027,34 +11049,43 @@ function decisionForm(id,pre){
   if(ex&&ex.answeredAt){ decisionDuplicate(id); return; }
   const arId=ex?ex.artistId:(pre.artistId||(DB.artists.find(a=>a.type==='roster')||DB.artists[0]||{}).id||'');
   const ar=get(DB.artists,arId);
-  _dec=ex?JSON.parse(JSON.stringify(ex)):{id:'',artistId:arId,title:ar?'A few decisions for '+ar.name.split(' ')[0]:'A few decisions',intro:'',due:'',questions:[]};
-  if(!_dec.questions.length&&!ex) _dec.questions.push({id:decQid(),type:'choice',label:'',help:'',options:['',''],required:true,allowNote:true});
+  _dec=ex?JSON.parse(JSON.stringify(ex)):{id:'',artistId:arId,title:pre.title||(ar?'A few decisions for '+ar.name.split(' ')[0]:'A few decisions'),intro:'',due:'',questions:[],links:pre.links?JSON.parse(JSON.stringify(pre.links)):{}};
+  if(!_dec.links) _dec.links={};
+  if(!_dec.questions.length&&!ex&&!pre.noBlank) _dec.questions.push({id:decQid(),type:'choice',label:'',help:'',options:['',''],required:true,allowNote:true});
   openModal(ex?'Edit decision card':'New decision card',
-    '<div class="row2"><div class="field"><label>Artist</label><select id="dc-artist" onchange="decSync();_dec.artistId=this.value">'
+    '<div class="row2"><div class="field"><label>Artist</label><select id="dc-artist" onchange="decSync();_dec.links={};decRenderLinks()">'
       +DB.artists.map(a=>'<option value="'+a.id+'" '+(a.id===_dec.artistId?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></div>'
     +'<div class="field"><label>Reply by <span class="muted" style="font-weight:400">(optional)</span></label><input type="date" id="dc-due" value="'+esc(_dec.due||'')+'"></div></div>'
     +'<div class="field"><label>Title</label><input id="dc-title" value="'+esc(_dec.title)+'" placeholder="e.g. Spring tour: three quick decisions"></div>'
     +'<div class="field"><label>Message <span class="muted" style="font-weight:400">(shown at the top)</span></label><textarea id="dc-intro" rows="2" placeholder="Hi! I need a few answers from you to lock in the spring run. Takes two minutes.">'+esc(_dec.intro||'')+'</textarea></div>'
-    +'<div class="sec-label" style="margin-top:4px">Questions</div>'
+    +'<div id="dc-links"></div>'
+    +'<div class="sec-label" style="margin-top:10px">Questions</div>'
     +'<div id="dc-qs"></div>'
-    +'<div class="dc-add"><button class="btn sm" onclick="decAddQ(\'choice\')">+ Pick one</button><button class="btn sm" onclick="decAddQ(\'yesno\')">+ Yes / No</button>'
+    +'<div class="dc-add"><button class="btn sm primary" onclick="decAddDatesPicker()">+ Choose dates</button><button class="btn sm" onclick="decAddQ(\'choice\')">+ Pick one</button><button class="btn sm" onclick="decAddQ(\'yesno\')">+ Yes / No</button>'
       +'<button class="btn sm" onclick="decAddQ(\'confirm\')">+ Confirm something</button><button class="btn sm" onclick="decAddShowsPicker()">+ Confirm shows</button>'
-      +'<button class="btn sm" onclick="decAddQ(\'date\')">+ Date</button><button class="btn sm" onclick="decAddQ(\'text\')">+ Written answer</button></div>'
+      +'<button class="btn sm" onclick="decAddQ(\'date\')">+ Any date</button><button class="btn sm" onclick="decAddQ(\'text\')">+ Written answer</button></div>'
     +'<div id="dc-shows"></div>'
     +'<p class="muted" style="font-size:11px;margin-top:10px">The artist sees only what\'s on this card: no money, notes or anything else from TourDesk. Answers to show questions are also added to that show\'s notes.</p>'
     +'<div id="dc-err" style="color:var(--red);font-size:12px;min-height:16px"></div>',
     '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="decSave(false)">Save draft</button><button class="btn primary" id="dc-go" onclick="decSave(true)">Save &amp; get link</button>');
   decRenderQs();
+  decRenderLinks();
 }
 function decSync(){
   if(!_dec) return;
   const v=id=>document.getElementById(id);
   if(v('dc-title')){ _dec.title=v('dc-title').value; _dec.intro=v('dc-intro').value; _dec.due=v('dc-due').value; _dec.artistId=v('dc-artist').value; }
+  if(v('dc-l-proposal')){ const L={}; [['proposal','proposalId'],['tour','tourId'],['inquiry','inquiryId'],['event','eventId']].forEach(([k,f])=>{ const e=v('dc-l-'+k); if(e&&e.value) L[f]=e.value; }); _dec.links=L; }
   _dec.questions.forEach(q=>{
     const g=k=>v('dcq-'+k+'-'+q.id);
     if(!g('label')) return;
     q.label=g('label').value; q.help=g('help').value; q.required=g('req').checked; q.allowNote=g('note').checked;
     if(g('opts')) q.options=[...document.querySelectorAll('[data-opt-of="'+q.id+'"]')].map(x=>x.value);
+    if(q.type==='dates'){
+      q.dates=[...document.querySelectorAll('[data-date-of="'+q.id+'"]')].map(r=>{ const lb=document.querySelector('[data-dlabel-of="'+q.id+'"][data-i="'+r.getAttribute('data-i')+'"]'); return {date:r.value,label:lb?lb.value:''}; });
+      const pk=g('pick'); if(pk) q.pick=pk.value;
+    }
+    const tg=g('target'); if(tg){ q.target=tg.value; const pt=decParseTarget(q.target); q.eventId=(pt&&pt.kind==='event')?pt.id:undefined; if(!q.target) delete q.target; }
   });
 }
 function decRenderQs(){
@@ -11078,23 +11109,27 @@ function decRenderQs(){
         +'<a class="dc-addopt" onclick="decOpt(\''+q.id+'\',-1)">+ Add option</a></div>':'')
       +(q.type==='yesno'?'<div class="dc-preview">Artist taps <b>Yes</b> or <b>No</b></div>':'')
       +(q.type==='confirm'?'<div class="dc-preview">Artist taps <b>✓ Confirmed</b> or <b>Needs a change</b> (and says what)</div>':'')
+      +(q.type==='dates'?decDatesEditor(q):'')
       +'<div class="dc-flags"><label><input type="checkbox" id="dcq-req-'+q.id+'" '+(q.required?'checked':'')+'> Required</label>'
         +'<label><input type="checkbox" id="dcq-note-'+q.id+'" '+(q.allowNote!==false?'checked':'')+'> Let them add a note</label></div>'
+      +decTargetSelect(q)
       +'</div>';
   }).join(''):'<p class="muted" style="font-size:13px">Add a question below.</p>';
 }
 function decPlaceholder(t){
   return {choice:'e.g. Which opener do you want for the spring run?',multi:'e.g. Which cities would you add a second show in?',yesno:'e.g. OK to add a 10pm show in Halifax?',
-    confirm:'e.g. Confirm your travel day is Thursday, March 11',date:'e.g. When do you need to be home by?',text:'e.g. Anything you want changed in the tech rider?'}[t]||'Question';
+    confirm:'e.g. Confirm your travel day is Thursday, March 11',dates:'e.g. Which date works best for the Halifax show?',date:'e.g. When do you need to be home by?',text:'e.g. Anything you want changed in the tech rider?'}[t]||'Question';
 }
 function decAddQ(type,extra){
   decSync();
-  _dec.questions.push(Object.assign({id:decQid(),type,label:'',help:'',options:(type==='choice'||type==='multi')?['','']:[],required:true,allowNote:true},extra||{}));
+  const nq=Object.assign({id:decQid(),type,label:'',help:'',options:(type==='choice'||type==='multi')?['','']:[],required:true,allowNote:true},extra||{});
+  if(type==='dates'){ if(!nq.dates||!nq.dates.length) nq.dates=[{date:'',label:''}]; nq.pick=nq.pick||'one'; }
+  _dec.questions.push(nq);
   decRenderQs();
   const q=_dec.questions[_dec.questions.length-1];
   if(!extra){ const el=document.getElementById('dcq-label-'+q.id); if(el) el.focus(); }
 }
-function decSetType(id,t){ decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q) return; q.type=t; if((t==='choice'||t==='multi')&&(!q.options||q.options.length<2)) q.options=(q.options||[]).concat(['','']).slice(0,Math.max(2,(q.options||[]).length)); decRenderQs(); }
+function decSetType(id,t){ decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q) return; q.type=t; if(t==='dates'){ if(!q.dates||!q.dates.length) q.dates=[{date:'',label:''}]; q.pick=q.pick||'one'; } if((t==='choice'||t==='multi')&&(!q.options||q.options.length<2)) q.options=(q.options||[]).concat(['','']).slice(0,Math.max(2,(q.options||[]).length)); decRenderQs(); }
 function decMove(id,dir){ decSync(); const i=_dec.questions.findIndex(x=>x.id===id), j=i+dir; if(i<0||j<0||j>=_dec.questions.length) return; const a=_dec.questions; [a[i],a[j]]=[a[j],a[i]]; decRenderQs(); }
 function decRemove(id){ decSync(); _dec.questions=_dec.questions.filter(x=>x.id!==id); decRenderQs(); }
 function decOpt(id,oi){
@@ -11130,18 +11165,22 @@ async function decSave(andSend){
   decSync();
   const err=document.getElementById('dc-err');
   const d=_dec;
-  d.title=(d.title||'').trim(); d.questions.forEach(q=>{ q.label=(q.label||'').trim(); if(q.options) q.options=q.options.map(o=>o.trim()).filter(Boolean); });
+  d.title=(d.title||'').trim(); d.questions.forEach(q=>{ q.label=(q.label||'').trim(); if(q.options) q.options=q.options.map(o=>o.trim()).filter(Boolean); delete q._range;
+    if(q.type==='dates'){ const seen={}; q.dates=(q.dates||[]).filter(x=>x&&x.date&&!seen[x.date]&&(seen[x.date]=1)).map(x=>({date:x.date,label:(x.label||'').trim()})).sort((a,b)=>a.date.localeCompare(b.date)); }
+    else { delete q.dates; delete q.pick; } });
   if(!d.title){ err.textContent='Give the card a title.'; return; }
   if(!d.questions.length){ err.textContent='Add at least one question.'; return; }
   const bad=d.questions.findIndex(q=>!q.label);
   if(bad>=0){ err.textContent='Question '+(bad+1)+' needs wording.'; return; }
   const few=d.questions.findIndex(q=>(q.type==='choice'||q.type==='multi')&&q.options.length<2);
   if(few>=0){ err.textContent='Question '+(few+1)+' needs at least two options.'; return; }
+  const nod=d.questions.findIndex(q=>q.type==='dates'&&!(q.dates||[]).length);
+  if(nod>=0){ err.textContent='Question '+(nod+1)+' needs at least one date to choose from.'; return; }
   const now=new Date().toISOString();
   let rec=d.id?get(dbDecisions(),d.id):null;
   const isNew=!rec;
   if(!rec){ rec={id:'dc'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),token:decNewToken(),createdAt:now,history:[{ts:now,what:'Created',by:AUTH_USER?.displayName||''}]}; dbDecisions().unshift(rec);  d.id=rec.id; }
-  Object.assign(rec,{artistId:d.artistId,title:d.title,intro:(d.intro||'').trim(),due:d.due||'',questions:d.questions,updatedAt:now});
+  Object.assign(rec,{artistId:d.artistId,title:d.title,intro:(d.intro||'').trim(),due:d.due||'',questions:d.questions,links:d.links||{},updatedAt:now});
   if(andSend||rec.sentAt){
     const btn=document.getElementById('dc-go'); if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
     try{ await decPush(rec); }
@@ -11162,10 +11201,211 @@ async function decSave(andSend){
 function decisionDuplicate(id){
   const d=get(dbDecisions(),id); if(!d) return;
   decisionForm(null,{artistId:d.artistId});
-  _dec.title=d.title+' (follow-up)'; _dec.intro=d.intro; _dec.due='';
+  _dec.title=d.title+' (follow-up)'; _dec.intro=d.intro; _dec.due=''; _dec.links=JSON.parse(JSON.stringify(d.links||{}));
   _dec.questions=JSON.parse(JSON.stringify(d.questions)).map(q=>Object.assign(q,{id:decQid()}));
   document.getElementById('dc-title').value=_dec.title; document.getElementById('dc-intro').value=_dec.intro||'';
   decRenderQs();
+  decRenderLinks();
+}
+
+/* ---------- Links to outreach / shows / tours / proposals, and date questions ---------- */
+function decNiceDate(x){ return /^\d{4}-\d\d-\d\d$/.test(String(x))?new Date(x+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):String(x); }
+function decQTarget(q){ return q.target||(q.eventId?'event:'+q.eventId:''); }
+function decParseTarget(s){
+  if(!s) return null; const a=String(s).split(':');
+  if(a[0]==='event'&&a[1]) return {kind:'event',id:a[1]};
+  if(a[0]==='show'&&a[1]&&a[2]) return {kind:'show',pid:a[1],sid:a.slice(2).join(':')};
+  if(a[0]==='inquiry'&&a[1]) return {kind:'inquiry',id:a[1]};
+  return null;
+}
+function decVenueName(id){ const v=get(DB.venues,id)||{}; return (v.name||'Venue')+(v.city?', '+v.city:''); }
+function decInqLabel(q){ return decVenueName(q.venueId); }
+function decExpandRange(a,b,max){
+  if(!a) return []; if(!b||b<=a) return [a];
+  const out=[], end=new Date(b+'T12:00:00'); let d=new Date(a+'T12:00:00');
+  while(d<=end&&out.length<(max||14)){ out.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); d.setDate(d.getDate()+1); }
+  return out;
+}
+// What a question can be tied to: shows, proposal shows and outreach inquiries for the card's artist
+function decSources(all){
+  const ar=get(DB.artists,_dec&&_dec.artistId), L=(_dec&&_dec.links)||{}, today=todayStr(), out=[];
+  if(!ar) return out;
+  const any=!all&&(L.proposalId||L.tourId||L.inquiryId||L.eventId);
+  artistAllEvents(ar).filter(e=>!e.date||e.date>=today).forEach(e=>{
+    if(any&&!(L.eventId===e.id||(L.tourId&&e.tourId===L.tourId))) return;
+    out.push({kind:'event',key:'event:'+e.id,name:decVenueName(e.venueId),sub:e.date?rptShowDate(e.date):'no date',dates:e.date?[e.date]:[],eventId:e.id});
+  });
+  (DB.proposals||[]).filter(p=>!['Accepted','Declined'].includes(p.status)&&proposalArtist(p)&&proposalArtist(p).id===ar.id).forEach(p=>{
+    if(any&&L.proposalId!==p.id) return;
+    (p.shows||[]).forEach(s=>out.push({kind:'show',key:'show:'+p.id+':'+s._sid,name:decVenueName(s.venueId),sub:(p.title||'Proposal')+(s.date?' · '+rptShowDate(s.date):''),dates:s.date?[s.date]:[]}));
+  });
+  dbInquiries().filter(q=>q.artistId===ar.id&&INQ_OPEN.includes(q.status)).forEach(q=>{
+    if(any&&!(L.inquiryId===q.id||(L.tourId&&q.tourId===L.tourId))) return;
+    out.push({kind:'inquiry',key:'inquiry:'+q.id,name:decInqLabel(q),sub:'Outreach'+(q.range?' · '+q.range:''),dates:decExpandRange(q.start,q.end,14)});
+  });
+  return out;
+}
+function decTargetInfo(str){
+  const t=decParseTarget(str); if(!t) return null;
+  if(t.kind==='event'){ const e=get(DB.events,t.id); return e?{t,label:decVenueName(e.venueId)+(e.date?' · '+rptShowDate(e.date):''),open:"go('events','"+e.id+"')",rec:e,noun:'show'}:null; }
+  if(t.kind==='show'){ const p=get(DB.proposals,t.pid), s=p&&(p.shows||[]).find(x=>x._sid===t.sid); if(!s) return null;
+    return {t,label:decVenueName(s.venueId)+' ('+(p.title||'proposal')+')',open:"go('proposals','"+p.id+"')",rec:s,noun:'proposal show'}; }
+  if(t.kind==='inquiry'){ const q=dbInquiries().find(x=>x.id===t.id); return q?{t,label:decInqLabel(q)+(q.range?' · '+q.range:''),open:"go('outreach')",rec:q,noun:'outreach inquiry'}:null; }
+  return null;
+}
+function decTargetSelect(q){
+  const cur=decQTarget(q), src=decSources(true);
+  let found=!cur, h='<option value="">Not tied to a record</option>';
+  [['event','Shows'],['show','Proposal shows'],['inquiry','Outreach']].forEach(([k,l])=>{
+    const it=src.filter(x=>x.kind===k); if(!it.length) return;
+    h+='<optgroup label="'+l+'">'+it.map(x=>{ if(x.key===cur) found=true; return '<option value="'+esc(x.key)+'" '+(x.key===cur?'selected':'')+'>'+esc(x.name+' · '+x.sub)+'</option>'; }).join('')+'</optgroup>';
+  });
+  if(!found){ const ti=decTargetInfo(cur); h+='<option value="'+esc(cur)+'" selected>'+esc(ti?ti.label:'(record no longer exists)')+'</option>'; }
+  return '<div class="dc-tie"><label for="dcq-target-'+q.id+'">Tied to'+(q.type==='dates'?' <span class="muted">(lets you apply the date they choose)</span>':'')+'</label><select id="dcq-target-'+q.id+'">'+h+'</select></div>';
+}
+function decDatesEditor(q){
+  const rows=(q.dates&&q.dates.length)?q.dates:[{date:'',label:''}];
+  return '<div class="dc-dates">'+rows.map((x,i)=>'<div class="dc-opt"><input type="date" data-date-of="'+q.id+'" data-i="'+i+'" value="'+esc(x.date||'')+'" aria-label="Date '+(i+1)+'">'
+      +'<input data-dlabel-of="'+q.id+'" data-i="'+i+'" value="'+esc(x.label||'')+'" placeholder="Label (optional), e.g. Halifax, Cohn" aria-label="Label for date '+(i+1)+'">'
+      +'<button class="btn ghost sm dc-ico" aria-label="Remove date" onclick="decDate(\''+q.id+'\','+i+')">×</button></div>').join('')
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap"><a class="dc-addopt" onclick="decDate(\''+q.id+'\',-1)">+ Add a date</a><a class="dc-addopt" onclick="decDateRange(\''+q.id+'\')">+ Add a range of days</a></div>'
+    +(q._range?'<div class="dc-range"><span>From</span><input type="date" id="dcr-from-'+q.id+'" aria-label="Range start"><span>to</span><input type="date" id="dcr-to-'+q.id+'" aria-label="Range end"><button class="btn sm" onclick="decDateRangeAdd(\''+q.id+'\')">Add days</button></div>':'')
+    +'<div class="dc-flags"><label>They can pick <select id="dcq-pick-'+q.id+'" aria-label="How many dates"><option value="one" '+(q.pick!=='many'?'selected':'')+'>one date</option><option value="many" '+(q.pick==='many'?'selected':'')+'>every date that works</option></select></label></div>'
+    +'<div class="dc-preview">They also get a <b>“'+DEC_NONE+'”</b> button and can say which dates would work instead.</div></div>';
+}
+function decDate(id,i){
+  decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q) return;
+  q.dates=q.dates||[];
+  if(i<0) q.dates.push({date:'',label:''}); else q.dates.splice(i,1);
+  if(!q.dates.length) q.dates.push({date:'',label:''});
+  decRenderQs();
+  if(i<0){ const ins=document.querySelectorAll('[data-date-of="'+id+'"]'); if(ins.length) ins[ins.length-1].focus(); }
+}
+function decDateRange(id){ decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q) return; q._range=!q._range; decRenderQs(); const f=document.getElementById('dcr-from-'+id); if(f) f.focus(); }
+function decDateRangeAdd(id){
+  const from=(document.getElementById('dcr-from-'+id)||{}).value, to=(document.getElementById('dcr-to-'+id)||{}).value;
+  decSync(); const q=_dec.questions.find(x=>x.id===id); if(!q||!from) return;
+  const have=(q.dates||[]).filter(x=>x.date), seen={}; have.forEach(x=>seen[x.date]=1);
+  decExpandRange(from,to||from,60).forEach(d=>{ if(!seen[d]) have.push({date:d,label:''}); });
+  q.dates=have.sort((a,b)=>a.date.localeCompare(b.date)); q._range=false; decRenderQs();
+}
+// Quick-add: a "choose a date" question for each show / proposal show / outreach inquiry ticked
+function decAddDatesPicker(all){
+  decSync();
+  const host=document.getElementById('dc-shows'); if(!host) return;
+  const src=decSources(all===true), ar=get(DB.artists,_dec.artistId);
+  const groups=[['event','Shows'],['show','Proposal shows'],['inquiry','Outreach inquiries']];
+  host.innerHTML='<div class="dc-showpick"><div style="font-size:12px;font-weight:600;margin-bottom:6px">Which should '+esc(ar?ar.name.split(' ')[0]:'the artist')+' choose dates for?</div>'
+    +(src.length?groups.map(([k,l])=>{ const it=src.filter(x=>x.kind===k); return it.length?'<div class="muted" style="font-size:11px;margin:8px 0 2px;text-transform:uppercase;letter-spacing:.5px">'+l+'</div>'
+        +it.map(x=>'<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" class="dc-src" value="'+esc(x.key)+'"> '+esc(x.name)+' <span class="muted">'+esc(x.sub)+'</span></label>').join(''):''; }).join('')
+      :'<p class="muted" style="font-size:12px">Nothing to pick from for this artist yet. You can still add a blank dates question.</p>')
+    +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><button class="btn sm primary" onclick="decAddDateQs()">Add</button><button class="btn sm" onclick="decAddDateQs(true)">Blank dates question</button>'
+    +(all===true||!(_dec.links&&Object.keys(_dec.links).length)?'':'<button class="btn sm" onclick="decAddDatesPicker(true)">Show everything for this artist</button>')
+    +'<button class="btn sm" onclick="document.getElementById(\'dc-shows\').innerHTML=\'\'">Cancel</button></div></div>';
+}
+function decAddDateQs(blank){
+  const picked=blank?[]:[...document.querySelectorAll('.dc-src:checked')].map(x=>x.value), src=decSources(true);
+  if(blank||!picked.length){ if(!blank&&document.querySelectorAll('.dc-src').length) return; decAddQ('dates',{}); }
+  else picked.forEach(k=>{ const x=src.find(y=>y.key===k); if(!x) return;
+    decAddQ('dates',{label:'Which date works for '+x.name+'?',dates:x.dates.map(d=>({date:d,label:''})),pick:'one',target:x.key,eventId:x.eventId,help:''}); });
+  document.getElementById('dc-shows').innerHTML='';
+}
+// "Linked to" row on the card: proposal, tour, outreach, show
+function decRenderLinks(){
+  const host=document.getElementById('dc-links'); if(!host||!_dec) return;
+  const ar=get(DB.artists,_dec.artistId), L=_dec.links=_dec.links||{};
+  const props=(DB.proposals||[]).filter(p=>p.id===L.proposalId||(p.status!=='Declined'&&ar&&proposalArtist(p)&&proposalArtist(p).id===ar.id));
+  const tours=(DB.tours||[]).filter(t=>t.id===L.tourId||(ar&&(t.artist||'').toLowerCase()===ar.name.toLowerCase()));
+  const evs=ar?artistAllEvents(ar).filter(e=>!e.date||e.date>=todayStr()||e.id===L.eventId):[];
+  const inqs=ar?dbInquiries().filter(q=>q.id===L.inquiryId||(q.artistId===ar.id&&INQ_OPEN.includes(q.status))):[];
+  const sel=(k,label,opts,cur)=>'<div><label for="dc-l-'+k+'">'+label+'</label><select id="dc-l-'+k+'" onchange="decLinkChanged(\''+k+'\')"><option value="">None</option>'
+    +opts.map(o=>'<option value="'+esc(o[0])+'" '+(o[0]===cur?'selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select></div>';
+  host.innerHTML='<div class="sec-label" style="margin-top:10px">Linked to <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(optional: shows up on those pages)</span></div><div class="dc-links">'
+    +sel('proposal','Proposal',props.map(p=>[p.id,p.title||'Proposal']),L.proposalId)
+    +sel('tour','Tour',tours.map(t=>[t.id,t.name]),L.tourId)
+    +sel('inquiry','Outreach',inqs.map(q=>[q.id,decInqLabel(q)+(q.range?' · '+q.range:'')]),L.inquiryId)
+    +sel('event','Show',evs.map(e=>[e.id,decVenueName(e.venueId)+(e.date?' · '+rptShowDate(e.date):'')]),L.eventId)+'</div>';
+}
+function decLinkChanged(k){
+  decSync(); const L=_dec.links;
+  if(k==='proposal'&&L.proposalId&&!L.tourId){ const t=(DB.tours||[]).find(x=>x.proposalId===L.proposalId); if(t) L.tourId=t.id; }
+  decRenderLinks();
+}
+function decLinkSummary(d){
+  const L=d.links||{};
+  const p=L.proposalId&&get(DB.proposals,L.proposalId), t=L.tourId&&get(DB.tours,L.tourId), e=L.eventId&&get(DB.events,L.eventId), q=L.inquiryId&&dbInquiries().find(x=>x.id===L.inquiryId);
+  return p?(p.title||'Proposal'):t?t.name:e?decVenueName(e.venueId):q?decInqLabel(q):'';
+}
+function decLinksHTML(d){
+  const L=d.links||{}, chips=[];
+  const p=L.proposalId&&get(DB.proposals,L.proposalId), t=L.tourId&&get(DB.tours,L.tourId), e=L.eventId&&get(DB.events,L.eventId), q=L.inquiryId&&dbInquiries().find(x=>x.id===L.inquiryId);
+  if(p) chips.push('<span>Proposal: <a class="venue-link" onclick="go(\'proposals\',\''+p.id+'\')">'+esc(p.title||'Proposal')+'</a></span>');
+  if(t) chips.push('<span>Tour: <a class="venue-link" onclick="go(\'tours\',\''+t.id+'\')">'+esc(t.name)+'</a></span>');
+  if(q) chips.push('<span>Outreach: <a class="venue-link" onclick="go(\'outreach\')">'+esc(decInqLabel(q)+(q.range?' · '+q.range:''))+'</a></span>');
+  if(e) chips.push('<span>Show: <a class="venue-link" onclick="go(\'events\',\''+e.id+'\')">'+esc(decVenueName(e.venueId)+(e.date?' · '+rptShowDate(e.date):''))+'</a></span>');
+  return chips.join('');
+}
+// Cards connected to a record: linked on the card, or a question tied to it
+function decCardsFor(kind,id){
+  return dbDecisions().filter(d=>{
+    const L=d.links||{};
+    if((kind==='proposal'&&L.proposalId===id)||(kind==='tour'&&L.tourId===id)||(kind==='event'&&L.eventId===id)||(kind==='inquiry'&&L.inquiryId===id)) return true;
+    return (d.questions||[]).some(q=>{ const t=decParseTarget(decQTarget(q)); if(!t) return false;
+      if(kind==='event') return t.kind==='event'&&t.id===id;
+      if(kind==='proposal') return t.kind==='show'&&t.pid===id;
+      if(kind==='inquiry') return t.kind==='inquiry'&&t.id===id;
+      if(kind==='tour'){ const e=t.kind==='event'&&get(DB.events,t.id); return !!(e&&e.tourId===id); }
+      return false; });
+  }).sort(decSort);
+}
+function decLinkedSection(kind,id){
+  if(!canDo('admin')||(typeof inArtistView==='function'&&inArtistView())) return '';
+  const list=decCardsFor(kind,id);
+  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Decision cards</span>'
+    +'<button class="btn ghost sm" style="text-transform:none;letter-spacing:0" onclick="decNewFor(\''+kind+'\',\''+id+'\')">☑ Ask the artist</button></div>'
+    +(list.length?decListHTML(list,{}):'<p class="muted" style="font-size:13px">Send the artist a card to choose dates or confirm details for this. Their answers are logged here.</p>')+'</div>';
+}
+function decInqLink(q){
+  if(!canDo('admin')||(typeof inArtistView==='function'&&inArtistView())||!q.artistId) return '';
+  const n=decCardsFor('inquiry',q.id);
+  return ' · '+(n.length?'<a onclick="go(\'decisions\',\''+n[0].id+'\')">☑ Card'+(n.length>1?' ('+n.length+')':'')+(n[0].answeredAt?' ●':'')+'</a>'
+    :'<a onclick="decNewFor(\'inquiry\',\''+q.id+'\')">☑ Ask artist</a>');
+}
+// Start a card from a proposal, tour, show or outreach inquiry, with the dates picker open
+function decNewFor(kind,id){
+  if(!canDo('admin')) return;
+  let artistId='', title='', links={};
+  if(kind==='proposal'){ const p=get(DB.proposals,id); if(!p) return; const a=proposalArtist(p); artistId=a?a.id:''; title='Dates for '+(p.title||'the proposal'); links={proposalId:id}; }
+  else if(kind==='tour'){ const t=get(DB.tours,id); if(!t) return; const a=DB.artists.find(x=>(x.name||'').toLowerCase()===(t.artist||'').toLowerCase()); artistId=a?a.id:''; title='Dates for '+t.name; links={tourId:id}; }
+  else if(kind==='event'){ const e=get(DB.events,id); if(!e) return; const a=eventArtist(e); artistId=a?a.id:''; title='Dates for '+decVenueName(e.venueId); links={eventId:id}; }
+  else if(kind==='inquiry'){ const q=dbInquiries().find(x=>x.id===id); if(!q) return; artistId=q.artistId||''; title='Dates for '+decInqLabel(q); links={inquiryId:id}; }
+  else return;
+  decisionForm(null,{artistId,title,links,noBlank:true});
+  decAddDatesPicker();
+}
+// Use the date the artist chose: sets it on the show, proposal show or outreach inquiry the question is tied to
+function decApplyHTML(d,q,v){
+  if(q.type!=='dates'||!d.answeredAt) return '';
+  const picks=(Array.isArray(v)?v:[v]).filter(x=>/^\d{4}-\d\d-\d\d$/.test(String(x)));
+  if(!picks.length) return '<div class="muted" style="font-size:12px;margin-top:4px">None of the offered dates work. See their note for other dates.</div>';
+  const ti=decTargetInfo(decQTarget(q)); if(!ti) return '';
+  const ap=d.applied&&d.applied[q.id];
+  return '<div class="dc-apply">'+(ap?'<span class="badge green">✓ '+esc(decNiceDate(ap.date))+' applied</span>':'')
+    +picks.map(x=>(ap&&ap.date===x)?'':'<button class="btn sm '+(ap?'':'primary')+'" onclick="decApplyDate(\''+d.id+'\',\''+q.id+'\',\''+x+'\')">Use '+esc(decNiceDate(x))+' for the '+ti.noun+'</button>').join('')+'</div>';
+}
+function decApplyDate(did,qid,date){
+  const d=get(dbDecisions(),did); if(!d||!canDo('admin')) return;
+  const q=(d.questions||[]).find(x=>x.id===qid); if(!q) return;
+  const ti=decTargetInfo(decQTarget(q)); if(!ti) return;
+  const who=(AUTH_USER&&AUTH_USER.displayName)||'', now=new Date().toISOString(), nice=decNiceDate(date);
+  const why='Date set to '+nice+' (chosen by the artist on decision card “'+d.title+'”)';
+  if(ti.t.kind==='event'){ const e=ti.rec; e.date=date; e.notesLog=e.notesLog||[]; e.notesLog.unshift({id:'nl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:now,by:who,text:why}); }
+  else if(ti.t.kind==='show'){ ti.rec.date=date; }
+  else if(ti.t.kind==='inquiry'){ const iq=ti.rec; iq.start=date; iq.end=date; iq.range=inquiryRange(date,date); iq.updatedAt=now; (iq.history=iq.history||[]).push({ts:now,status:iq.status,note:why,by:who}); }
+  d.applied=d.applied||{}; d.applied[qid]={date,ts:now,by:who};
+  (d.history=d.history||[]).push({ts:now,what:'Applied '+nice+' to '+ti.label,by:who});
+  logActivity('applied a date from','Decision card',d.title+' → '+ti.label);
+  persist(); render();
 }
 
 /* ---------- Sharing ---------- */
@@ -11228,7 +11468,8 @@ function decRowHTML(d,opts){
   opts=opts||{};
   const ar=get(DB.artists,d.artistId), st=decStatus(d);
   const n=(d.questions||[]).length;
-  const sub=[!opts.hideArtist&&ar?esc(ar.name):'',n+' question'+(n===1?'':'s'),
+  const lk=decLinkSummary(d);
+  const sub=[!opts.hideArtist&&ar?esc(ar.name):'',lk?'Re: '+esc(lk):'',n+' question'+(n===1?'':'s'),
     d.answeredAt?'Answered '+esc(inqTimeAgo(d.answeredAt)):d.sentAt?'Link made '+esc(inqTimeAgo(d.sentAt)):'Not sent yet',
     d.due&&!d.answeredAt?'Reply by '+esc(new Date(d.due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})):''].filter(Boolean).join(' · ');
   const overdue=d.due&&!d.answeredAt&&!d.closed&&d.due<todayStr();
@@ -11276,6 +11517,7 @@ VIEWS.decisions={
     c.innerHTML='<div class="detail-head"><span class="back" onclick="go(\'decisions\')">← Decisions</span><span class="detail-title">'+esc(d.title)+'</span>'+decBadge(d)+'</div>'
       +'<div class="meta-row" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--txt2);margin-bottom:14px">'
         +(ar?'<span>Artist: <a class="venue-link" onclick="go(\'artists\',\''+ar.id+'\',\'decisions\')">'+esc(ar.name)+'</a></span>':'')
+        +decLinksHTML(d)
         +(d.due?'<span>Reply by '+esc(new Date(d.due+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}))+'</span>':'')
         +(d.answeredAt?'<span>Answered '+esc(new Date(d.answeredAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))+(ans&&ans.name?' by '+esc(ans.name):'')+'</span>':'')
         +(d.dirty?'<span style="color:var(--amber)">Changes not sent to the link yet: edit and save again</span>':'')
@@ -11283,15 +11525,18 @@ VIEWS.decisions={
       +(d.intro?'<div class="sec"><div class="sec-label">Message</div><p style="font-size:13px;white-space:pre-wrap;margin:0">'+esc(d.intro)+'</p></div>':'')
       +'<div class="sec"><div class="sec-label">'+(d.answeredAt?'Answers':'Questions')+'</div>'
         +(d.questions||[]).map((q,i)=>{
-          const ev=q.eventId?get(DB.events,q.eventId):null, t=decAnswerText(q,ans);
+          const ti=decTargetInfo(decQTarget(q)), t=decAnswerText(q,ans);
           const v=ans&&ans.values?ans.values[q.id]:undefined;
-          const tone=v==='Needs a change'||v==='No'?'amber':(v==='Confirmed'||v==='Yes')?'green':'';
+          const none=q.type==='dates'&&(v===DEC_NONE||(Array.isArray(v)&&v[0]===DEC_NONE));
+          const tone=v==='Needs a change'||v==='No'||none?'amber':(v==='Confirmed'||v==='Yes')?'green':'';
           return '<div class="dc-ans"><div class="dc-ans-q"><span class="muted">'+(i+1)+'.</span> '+esc(q.label)
             +' <span class="muted" style="font-size:11px">'+esc(DEC_TYPES[q.type]||'')+(q.required?'':' · optional')+'</span>'
-            +(ev?' <a class="venue-link" style="font-size:11px" onclick="go(\'events\',\''+ev.id+'\')">View show →</a>':'')+'</div>'
+            +(ti?' <a class="venue-link" style="font-size:11px" onclick="'+ti.open+'">'+(ti.t.kind==='event'?'View show':esc(ti.label))+' →</a>':'')+'</div>'
             +(q.help?'<div class="muted" style="font-size:12px">'+esc(q.help)+'</div>':'')
             +((q.type==='choice'||q.type==='multi')&&!d.answeredAt?'<div class="muted" style="font-size:12px">Options: '+esc((q.options||[]).join(' · '))+'</div>':'')
+            +(q.type==='dates'&&!d.answeredAt?'<div class="muted" style="font-size:12px">Dates offered ('+(q.pick==='many'?'any that work':'pick one')+'): '+esc((q.dates||[]).map(x=>decNiceDate(x.date)+(x.label?' ('+x.label+')':'')).join(' · '))+'</div>':'')
             +(d.answeredAt?'<div class="dc-ans-a'+(tone?' '+tone:'')+'">'+(t?esc(t):'<span class="muted">No answer</span>')+'</div>':'')
+            +(d.answeredAt?decApplyHTML(d,q,v):'')
             +'</div>';
         }).join('')
         +(ans&&ans.comment?'<div class="dc-ans"><div class="dc-ans-q">Anything else</div><div class="dc-ans-a">'+esc(ans.comment)+'</div></div>':'')
