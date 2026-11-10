@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Decisions</title>
+<style>
+:root{--bg:#f6f3ec;--card:#ffffff;--ink:#22394d;--ink2:#566b7f;--ink3:#8a97a3;--line:#e2dccd;--soft:#f1ede3;--acc:#c9971c;--acc-ink:#5a4208;--ok:#2f7a45;--ok-bg:#e5f1e7;--warn:#a8541c;--warn-bg:#fbeee2;--err:#b42339;--focus:#2f6690}
+@media (prefers-color-scheme:dark){:root{--bg:#141a20;--card:#1c242c;--ink:#e8edf1;--ink2:#b3c0cc;--ink3:#7f8d99;--line:#2e3a45;--soft:#232d37;--acc:#e0b13a;--acc-ink:#2a1f05;--ok:#7cc492;--ok-bg:#1f3227;--warn:#f0a36c;--warn-bg:#3a2a1e;--err:#ff8a9b;--focus:#7fb2dc}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+.wrap{max-width:640px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+header img{height:36px;width:auto;max-width:110px;object-fit:contain}
+.brand{font-size:13px;color:var(--ink2);font-weight:600;letter-spacing:.2px}
+h1{font-size:26px;line-height:1.2;margin:0 0 6px}
+.for{color:var(--ink2);font-size:14px;margin-bottom:14px}
+.intro{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px;white-space:pre-wrap}
+.due{display:inline-block;background:var(--warn-bg);color:var(--warn);font-size:13px;font-weight:600;border-radius:100px;padding:3px 11px;margin-bottom:14px}
+.q{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.q.missing{border-color:var(--err);box-shadow:0 0 0 1px var(--err)}
+.qn{font-size:12px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.ql{font-size:18px;font-weight:600;line-height:1.35;margin:0 0 4px}
+.qh{color:var(--ink2);font-size:14px;margin:0 0 10px;white-space:pre-wrap}
+.req{color:var(--err);font-weight:700}
+.opts{display:grid;gap:8px;margin-top:10px}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{display:flex;align-items:center;gap:12px;min-height:52px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:16px;text-align:left;cursor:pointer;width:100%;-webkit-tap-highlight-color:transparent}
+.opt:hover{border-color:var(--ink3)}
+.opt .mark{flex:0 0 22px;height:22px;border:2px solid var(--ink3);border-radius:50%;display:grid;place-items:center}
+.opt.multi .mark{border-radius:6px}
+.opt[aria-checked="true"],.opt[aria-pressed="true"]{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,var(--card))}
+.opt[aria-checked="true"] .mark,.opt[aria-pressed="true"] .mark{border-color:var(--acc);background:var(--acc)}
+.opt[aria-checked="true"] .mark::after,.opt[aria-pressed="true"] .mark::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--card)}
+.opt.multi[aria-checked="true"] .mark::after{width:10px;height:6px;border-radius:0;background:none;border-left:2.5px solid var(--card);border-bottom:2.5px solid var(--card);transform:translateY(-1px) rotate(-45deg)}
+.opt.big{justify-content:center;font-weight:600}
+.opt.big .mark{display:none}
+.opt.yes[aria-pressed="true"]{border-color:var(--ok);background:var(--ok-bg);color:var(--ok)}
+.opt.no[aria-pressed="true"]{border-color:var(--warn);background:var(--warn-bg);color:var(--warn)}
+.opt:focus-visible,textarea:focus-visible,input:focus-visible,button:focus-visible,.linkbtn:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+textarea,input[type=text],input[type=date]{width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:16px}
+textarea{min-height:90px;resize:vertical}
+input[type=date]{min-height:50px}
+.linkbtn{background:none;border:0;padding:8px 0 0;color:var(--focus);font:inherit;font-size:14px;cursor:pointer;text-decoration:underline}
+.note{margin-top:10px}
+.lbl{display:block;font-size:14px;font-weight:600;margin:0 0 6px}
+.submit{display:block;width:100%;min-height:56px;margin-top:8px;border:0;border-radius:14px;background:var(--acc);color:var(--acc-ink);font:inherit;font-size:17px;font-weight:700;cursor:pointer}
+.submit[disabled]{opacity:.6;cursor:default}
+.err{color:var(--err);font-size:14px;font-weight:600;min-height:20px;margin:10px 0 0}
+.state{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 18px;text-align:center}
+.state h2{margin:6px 0 6px;font-size:22px}
+.state p{color:var(--ink2);margin:0 0 6px}
+.tick{width:56px;height:56px;border-radius:50%;background:var(--ok-bg);color:var(--ok);display:grid;place-items:center;font-size:30px;margin:0 auto}
+.summary{margin-top:16px;text-align:left}
+.srow{border-top:1px solid var(--line);padding:10px 0}
+.srow b{display:block;font-size:14px}
+.srow span{color:var(--ink2);font-size:15px;white-space:pre-wrap}
+.secondary{display:inline-block;margin-top:14px;padding:11px 18px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+footer{margin-top:22px;text-align:center;color:var(--ink3);font-size:12px}
+.loading{padding:40px 0;text-align:center;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="loading">Loading…</div></div>
+<script>
+(function(){
+  var SUPABASE_URL='https://rcxnqabfjcnmttoxhtpb.supabase.co';
+  var SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjeG5xYWJmamNubXR0b3hodHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjg5NzYsImV4cCI6MjA5NjYwNDk3Nn0.T6vCvuHh-C6i1ctpV7n_fOEaUN-Q8sIdbmtjg4N_wAM';
+  var app=document.getElementById('app');
+  var token=(new URLSearchParams(location.search).get('d')||'').trim();
+  var card=null, prev=null, closed=false, state={values:{},notes:{},openNotes:{}};
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function rpc(fn,args){
+    return fetch(SUPABASE_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify(args)})
+      .then(function(r){return r.text().then(function(t){var j=null;try{j=t?JSON.parse(t):null;}catch(e){}if(!r.ok){throw new Error((j&&(j.message||j.hint))||('Error '+r.status));}return j;});});
+  }
+  function fmtDate(d){ if(!d) return ''; var x=new Date(d.length<=10?d+'T12:00:00':d); return isNaN(x)?d:x.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'}); }
+  function showState(icon,title,msg){ app.innerHTML=head()+'<div class="state">'+(icon?'<div class="tick" aria-hidden="true">'+icon+'</div>':'')+'<h2>'+esc(title)+'</h2><p>'+msg+'</p></div>'+foot(); }
+  function head(){
+    if(!card) return '';
+    return '<header>'+(card.logo?'<img src="'+esc(card.logo)+'" alt="">':'')+'<div class="brand">'+esc(card.company||'')+'</div></header>';
+  }
+  function foot(){ return '<footer>Sent by '+esc((card&&card.company)||'your booking agent')+' · Your answers go straight to them.</footer>'; }
+  function answerText(q){
+    var v=state.values[q.id], n=state.notes[q.id];
+    var t=Array.isArray(v)?v.join(', '):(q.type==='date'&&v?fmtDate(v):(v||''));
+    return (t||'—')+(n?'\n“'+n+'”':'');
+  }
+  function needsNote(q){ return q.type==='confirm'&&state.values[q.id]==='Needs a change'; }
+  function answered(q){
+    var v=state.values[q.id];
+    if(Array.isArray(v)) return v.length>0;
+    return v!=null&&String(v).trim()!=='';
+  }
+
+  function render(){
+    var qs=card.questions||[];
+    var h=head()+'<h1>'+esc(card.title||'Decisions')+'</h1>'
+      +(card.artistName?'<div class="for">For '+esc(card.artistName)+'</div>':'')
+      +(card.due?'<div class="due">Please reply by '+esc(fmtDate(card.due))+'</div>':'')
+      +(card.intro?'<div class="intro">'+esc(card.intro)+'</div>':'')
+      +'<form id="f" novalidate>';
+    qs.forEach(function(q,i){
+      var v=state.values[q.id];
+      h+='<section class="q" id="q-'+esc(q.id)+'" aria-labelledby="ql-'+esc(q.id)+'"><div class="qn">Question '+(i+1)+' of '+qs.length+'</div>'
+        +'<p class="ql" id="ql-'+esc(q.id)+'">'+esc(q.label)+(q.required?' <span class="req" aria-label="required">*</span>':'')+'</p>'
+        +(q.help?'<p class="qh">'+esc(q.help)+'</p>':'');
+      if(q.type==='choice'||q.type==='multi'){
+        var multi=q.type==='multi';
+        h+='<div class="opts" role="'+(multi?'group':'radiogroup')+'" aria-labelledby="ql-'+esc(q.id)+'">'+(q.options||[]).map(function(o,oi){
+          var on=multi?(Array.isArray(v)&&v.indexOf(o)>=0):v===o;
+          return '<button type="button" class="opt'+(multi?' multi':'')+'" role="'+(multi?'checkbox':'radio')+'" aria-checked="'+on+'" data-q="'+esc(q.id)+'" data-v="'+oi+'"><span class="mark" aria-hidden="true"></span><span>'+esc(o)+'</span></button>';
+        }).join('')+'</div>';
+        if(multi) h+='<div class="qh" style="margin:8px 0 0;font-size:13px">Pick as many as you like.</div>';
+      } else if(q.type==='yesno'||q.type==='confirm'){
+        var a=q.type==='yesno'?['Yes','No']:['Confirmed','Needs a change'];
+        h+='<div class="opts two" role="radiogroup" aria-labelledby="ql-'+esc(q.id)+'">'
+          +'<button type="button" class="opt big yes" aria-pressed="'+(v===a[0])+'" data-q="'+esc(q.id)+'" data-yn="'+esc(a[0])+'"><span class="mark"></span>'+(q.type==='confirm'?'✓ ':'')+esc(a[0])+'</button>'
+          +'<button type="button" class="opt big no" aria-pressed="'+(v===a[1])+'" data-q="'+esc(q.id)+'" data-yn="'+esc(a[1])+'"><span class="mark"></span>'+esc(a[1])+'</button></div>';
+      } else if(q.type==='date'){
+        h+='<input type="date" data-q="'+esc(q.id)+'" data-kind="value" value="'+esc(v||'')+'" aria-labelledby="ql-'+esc(q.id)+'">';
+      } else {
+        h+='<textarea data-q="'+esc(q.id)+'" data-kind="value" aria-labelledby="ql-'+esc(q.id)+'" placeholder="Type your answer">'+esc(v||'')+'</textarea>';
+      }
+      var showNote=needsNote(q)||state.openNotes[q.id]||state.notes[q.id];
+      if(q.type!=='text'){
+        if(showNote) h+='<div class="note"><label class="lbl" for="n-'+esc(q.id)+'">'+(needsNote(q)?'What needs to change?':'Note (optional)')+'</label><textarea id="n-'+esc(q.id)+'" data-q="'+esc(q.id)+'" data-kind="note" placeholder="'+(needsNote(q)?'Tell us what to change':'Anything to add?')+'">'+esc(state.notes[q.id]||'')+'</textarea></div>';
+        else if(q.allowNote!==false) h+='<button type="button" class="linkbtn" data-addnote="'+esc(q.id)+'">+ Add a note</button>';
+      }
+      h+='</section>';
+    });
+    h+='<section class="q"><label class="lbl" for="who">Your name</label><input type="text" id="who" autocomplete="name" value="'+esc(state.name!=null?state.name:(card.artistName||''))+'">'
+      +'<label class="lbl" for="comment" style="margin-top:14px">Anything else? <span style="font-weight:400;color:var(--ink3)">(optional)</span></label><textarea id="comment" placeholder="Questions, ideas, anything we should know">'+esc(state.comment||'')+'</textarea></section>'
+      +'<button type="submit" class="submit" id="go">'+(prev?'Update my answers':'Submit')+'</button><p class="err" id="err" role="alert"></p></form>'+foot();
+    app.innerHTML=h;
+    bind();
+  }
+  function keepTyping(){
+    [].forEach.call(app.querySelectorAll('[data-kind]'),function(el){
+      var q=el.getAttribute('data-q');
+      if(el.getAttribute('data-kind')==='note') state.notes[q]=el.value; else state.values[q]=el.value;
+    });
+    var w=document.getElementById('who'); if(w) state.name=w.value;
+    var c=document.getElementById('comment'); if(c) state.comment=c.value;
+  }
+  function findQ(id){ return (card.questions||[]).filter(function(q){return q.id===id;})[0]; }
+  function bind(){
+    [].forEach.call(app.querySelectorAll('.opt[data-v]'),function(b){
+      b.addEventListener('click',function(){
+        keepTyping();
+        var q=findQ(b.getAttribute('data-q')), o=q.options[+b.getAttribute('data-v')];
+        if(q.type==='multi'){ var a=Array.isArray(state.values[q.id])?state.values[q.id].slice():[]; var i=a.indexOf(o); if(i>=0)a.splice(i,1);else a.push(o); state.values[q.id]=a; }
+        else state.values[q.id]=o;
+        rerender(q.id);
+      });
+    });
+    [].forEach.call(app.querySelectorAll('.opt[data-yn]'),function(b){
+      b.addEventListener('click',function(){ keepTyping(); var id=b.getAttribute('data-q'); state.values[id]=b.getAttribute('data-yn'); rerender(id, needsNote(findQ(id))?'n-'+id:null); });
+    });
+    [].forEach.call(app.querySelectorAll('[data-addnote]'),function(b){
+      b.addEventListener('click',function(){ keepTyping(); var id=b.getAttribute('data-addnote'); state.openNotes[id]=true; rerender(id,'n-'+id); });
+    });
+    document.getElementById('f').addEventListener('submit',function(e){ e.preventDefault(); submit(); });
+  }
+  function rerender(qid,focusId){
+    var y=window.scrollY; render(); window.scrollTo(0,y);
+    var el=focusId?document.getElementById(focusId):null;
+    if(el){ el.focus(); return; }
+    var sec=document.getElementById('q-'+qid); if(sec){ var b=sec.querySelector('[aria-checked="true"],[aria-pressed="true"]'); if(b) b.focus(); }
+  }
+  function submit(){
+    keepTyping();
+    var err=document.getElementById('err'), first=null;
+    [].forEach.call(app.querySelectorAll('.q.missing'),function(s){s.classList.remove('missing');});
+    (card.questions||[]).forEach(function(q){
+      var miss=(q.required&&!answered(q))||(needsNote(q)&&!(state.notes[q.id]||'').trim());
+      if(miss){ var s=document.getElementById('q-'+q.id); s.classList.add('missing'); if(!first) first=s; }
+    });
+    if(first){
+      err.textContent='Please answer the questions marked in red.';
+      first.scrollIntoView({behavior:'smooth',block:'center'});
+      var f=first.querySelector('textarea[data-kind="note"]')||first.querySelector('.opt,textarea,input'); if(f) f.focus({preventScroll:true});
+      return;
+    }
+    var btn=document.getElementById('go'); btn.disabled=true; btn.textContent='Sending…'; err.textContent='';
+    var values={},notes={};
+    (card.questions||[]).forEach(function(q){ if(answered(q)) values[q.id]=state.values[q.id]; if((state.notes[q.id]||'').trim()) notes[q.id]=state.notes[q.id].trim(); });
+    var payload={values:values,notes:notes,name:(state.name||'').trim(),comment:(state.comment||'').trim(),submittedAt:new Date().toISOString(),ua:navigator.userAgent.slice(0,120)};
+    rpc('td_submit_decision',{p_token:token,p_answers:payload}).then(function(){
+      prev=payload; done(true);
+    }).catch(function(e){
+      btn.disabled=false; btn.textContent=prev?'Update my answers':'Submit';
+      err.textContent=/closed/i.test(e.message)?'This card has been closed, so answers can no longer be changed.':'Something went wrong sending your answers. Check your connection and try again.';
+    });
+  }
+  function done(justSent,when){
+    var rows=(card.questions||[]).map(function(q){return '<div class="srow"><b>'+esc(q.label)+'</b><span>'+esc(answerText(q))+'</span></div>';}).join('')
+      +(state.comment?'<div class="srow"><b>Anything else</b><span>'+esc(state.comment)+'</span></div>':'');
+    app.innerHTML=head()+'<div class="state"><div class="tick" aria-hidden="true">✓</div><h2>'+(justSent?'Thanks, your answers are in':'You’ve already answered')+'</h2>'
+      +'<p>'+(justSent?esc((card.company||'Your agent'))+' has them now.':'Sent '+esc(fmtDate(when)))+'</p>'
+      +'<div class="summary">'+rows+'</div>'
+      +(closed?'<p style="margin-top:14px">This card is closed.</p>':'<button type="button" class="secondary" id="edit">Change my answers</button>')+'</div>'+foot();
+    var e=document.getElementById('edit'); if(e) e.addEventListener('click',function(){ render(); window.scrollTo(0,0); });
+    window.scrollTo(0,0);
+  }
+  if(!token||token.length<20){ showState('','This link isn’t complete','Check that you opened the whole link from the email, or ask for a new one.'); return; }
+  rpc('td_get_decision',{p_token:token}).then(function(r){
+    if(!r||!r.card){ showState('','We couldn’t find this card','The link may be out of date. Ask for a new one.'); return; }
+    card=r.card; closed=!!r.closed;
+    document.title=(card.title||'Decisions')+(card.company?' · '+card.company:'');
+    if(r.answers&&r.answers.values){ prev=r.answers; state.values=JSON.parse(JSON.stringify(r.answers.values||{})); state.notes=JSON.parse(JSON.stringify(r.answers.notes||{})); state.name=r.answers.name; state.comment=r.answers.comment; done(false,r.answered_at); return; }
+    if(closed){ showState('','This card is closed','It’s no longer taking answers. Get in touch if you still need to reply.'); return; }
+    render();
+  }).catch(function(){ showState('','Couldn’t load this card','Check your connection and refresh the page.'); });
+})();
+</script>
+</body>
+</html>
