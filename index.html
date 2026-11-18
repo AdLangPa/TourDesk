@@ -395,6 +395,45 @@ a{color:var(--blue);text-decoration:none}
   .pe-row span{text-align:left!important;font-size:14px!important}
   .content select,.content input,.content textarea{max-width:100%;min-width:0}
 }
+/* availability calendar + planner */
+.av-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}.av-head b{flex:1;text-align:center;font-size:14px}
+.av-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.av-dow{font-size:10px;text-align:center;color:var(--txt3);text-transform:uppercase}
+.av-pad{min-height:1px}
+.av-day{position:relative;min-height:42px;border:1px solid var(--bord);border-radius:6px;background:var(--surf);color:var(--txt);font-size:12px;cursor:pointer;padding:3px 4px;text-align:left;display:flex;flex-direction:column;justify-content:space-between;touch-action:manipulation}
+.av-n{font-weight:600}.av-code{font-size:11px;font-weight:700}.av-mark{font-size:10px;font-weight:700;color:var(--acc)}
+.av-today .av-n{text-decoration:underline}
+.av-sel{outline:2px solid var(--acc);outline-offset:-1px}
+.av-available{background:var(--green-soft);color:var(--green)}
+.av-hold1{background:var(--amber-soft);color:var(--amber)}
+.av-hold2{background:var(--amber-soft);color:var(--amber);background-image:repeating-linear-gradient(135deg,transparent 0 4px,rgba(168,114,28,.18) 4px 6px)}
+.av-unavailable{background:var(--red-soft);color:var(--red)}
+.av-unknown{background:var(--surf2);color:var(--txt3);background-image:repeating-linear-gradient(45deg,transparent 0 4px,rgba(128,128,128,.18) 4px 6px)}
+.av-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--txt2);margin:8px 0}
+.av-key{display:inline-block;min-width:20px;text-align:center;border:1px solid var(--bord);border-radius:4px;font-style:normal;font-size:11px;font-weight:700;padding:0 3px}
+.av-tools{background:var(--surf2);border-radius:var(--rad);padding:10px 12px;margin:8px 0;display:flex;flex-direction:column;gap:8px}
+.av-btns,.av-opts,.av-range{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.av-btn{border:1px solid var(--bord2);border-radius:var(--rad);padding:6px 10px;font-size:12px;cursor:pointer;background:var(--surf);color:var(--txt)}
+.av-list{margin-top:8px}.av-run{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--bord);font-size:13px}
+.av-chip{border:1px solid var(--bord2);border-radius:12px;padding:1px 8px;font-size:11px;cursor:pointer;margin:2px 4px 0 0;color:var(--txt)}
+.pav-chips{grid-column:1/-1}
+.pl-bar{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}.pl-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.pl-lbl{font-size:12px;color:var(--txt2);display:flex;gap:6px;align-items:center}.pl-nav{display:flex;gap:6px;align-items:center}
+.pl-brushes{display:flex;flex-wrap:wrap;gap:6px}.pl-brush{border:1px solid var(--bord2);border-radius:var(--rad);padding:6px 10px;font-size:12px;cursor:pointer;background:var(--surf);color:var(--txt)}
+.pl-brush.on{outline:2px solid var(--acc);font-weight:600}.pl-help{font-size:12px;color:var(--txt3)}
+.pl-wrap{overflow:auto;max-height:70vh;border:1px solid var(--bord);border-radius:var(--rad);user-select:none;-webkit-user-select:none}
+.pl-tbl{border-collapse:separate;border-spacing:0;font-size:11px}
+.pl-tbl th,.pl-tbl td{border-right:1px solid var(--bord);border-bottom:1px solid var(--bord);text-align:center}
+.pl-v{position:sticky;left:0;z-index:2;background:var(--surf);min-width:150px;max-width:170px;text-align:left!important;padding:4px 8px;display:table-cell}
+.pl-tbl thead th{position:sticky;top:0;z-index:1;background:var(--surf2)}.pl-tbl thead .pl-v{z-index:3}
+.pl-h{min-width:30px;font-weight:400}.pl-h span{display:block;font-size:9px;color:var(--txt3)}
+.pl-vn a{font-weight:600;cursor:pointer;font-size:12px}.pl-vn small{display:block;color:var(--txt3);font-size:10px}
+.pl-x{float:right;border:0;background:none;color:var(--txt3);cursor:pointer;font-size:14px;margin-top:-30px}
+.pl-c{height:34px;min-width:30px;cursor:crosshair;touch-action:manipulation;position:relative;background:var(--surf)}
+.pl-c.av-available{background:var(--green-soft)}.pl-c.av-hold1,.pl-c.av-hold2{background:var(--amber-soft)}.pl-c.av-unavailable{background:var(--red-soft)}.pl-c.av-unknown{background:var(--surf2)}
+.pl-we:not(.av-available):not(.av-hold1):not(.av-hold2):not(.av-unavailable):not(.av-unknown){background:var(--surf2)}
+.pl-sel{outline:2px solid var(--acc);outline-offset:-2px}.pl-today{box-shadow:inset 0 0 0 1px var(--acc)}
+.pl-c .av-code,.pl-c .av-mark{display:block;line-height:1.1}
+@media(max-width:700px){.pl-v{min-width:110px}}
 </style>
 </head>
 <body>
@@ -419,6 +458,7 @@ a{color:var(--blue);text-decoration:none}
       <div class="nav-item" data-view="artists"><span class="nav-ico">♪</span>Artists</div>
       <div class="nav-section">Sales</div>
       <div class="nav-item" data-view="proposals"><span class="nav-ico">◈</span>Proposals</div>
+      <div class="nav-item" data-view="planner"><span class="nav-ico">▦</span>Planner</div>
       <div class="nav-item" data-view="outreach"><span class="nav-ico">✉</span>Outreach</div>
       <div class="nav-item" data-view="decisions"><span class="nav-ico">☑</span>Decisions</div>
       <div class="nav-section">System</div>
@@ -1643,7 +1683,7 @@ const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 
 /* ---------- ROUTER ---------- */
 let route={view:'dashboard',id:null,tab:null};
-const NAV_TITLES={dashboard:'Dashboard',financial:'Financial',outreach:'Outreach',decisions:'Decisions',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',activity:'Activity',settings:'Settings'};
+const NAV_TITLES={dashboard:'Dashboard',financial:'Financial',outreach:'Outreach',decisions:'Decisions',venues:'Venues',tours:'Tours',events:'Events',calendar:'Calendar',tasks:'Tasks',contacts:'Contacts',artists:'Artists',proposals:'Proposals',planner:'Planner',activity:'Activity',settings:'Settings'};
 
 /* ---------- ARTIST VIEW MODE ---------- */
 let ARTIST_VIEW=null; // artist id when filtering the whole app to one artist
@@ -1677,7 +1717,7 @@ function applyArtistViewChrome(){
   // In artist view: only Dashboard, Tours, Events, Proposals visible
   const avAllowed=['dashboard','financial','tours','events','calendar','tasks','proposals'];
   // Producer cannot access settings, activity, artists, contacts, venues
-  const producerBlocked=['settings','activity','artists','contacts','venues','outreach','decisions'];
+  const producerBlocked=['settings','activity','artists','contacts','venues','outreach','decisions','planner'];
   nav.querySelectorAll('.nav-item').forEach(n=>{
     const view=n.dataset.view;
     const blockedByAV=inArtistView()&&!avAllowed.includes(view);
@@ -1769,7 +1809,7 @@ function go(view,id=null,tab=null,_unused=null,ref=null){
     view='dashboard'; id=null; tab=null; ref=null;
   }
   // Block disallowed views for producer role
-  const producerBlocked=['settings','activity','artists','contacts','venues','outreach','decisions'];
+  const producerBlocked=['settings','activity','artists','contacts','venues','outreach','decisions','planner'];
   if(AUTH_USER?.role==='producer' && producerBlocked.includes(view)){
     view='dashboard'; id=null; tab=null; ref=null;
   }
@@ -2072,65 +2112,14 @@ VIEWS.venues={
       </div>
       ${v.notes?`<div class="sec"><div class="sec-label">Notes</div><p style="font-size:13px;color:var(--txt2);line-height:1.6">${esc(v.notes)}</p></div>`:''}
       ${(v.tags||[]).length?('<div class="sec">'+v.tags.map(tg=>'<span class="tag">'+esc(tg)+'</span>').join('')+'</div>'):''}
-      <div class="sec">
-        <div class="sec-label" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Known availability</span>
-          ${canDo('admin')?`<button class="btn ghost sm" onclick="venueAvailAdd('${v.id}')">+ Add date</button>`:''}
-        </div>
-        <div id="venue-avail-list">${renderVenueAvailList(v)}</div>
-      </div>
+      ${venueAvailSection(v)}
       <div class="sec">${tasksSection('venue',v.id,'Tasks')}</div>
       ${venueContactHistoryHTML(v)}
       <div class="sec"><div class="sec-label">Events at this venue (${evts.length})</div>
         ${evts.length?tableEvents(evts):'<p class="muted" style="font-size:13px">No events here yet.</p>'}</div>`;
+    availInit(v.id);
   }
 };
-function renderVenueAvailList(v){
-  const entries=(v.availability||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
-  if(!entries.length) return '<p class="muted" style="font-size:13px">No availability info recorded yet — add dates you know are open, held, or already booked elsewhere.</p>';
-  return entries.map(a=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--bord)">
-      <span style="font-size:13px;font-weight:600;min-width:90px">${fmtDate(a.date)}</span>
-      <span class="badge ${a.type==='unavailable'?'red':a.type==='held'?'amber':'green'}">${AVAIL_TYPE_LABEL[a.type]||a.type}</span>
-      <span style="flex:1;font-size:12px;color:var(--txt2)">${esc(a.note||'')}</span>
-      ${canDo('admin')?`<button class="btn ghost sm" style="padding:2px 7px" onclick="venueAvailDelete('${v.id}','${a.id}')">×</button>`:''}
-    </div>`).join('');
-}
-function venueAvailAdd(vid){
-  openModal('Add availability info',`
-    <div class="row2">
-      <div class="field"><label>Date</label><input id="va-date" type="date"></div>
-      <div class="field"><label>Type</label><select id="va-type">
-        <option value="unavailable">Unavailable (already booked)</option>
-        <option value="held">Held (by someone, not yet confirmed)</option>
-        <option value="available">Known available</option>
-      </select></div>
-    </div>
-    <div class="field"><label>Note (optional)</label><input id="va-note" placeholder="e.g. Held by another agency, or house show"></div>
-    <div id="va-err" style="color:var(--red);font-size:12px;min-height:16px"></div>`,
-    `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn primary" onclick="venueAvailSave('${vid}')">Add</button>`);
-}
-function venueAvailSave(vid){
-  const date=fv('va-date');
-  const err=document.getElementById('va-err');
-  if(!date){ if(err) err.textContent='Please pick a date.'; return; }
-  const v=get(DB.venues,vid); if(!v) return;
-  v.availability=v.availability||[];
-  if(v.availability.some(a=>a.date===date)){ if(err) err.textContent='There\'s already an entry for this date — remove it first if you want to replace it.'; return; }
-  v.availability.push({id:'av'+Date.now().toString(36),date,type:fv('va-type'),note:fv('va-note')});
-  persist();
-  closeModal();
-  const host=document.getElementById('venue-avail-list');
-  if(host) host.innerHTML=renderVenueAvailList(v);
-}
-function venueAvailDelete(vid,aid){
-  const v=get(DB.venues,vid); if(!v) return;
-  v.availability=(v.availability||[]).filter(a=>a.id!==aid);
-  persist();
-  const host=document.getElementById('venue-avail-list');
-  if(host) host.innerHTML=renderVenueAvailList(v);
-}
 function ctLabel(ct){return {guarantee:'Guarantee',door:'Door split',guarantee_plus:'Guarantee+',rental:'Rental (flat fee)',rental_greater_of:'Rental (greater of flat or %)',rental_plus_pct:'Rental (flat fee + % of net)'}[ct]||'—';}
 
 // Hold status tracks where things stand with the VENUE specifically — separate
@@ -4499,6 +4488,7 @@ function eventSettlementV2(host,e){
     <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:8px">If the venue's statement already credits the deposit back, leave this empty.</p>
     <div id="sv-deposits"></div>
     <button class="btn sm" style="margin-top:8px" onclick="addDepositCredit('${e.id}')">+ Add deposit</button>
+    <label id="sv-commdep-wrap" style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12px;color:var(--txt2);cursor:pointer"><input type="checkbox" id="sv-commdep" style="margin-top:2px" ${settlementV2Figures(e).commissionOnDeposits?'checked':''} onchange="setCommissionOnDeposits('${e.id}',this.checked)"><span><b>Charge commission on the deposit too</b> (commission on the full venue payout). Untick to take deposits off the top before commission.</span></label>
 
     <div class="sec-label" style="margin-top:20px">Producer expenses <span style="font-weight:400;font-size:11px;color:var(--txt3)">(from Projections — edit there to change)</span></div>
     ${prodExps.length
@@ -4543,9 +4533,13 @@ function settlementV2Figures(ev){
     else toArtist+=(+d.amount||0);
   });
 
-  // Commissionable pot = payout minus ALL deposits (artist and producer)
+  // Payout after deposits (deposits go back to whoever fronted them).
+  // Commission is charged on the FULL venue payout, deposits included, unless this event is switched to the old
+  // "deposits off the top first" method. Events already settled keep that old method unless you change it.
+  const commissionOnDeposits=sv.commissionOnDeposits!==undefined?!!sv.commissionOnDeposits:(sv.settled?false:true);
   const commissionablePot=Math.max(0, payout-depositTotal);
-  const commission=commissionablePot*mgmtPct;
+  const commissionBase=commissionOnDeposits?payout:commissionablePot;
+  const commission=commissionBase*mgmtPct;
 
   // Expenses from Projections tab
   const projExps=ev.projection?.expenses||[];
@@ -4556,14 +4550,14 @@ function settlementV2Figures(ev){
   const artistExpTotal=artistExpenses.reduce((t,x)=>t+(+x.amount||0),0);
 
   // Waterfall:
-  // commissionable pot - commission - producer expenses = artist gross
+  // payout after deposits - commission - producer expenses = artist gross
   // artist gross + deposit returned to artist - artist direct expenses = artist net
   // (this keeps the printed statement arithmetically consistent top to bottom)
   const artistGross=commissionablePot-commission-producerExpTotal;
   const artistNet=artistGross+toArtist-artistExpTotal;
   const yourTotal=commission+producerExpTotal+toProducer;
 
-  return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,
+  return {payout,mgmtPct:mgmtPct*100,commissionablePot,commission,commissionBase,commissionOnDeposits,
     producerExpenses,producerExpTotal,
     artistGross,deposits,depositTotal,toArtist,toProducer,
     exps:artistExpenses,expenseTotal:artistExpTotal,
@@ -4587,6 +4581,10 @@ function renderDepositCredits(e){
       </select>
       <button class="btn ghost sm" style="padding:3px 6px" onclick="removeDepositCredit('${e.id}',${i})">×</button>
     </div>`).join('')}`;
+}
+function setCommissionOnDeposits(id,on){
+  const e=get(DB.events,id); e.settlementV2.commissionOnDeposits=!!on;
+  renderSettlementV2Waterfall(e);
 }
 function addDepositCredit(id){
   const e=get(DB.events,id);
@@ -4667,8 +4665,8 @@ function renderSettlementV2Waterfall(e){
   const rows=[
     bar('Venue payout',f.payout,'var(--green)',true),
     ...depositLines,
-    ...(f.depositTotal>0?[bar('Commissionable pot',f.commissionablePot,'#6fa8dc',true)]:[]),
-    bar('Less: mgmt commission ('+f.mgmtPct+'%) — LPA Inc.',-f.commission,'var(--amber)',false),
+    ...(f.depositTotal>0?[bar(f.commissionOnDeposits?'Payout after deposit':'Commissionable pot',f.commissionablePot,'#6fa8dc',true)]:[]),
+    bar('Less: mgmt commission ('+f.mgmtPct+'%'+(f.commissionOnDeposits&&f.depositTotal>0?' of full payout':'')+') — LPA Inc.',-f.commission,'var(--amber)',false),
     ...producerExpLines,
     '<div style="height:8px"></div>',
     bar('Artist gross — '+esc(artistName),f.artistGross,'#97c459',true),
@@ -4740,13 +4738,13 @@ function printSettlementV2(id){
     </div>
     <table style="width:100%;border-collapse:collapse">
       ${row('Venue payout', f.payout, {b:1})}
-      ${f.deposits.filter(d=>+d.amount>0).length?section('Deposits — off the top before commission'):''}
+      ${f.deposits.filter(d=>+d.amount>0).length?section(f.commissionOnDeposits?'Deposits — returned to whoever fronted them':'Deposits — off the top before commission'):''}
       ${f.deposits.filter(d=>+d.amount>0).map(d=>row('&nbsp;&nbsp;'+esc(d.desc||'Deposit')+' (fronted by '+(d.frontedBy==='producer'?'LPA Inc.':esc(artistName))+')', -(+d.amount), {neg:1})).join('')}
       ${f.depositTotal>0?divider:''}
-      ${f.depositTotal>0?row('Commissionable pot', f.commissionablePot, {b:1}):''}
+      ${f.depositTotal>0?row(f.commissionOnDeposits?'Payout after deposits':'Commissionable pot', f.commissionablePot, {b:1}):''}
       ${divider}
       ${section('LPA Inc. — commission &amp; expenses')}
-      ${row('&nbsp;&nbsp;Management commission ('+f.mgmtPct+'%)', -f.commission, {neg:1})}
+      ${row('&nbsp;&nbsp;Management commission ('+f.mgmtPct+'%'+(f.commissionOnDeposits&&f.depositTotal>0?' of the full venue payout, deposits included':'')+')', -f.commission, {neg:1})}
       ${f.producerExpenses.filter(x=>+x.amount>0).map(x=>{
         const bo=(+x.amount||0)*(1+(+x.markupPct||0)/100);
         return row('&nbsp;&nbsp;'+esc(x.desc||'Expense'), -bo, {neg:1});
@@ -4762,7 +4760,7 @@ function printSettlementV2(id){
       ${row('Artist net — '+esc(artistName), f.artistNet, {b:1, pos:f.artistNet>=0})}
     </table>
     <div style="margin-top:18px;padding:12px 14px;background:#f4f3ef;border-radius:6px;font-size:11px;color:#5f5e58;line-height:1.6">
-      <strong>Summary:</strong> Venue payout ${money0(f.payout)}${f.depositTotal>0?' − deposits '+money0(f.depositTotal)+' = commissionable pot '+money0(f.commissionablePot):''} − LPA Inc. total ${money0(totalLpaDeductions)} (commission ${money0(f.commission)}${f.producerExpTotal>0?' + expenses '+money0(f.producerExpTotal):''}) = artist gross ${money0(f.artistGross)}${f.toArtist>0?' + deposit returned '+money0(f.toArtist):''}${f.expenseTotal>0?' − artist expenses '+money0(f.expenseTotal):''} = artist net ${money0(f.artistNet)}.<br>
+      <strong>Summary:</strong> Venue payout ${money0(f.payout)}${f.depositTotal>0?' − deposits '+money0(f.depositTotal)+' = '+(f.commissionOnDeposits?'payout after deposits ':'commissionable pot ')+money0(f.commissionablePot):''} − LPA Inc. total ${money0(totalLpaDeductions)} (commission ${money0(f.commission)}${f.producerExpTotal>0?' + expenses '+money0(f.producerExpTotal):''}) = artist gross ${money0(f.artistGross)}${f.toArtist>0?' + deposit returned '+money0(f.toArtist):''}${f.expenseTotal>0?' − artist expenses '+money0(f.expenseTotal):''} = artist net ${money0(f.artistNet)}.<br>
       ${f.toProducer>0?`LPA Inc. is also owed ${money0(f.toProducer)} deposit reimbursement. Total due to LPA Inc.: ${money0(f.yourTotal)}.<br>`:''}
       <em>Figures do not include applicable taxes. This document is not an invoice.</em>
     </div>
@@ -7124,7 +7122,7 @@ function proposalShowsTable(p,shows,isAccepted){
         <td><div style="font-weight:500">${v&&!inArtistView()&&AUTH_USER?.role!=='producer'?`<a class="venue-link" onclick="event.stopPropagation();go('venues','${v.id}')">${esc(v.name)}</a>`:(v?esc(v.name):'—')}</div>
           ${v?.city?`<div style="font-size:11px;color:var(--txt3)">${esc(v.city)}</div>`:''}
         </td>
-        <td>${esc(s.date||'TBD')}</td>
+        <td onclick="event.stopPropagation()">${propDateCell(p,s,isAccepted)}</td>
         <td onclick="event.stopPropagation()">${propShowStatusCell(p,s,isAccepted)}</td>
         <td class="num">${(s.tiers&&s.tiers.length>0) ? s.tiers.map(t=>esc(t.name)+' '+money0(t.base)).join(', ') : money0(s.ticketBase)}</td>
         <td class="num">${s.ticketsEst||'—'} <span class="muted">(${Math.round((+s.ticketsEst||0)/(+s.capacity||1)*100)}%)</span></td>
@@ -8899,7 +8897,7 @@ function pavRenderSel(){
     return '<div class="pav-sel-row"><span class="pav-sel-name"><b>'+esc(v.name||'')+'</b><span class="muted"> · '+esc(v.city||'')+(v.province?', '+esc(v.province):'')+'</span></span>'
       +'<input type="date" aria-label="Date for '+esc(v.name||'')+'" value="'+esc(x.date||'')+'" onchange="pavSetDate(\''+id+'\',this.value)">'
       +'<button class="btn ghost sm" style="padding:2px 7px" aria-label="Remove" onclick="pavToggle(\''+id+'\',false);pavRenderList()">×</button>'
-      +'<span class="pav-sel-warn" id="pav-w-'+id+'">'+pavAvailNote(id,x.date)+'</span></div>';}).join('')+'</div>'
+      +'<span class="pav-sel-warn" id="pav-w-'+id+'">'+pavAvailNote(id,x.date)+'</span>'+pavChips(id)+'</div>';}).join('')+'</div>'
     :'<p class="muted" style="font-size:12px">Tick venues in the list above.</p>';
 }
 // One proposal show for a venue, with tour tiers and VIP merch applied
@@ -8995,8 +8993,8 @@ function venueAvailabilityOn(venueId, date){
   const v=get(DB.venues,venueId); if(!v) return null;
   return (v.availability||[]).find(a=>a.date===date) || null;
 }
-const AVAIL_TYPE_LABEL={unavailable:'Marked unavailable',held:'Marked as held (by someone)',available:'Marked available'};
-const AVAIL_TYPE_COLOR={unavailable:'var(--red)',held:'var(--amber)',available:'var(--green)'};
+const AVAIL_TYPE_LABEL={unavailable:'Marked unavailable',held:'Marked as 1st hold',hold1:'Marked as 1st hold',hold2:'Marked as 2nd hold',unknown:'Availability unknown',available:'Marked available'};
+const AVAIL_TYPE_COLOR={unavailable:'var(--red)',held:'var(--amber)',hold1:'var(--amber)',hold2:'var(--amber)',unknown:'var(--txt3)',available:'var(--green)'};
 
 function pavPreview(pid){
   const vid=fv('pav-venue');
@@ -9164,7 +9162,7 @@ function acceptProposalModal(id){
   openModal('Accept proposal',
     '<p style="font-size:13px;color:var(--txt2);margin-bottom:10px">Tick the shows that are going ahead. Each becomes an event'+(p.kind==='tour'?' on a new tour':'')+', and its inquiries move with it. Unticked shows stay in the proposal.</p>'
     +'<div class="cr-statuses" style="flex-direction:column;align-items:stretch">'+shows.map(s=>{const v=get(DB.venues,s.venueId), st=propShowStatus(s);
-      return '<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" class="acc-show" value="'+s._sid+'" '+(st==='Not available'?'':'checked')+' onchange="accCount()"> <b style="font-weight:500">'+esc(v?v.name:'Show')+'</b> <span class="muted">'+esc(s.date||'Date TBD')+'</span> <span class="badge '+PROP_SHOW_COLOR[st]+'">'+esc(st)+'</span></label>';}).join('')+'</div>'
+      return '<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" class="acc-show" data-ok="'+(accDateOk(s)?1:0)+'" value="'+s._sid+'" '+(st==='Not available'?'':'checked')+' onchange="accCount()"> <b style="font-weight:500">'+esc(v?v.name:'Show')+'</b> <span class="muted">'+esc(s.date||'Date TBD')+'</span>'+accAvailTag(p,s)+' <span class="badge '+PROP_SHOW_COLOR[st]+'">'+esc(st)+'</span></label>';}).join('')+'</div>'
     +'<p class="muted" style="font-size:11px;margin-top:8px">New events start as Contract Discussions when the venue has confirmed, offered a hold or is in discussion, and as Inquiry otherwise.</p>'
     +'<div id="acc-count" style="font-size:13px;font-weight:500;margin-top:8px"></div>',
     '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="acc-go" onclick="acceptProposal(\''+id+'\',[...document.querySelectorAll(\'.acc-show:checked\')].map(x=>x.value))">✓ Accept &amp; create events</button>');
@@ -9172,7 +9170,8 @@ function acceptProposalModal(id){
 }
 function accCount(){
   const n=document.querySelectorAll('.acc-show:checked').length, el=document.getElementById('acc-count'), b=document.getElementById('acc-go');
-  if(el) el.textContent=n?n+' event'+(n===1?'':'s')+' will be created.':'Tick at least one show.';
+  const bad=[...document.querySelectorAll('.acc-show:checked')].filter(x=>x.dataset.ok!=='1').length;
+  if(el) el.innerHTML=n?n+' event'+(n===1?'':'s')+' will be created.'+(bad?'<div style="font-size:12px;font-weight:400;color:var(--amber);margin-top:4px">⚠ '+bad+' show'+(bad===1?' has':'s have')+' no date, or a date not recorded as available or held. You can still accept.</div>':''):'Tick at least one show.';
   if(b) b.disabled=!n;
 }
 function declineProposal(id,reopen){
@@ -10823,7 +10822,7 @@ function inquiryRowHTML(q,opts){
     +'<div class="inq-side">'
     +'<select class="inq-status '+(INQ_COLOR[q.status]||'gray')+'" onchange="setInquiryStatus(\''+q.id+'\',this.value);render()" aria-label="Status">'
     +INQ_STATUSES.map(s=>'<option '+(s===q.status?'selected':'')+'>'+s+'</option>').join('')+'</select>'
-    +'<div class="inq-acts"><a onclick="inquiryUpdateModal(\''+q.id+'\')">Update / notes</a>'
+    +'<div class="inq-acts"><a onclick="inquiryEditModal(\''+q.id+'\')">Edit</a> · <a onclick="inquiryUpdateModal(\''+q.id+'\')">Update / notes</a>'
     +(opts.inProposal?''
       :opts.linkEventId?(q.eventId===opts.linkEventId?' · <span class="muted">Linked to this show</span>':' · <a onclick="linkInquiryToEvent(\''+q.id+'\',\''+opts.linkEventId+'\')">Link to this show</a>')
       :(ev?' · <a onclick="go(\'events\',\''+ev.id+'\')">View show</a>'
@@ -10921,6 +10920,483 @@ function outreachSectionHTML(filter,label){
     +'<button class="btn sm primary" style="text-transform:none;letter-spacing:0" onclick="bulkInquiryModal('+pre+')">✉ Bulk inquiry</button></span></div>'
     +(list.length?inquirySummaryChips(list):'')
     +inquiryListHTML(list,{hideArtist:!!filter.artistId&&!filter.tourId,empty:'No venue inquiries yet. Use Bulk inquiry to ask several venues at once.'})+'</div>';
+}
+
+/* ============================================================
+   VENUE AVAILABILITY + TOUR PLANNER
+   v.availability = [{id,date,type,note,artistId,updatedAt}]
+   type: available | hold1 | hold2 | unavailable | unknown   (one entry per venue per date)
+   ============================================================ */
+const AVAIL_STATUSES=['available','hold1','hold2','unavailable','unknown'];
+const AVAIL_NAME={available:'Available',hold1:'1st hold',hold2:'2nd hold',unavailable:'Unavailable',unknown:'Unknown'};
+const AVAIL_CODE={available:'✓',hold1:'1',hold2:'2',unavailable:'✕',unknown:'?'};
+const AVAIL_BADGE={available:'green',hold1:'amber',hold2:'amber',unavailable:'red',unknown:'gray'};
+const AVAIL_USABLE=['available','hold1','hold2'];
+function migrateAvailability(){
+  let n=0;
+  (DB.venues||[]).forEach(v=>(v.availability||[]).forEach(a=>{ if(a.type==='held'){ a.type='hold1'; n++; } }));
+  return n;
+}
+function availBadge(type){ return '<span class="badge '+(AVAIL_BADGE[type]||'gray')+'">'+esc(AVAIL_NAME[type]||type)+'</span>'; }
+function availLabel(a){
+  const ar=a.artistId?get(DB.artists,a.artistId):null;
+  return (AVAIL_NAME[a.type]||a.type)+(ar?' · '+ar.name:'')+(a.note?' · '+a.note:'');
+}
+function dayStr(y,m,d){ return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function dayAfter(d){ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+1); return dayStr(x.getFullYear(),x.getMonth()+1,x.getDate()); }
+function monthLabel(ym){ const p=ym.split('-'); return new Date(+p[0],+p[1]-1,1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
+function monthShift(ym,delta){ const p=ym.split('-').map(Number); const d=new Date(p[0],p[1]-1+delta,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+// Set (or, with type 'clear', remove) the status of several dates for one venue. Returns how many days changed.
+function availSet(vid,dates,type,o){
+  o=o||{}; const v=get(DB.venues,vid); if(!v||!dates||!dates.length) return 0;
+  v.availability=v.availability||[];
+  const now=new Date().toISOString(), by={}, drop={}; v.availability.forEach(a=>{ by[a.date]=a; });
+  let n=0;
+  dates.forEach(d=>{
+    const a=by[d];
+    if(type==='clear'){ if(a){ drop[a.id]=1; n++; } return; }
+    if(a){ if(a.type===type&&(o.note===undefined||o.note===a.note)&&(o.artistId===undefined||o.artistId===(a.artistId||''))) return;
+      a.type=type; if(o.note!==undefined) a.note=o.note; if(o.artistId!==undefined) a.artistId=o.artistId; a.updatedAt=now; }
+    else { const na={id:'av'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),date:d,type,note:o.note||'',artistId:o.artistId||'',updatedAt:now}; v.availability.push(na); by[d]=na; }
+    n++;
+  });
+  if(Object.keys(drop).length) v.availability=v.availability.filter(a=>!drop[a.id]);
+  return n;
+}
+// Upcoming dates a venue could be booked on (available, 1st or 2nd hold; unknown only if asked for)
+function availOpenDates(vid,fromDate,includeUnknown){
+  const v=get(DB.venues,vid); if(!v) return [];
+  const ok=AVAIL_USABLE.concat(includeUnknown?['unknown']:[]), from=fromDate||todayStr();
+  return (v.availability||[]).filter(a=>ok.includes(a.type)&&a.date>=from).sort((a,b)=>a.date.localeCompare(b.date));
+}
+// Consecutive days with the same status, note and artist collapse into one line
+function availRuns(v,includePast){
+  const today=todayStr(), runs=[];
+  (v.availability||[]).filter(a=>includePast||a.date>=today).sort((a,b)=>a.date.localeCompare(b.date)).forEach(a=>{
+    const last=runs[runs.length-1];
+    if(last&&last.type===a.type&&last.note===(a.note||'')&&last.artistId===(a.artistId||'')&&dayAfter(last.to)===a.date){ last.to=a.date; last.ids.push(a.id); }
+    else runs.push({type:a.type,note:a.note||'',artistId:a.artistId||'',from:a.date,to:a.date,ids:[a.id]});
+  });
+  return runs;
+}
+function availRunLabel(r){ return r.from===r.to?fmtDate(r.from):fmtDate(r.from)+' – '+fmtDate(r.to)+' <span class="muted">('+r.ids.length+' days)</span>'; }
+
+/* ---------- Venue page: calendar editor ---------- */
+let _av=null;
+function venueAvailSection(v){
+  return '<div class="sec"><div class="sec-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Availability</span>'
+    +(canDo('admin')?'<a onclick="go(\'planner\')" style="font-size:11px;text-transform:none;letter-spacing:0;cursor:pointer">Open planner →</a>':'')+'</div>'
+    +'<div id="venue-avail"></div></div>';
+}
+function availInit(vid){
+  if(!document.getElementById('venue-avail')) return;
+  if(!_av||_av.vid!==vid) _av={vid,ym:todayStr().slice(0,7),sel:new Set(),anchor:'',artistId:'',note:'',past:false};
+  availRender();
+}
+function availKeep(){ const n=document.getElementById('av-note'), a=document.getElementById('av-artist'); if(_av){ if(n) _av.note=n.value; if(a) _av.artistId=a.value; } }
+function availRender(){
+  const host=document.getElementById('venue-avail'); if(!host||!_av) return;
+  const v=get(DB.venues,_av.vid); if(!v) return;
+  const admin=canDo('admin'), today=todayStr();
+  const p=_av.ym.split('-').map(Number), Y=p[0], M=p[1];
+  const by={}; (v.availability||[]).forEach(a=>{ by[a.date]=a; });
+  const evs={}; (DB.events||[]).forEach(e=>{ if(e.venueId===v.id&&e.date) evs[e.date]=e; });
+  const props={}; (DB.proposals||[]).forEach(pr=>{ if(pr.status==='Declined'||pr.status==='Accepted') return; (pr.shows||[]).forEach(s=>{ if(s.venueId===v.id&&s.date) props[s.date]=pr; }); });
+  let cells=''; const lead=new Date(Y,M-1,1).getDay(), days=new Date(Y,M,0).getDate();
+  for(let i=0;i<lead;i++) cells+='<span class="av-pad"></span>';
+  for(let d=1;d<=days;d++){
+    const ds=dayStr(Y,M,d), a=by[ds], sel=_av.sel.has(ds);
+    const tip=fmtDate(ds)+(a?' — '+availLabel(a):'')+(evs[ds]?' — Show: '+(evs[ds].name||''):'')+(props[ds]?' — In proposal: '+(props[ds].title||''):'');
+    cells+='<button type="button" data-d="'+ds+'" class="av-day'+(a?' av-'+a.type:'')+(sel?' av-sel':'')+(ds===today?' av-today':'')+'" '+(admin?'onclick="availDay(\''+ds+'\',event)"':'disabled')+' title="'+esc(tip)+'" aria-pressed="'+sel+'" aria-label="'+esc(tip)+'">'
+      +'<span class="av-n">'+d+'</span>'+(a?'<span class="av-code">'+AVAIL_CODE[a.type]+'</span>':'')+(evs[ds]?'<span class="av-mark">★</span>':props[ds]?'<span class="av-mark">P</span>':'')+'</button>';
+  }
+  const n=_av.sel.size;
+  const legend='<div class="av-legend">'+AVAIL_STATUSES.map(t=>'<span><i class="av-key av-'+t+'">'+AVAIL_CODE[t]+'</i> '+AVAIL_NAME[t]+'</span>').join('')+'<span><i class="av-key">★</i> our show</span><span><i class="av-key">P</i> in a proposal</span></div>';
+  const tools=admin?'<div class="av-tools">'
+      +'<div style="font-size:12px;margin-bottom:6px"><b>'+(n?n+' day'+(n===1?'':'s')+' selected':'Click days to select them')+'</b><span class="muted"> · shift-click to select a range</span></div>'
+      +'<div class="av-btns">'+AVAIL_STATUSES.map(t=>'<button type="button" class="btn sm av-btn av-'+t+'" '+(n?'':'disabled')+' onclick="availApply(\''+t+'\')">'+AVAIL_CODE[t]+' '+AVAIL_NAME[t]+'</button>').join('')
+      +'<button type="button" class="btn sm" '+(n?'':'disabled')+' onclick="availApply(\'clear\')">Clear</button>'
+      +'<button type="button" class="btn ghost sm" '+(n?'':'disabled')+' onclick="availSelNone()">Deselect</button></div>'
+      +'<div class="av-opts"><input id="av-note" placeholder="Note for these days (optional), e.g. Gerry holding for another act" value="'+esc(_av.note||'')+'" aria-label="Note">'
+      +'<select id="av-artist" aria-label="For artist"><option value="">For artist (optional)</option>'+DB.artists.map(ar=>'<option value="'+ar.id+'" '+(_av.artistId===ar.id?'selected':'')+'>'+esc(ar.name)+'</option>').join('')+'</select></div>'
+      +'<div class="av-range"><span>Or type a range:</span><input type="date" id="av-from" aria-label="Range start"><span>to</span><input type="date" id="av-to" aria-label="Range end"><button type="button" class="btn sm" onclick="availSelRange()">Select these days</button></div>'
+    +'</div>':'';
+  const runs=availRuns(v,_av.past);
+  const list=runs.length?runs.map(r=>'<div class="av-run"><span class="av-run-d">'+availRunLabel(r)+'</span>'+availBadge(r.type)
+      +'<span class="av-run-n">'+esc((r.artistId&&get(DB.artists,r.artistId)?get(DB.artists,r.artistId).name+(r.note?' · ':''):'')+r.note)+'</span>'
+      +(admin?'<button type="button" class="btn ghost sm" style="padding:2px 7px" aria-label="Remove" onclick="availDeleteRun(\''+r.ids.join(',')+'\')">×</button>':'')+'</div>').join('')
+    :'<p class="muted" style="font-size:13px;margin:8px 0 0">No availability recorded'+(_av.past?'':' for upcoming dates')+' yet. Click days above and mark them available, on hold, unavailable or unknown.</p>';
+  host.innerHTML='<div class="av-head"><button type="button" class="btn ghost sm" onclick="availNav(-1)" aria-label="Previous month">‹</button><b>'+esc(monthLabel(_av.ym))+'</b>'
+    +'<button type="button" class="btn ghost sm" onclick="availNav(1)" aria-label="Next month">›</button><button type="button" class="btn ghost sm" onclick="availNav(0)">Today</button></div>'
+    +'<div class="av-cal"><span class="av-dow">Sun</span><span class="av-dow">Mon</span><span class="av-dow">Tue</span><span class="av-dow">Wed</span><span class="av-dow">Thu</span><span class="av-dow">Fri</span><span class="av-dow">Sat</span>'+cells+'</div>'
+    +legend+tools
+    +'<div class="av-list"><div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 2px"><span class="sec-label" style="margin:0">Recorded dates</span>'
+    +'<label style="font-size:11px;color:var(--txt3);cursor:pointer"><input type="checkbox" '+(_av.past?'checked':'')+' onchange="_av.past=this.checked;availRender()"> include past</label></div>'+list+'</div>';
+}
+function availNav(d){ availKeep(); _av.ym=d===0?todayStr().slice(0,7):monthShift(_av.ym,d); availRender(); }
+function availDay(ds,ev){
+  availKeep();
+  if(ev&&ev.shiftKey&&_av.anchor){ const a=_av.anchor<=ds?_av.anchor:ds, b=_av.anchor<=ds?ds:_av.anchor; decExpandRange(a,b,120).forEach(x=>_av.sel.add(x)); }
+  else if(_av.sel.has(ds)) _av.sel.delete(ds); else _av.sel.add(ds);
+  _av.anchor=ds; availRender();
+}
+function availSelNone(){ availKeep(); _av.sel=new Set(); availRender(); }
+function availSelRange(){
+  availKeep();
+  const f=(document.getElementById('av-from')||{}).value, t=(document.getElementById('av-to')||{}).value;
+  if(!f) return;
+  decExpandRange(f,t||f,200).forEach(x=>_av.sel.add(x)); _av.anchor=f; _av.ym=f.slice(0,7); availRender();
+}
+function availApply(type){
+  availKeep(); const v=get(DB.venues,_av.vid); if(!v||!_av.sel.size) return;
+  const dates=[..._av.sel].sort(), note=(_av.note||'').trim();
+  const n=availSet(v.id,dates,type,type==='clear'?{}:{note:note||undefined,artistId:_av.artistId||undefined});
+  logActivity('updated availability for','Venue',v.name+' ('+n+' day'+(n===1?'':'s')+': '+(type==='clear'?'cleared':AVAIL_NAME[type])+')');
+  persist(); _av.sel=new Set(); availRender();
+}
+function availDeleteRun(idsCsv){
+  const v=get(DB.venues,_av&&_av.vid); if(!v) return;
+  const ids=idsCsv.split(','); v.availability=(v.availability||[]).filter(a=>!ids.includes(a.id));
+  persist(); availRender();
+}
+
+/* ---------- PLANNER: venues down, days across ---------- */
+let _plan=null;
+function planLoad(){
+  if(_plan) return _plan;
+  let s={}; try{ s=JSON.parse(localStorage.getItem('td_planner')||'{}')||{}; }catch(e){}
+  _plan={artistId:(s.artistId&&get(DB.artists,s.artistId))?s.artistId:'',ym:(s.ym&&/^\d{4}-\d\d$/.test(s.ym))?s.ym:todayStr().slice(0,7),
+    venueIds:Array.isArray(s.venueIds)?s.venueIds.filter(id=>get(DB.venues,id)):[],brush:'available',sel:new Map(),maps:null};
+  return _plan;
+}
+function planSave(){ try{ localStorage.setItem('td_planner',JSON.stringify({artistId:_plan.artistId,ym:_plan.ym,venueIds:_plan.venueIds})); }catch(e){} }
+VIEWS.planner={
+  render(c,a){
+    if(!canDo('admin')){ c.innerHTML=emptyState('▦','The planner is only available to administrators.'); return; }
+    planLoad();
+    a.innerHTML='<button class="btn sm primary" onclick="planPickVenues()">+ Add venues</button>';
+    c.innerHTML='<div id="plan-bar"></div><div id="plan-grid-wrap"></div>';
+    planRender();
+  }
+};
+function planMaps(){
+  const P=_plan, ev={}, pr={};
+  (DB.events||[]).forEach(e=>{ if(e.venueId&&e.date) (ev[e.venueId+'|'+e.date]=ev[e.venueId+'|'+e.date]||[]).push(e); });
+  (DB.proposals||[]).forEach(p=>{
+    if(p.status==='Declined'||p.status==='Accepted') return;
+    if(P.artistId){ const ar=proposalArtist(p); if(!ar||ar.id!==P.artistId) return; }
+    (p.shows||[]).forEach(s=>{ if(s.venueId&&s.date) (pr[s.venueId+'|'+s.date]=pr[s.venueId+'|'+s.date]||[]).push(p); });
+  });
+  P.maps={ev,pr};
+}
+function planCellInner(vid,ds){
+  const a=venueAvailabilityOn(vid,ds), m=_plan.maps||{ev:{},pr:{}}, k=vid+'|'+ds;
+  return (a?'<span class="av-code">'+AVAIL_CODE[a.type]+'</span>':'')+(m.ev[k]?'<span class="av-mark">★</span>':m.pr[k]?'<span class="av-mark">P</span>':'');
+}
+function planCellTip(vid,ds){
+  const v=get(DB.venues,vid)||{}, a=venueAvailabilityOn(vid,ds), m=_plan.maps||{ev:{},pr:{}}, k=vid+'|'+ds;
+  return (v.name||'')+' · '+fmtDate(ds)+(a?' — '+availLabel(a):' — nothing recorded')
+    +(m.ev[k]?' — Our show: '+m.ev[k].map(e=>e.name).join(', '):'')+(m.pr[k]?' — In proposal: '+m.pr[k].map(p=>p.title).join(', '):'');
+}
+function planCellClass(vid,ds){
+  const a=venueAvailabilityOn(vid,ds), dow=new Date(ds+'T12:00:00').getDay();
+  return 'pl-c'+(a?' av-'+a.type:'')+((dow===0||dow===6)?' pl-we':'')+(_plan.sel.has(vid+'|'+ds)?' pl-sel':'')+(ds===todayStr()?' pl-today':'');
+}
+function planRender(){
+  const P=_plan, bar=document.getElementById('plan-bar'), wrap=document.getElementById('plan-grid-wrap'); if(!bar||!wrap) return;
+  planMaps();
+  const sel='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px';
+  const brushes=AVAIL_STATUSES.map(t=>[t,AVAIL_CODE[t]+' '+AVAIL_NAME[t]]).concat([['erase','⌫ Erase'],['select','⬚ Pick dates for a proposal']]);
+  const help={available:'Click or drag across days to mark them available.',hold1:'Click or drag to mark days as first hold'+(P.artistId?' for '+esc((get(DB.artists,P.artistId)||{}).name||''):'')+'.',
+    hold2:'Click or drag to mark days as second hold'+(P.artistId?' for '+esc((get(DB.artists,P.artistId)||{}).name||''):'')+'.',unavailable:'Click or drag to mark days unavailable.',
+    unknown:'Click or drag to mark days as unknown (asked, no answer yet).',erase:'Click or drag to clear what is recorded for those days.',
+    select:'Click the days you want, across any venues, then add them to a proposal as shows.'}[P.brush]||'';
+  bar.innerHTML='<div class="pl-bar"><div class="pl-row"><label class="pl-lbl">Artist <select id="pl-artist" onchange="planArtist(this.value)" style="'+sel+'"><option value="">— none —</option>'
+    +DB.artists.map(ar=>'<option value="'+ar.id+'" '+(P.artistId===ar.id?'selected':'')+'>'+esc(ar.name)+'</option>').join('')+'</select></label>'
+    +'<div class="pl-nav"><button type="button" class="btn sm" onclick="planNav(-1)" aria-label="Previous month">‹</button><b>'+esc(monthLabel(P.ym))+'</b>'
+    +'<button type="button" class="btn sm" onclick="planNav(1)" aria-label="Next month">›</button><button type="button" class="btn ghost sm" onclick="planNav(0)">Today</button></div></div>'
+    +'<div class="pl-row"><span class="pl-lbl">Paint with</span><div class="pl-brushes">'
+    +brushes.map(b=>'<button type="button" class="pl-brush av-'+b[0]+(P.brush===b[0]?' on':'')+'" aria-pressed="'+(P.brush===b[0])+'" onclick="planBrush(\''+b[0]+'\')">'+b[1]+'</button>').join('')+'</div></div>'
+    +'<div class="pl-help" id="pl-help">'+help+'</div><div class="pl-row" id="pl-sel"></div></div>';
+  planSelBar();
+  if(!P.venueIds.length){
+    wrap.innerHTML='<div class="empty-state" style="text-align:center;padding:40px 10px"><div style="font-size:32px;margin-bottom:8px">▦</div><p style="font-size:14px;margin-bottom:12px">Add the venues you are considering, then paint their availability across the month.</p><button class="btn primary" onclick="planPickVenues()">+ Add venues</button></div>';
+    return;
+  }
+  const p=P.ym.split('-').map(Number), days=new Date(p[0],p[1],0).getDate(), dl=['S','M','T','W','T','F','S'];
+  const head='<tr><th class="pl-v">Venue</th>'+Array.from({length:days},(_,i)=>{ const ds=dayStr(p[0],p[1],i+1), dow=new Date(ds+'T12:00:00').getDay();
+      return '<th class="pl-h'+((dow===0||dow===6)?' pl-we':'')+(ds===todayStr()?' pl-today':'')+'"><span>'+dl[dow]+'</span><b>'+(i+1)+'</b></th>'; }).join('')+'</tr>';
+  const rows=P.venueIds.map(vid=>{ const v=get(DB.venues,vid); if(!v) return '';
+    return '<tr><th class="pl-v"><div class="pl-vn"><a onclick="go(\'venues\',\''+vid+'\')">'+esc(v.name||'')+'</a><small>'+esc((v.city||'')+(v.province?', '+v.province:''))+'</small></div>'
+      +'<button type="button" class="pl-x" aria-label="Remove '+esc(v.name||'venue')+' from the planner" onclick="planRemoveVenue(\''+vid+'\')">×</button></th>'
+      +Array.from({length:days},(_,i)=>{ const ds=dayStr(p[0],p[1],i+1);
+        return '<td class="'+planCellClass(vid,ds)+'" data-v="'+vid+'" data-d="'+ds+'" title="'+esc(planCellTip(vid,ds))+'">'+planCellInner(vid,ds)+'</td>'; }).join('')+'</tr>'; }).join('');
+  wrap.innerHTML='<div class="pl-wrap" id="plan-grid"><table class="pl-tbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div class="av-legend" style="margin-top:10px">'+AVAIL_STATUSES.map(t=>'<span><i class="av-key av-'+t+'">'+AVAIL_CODE[t]+'</i> '+AVAIL_NAME[t]+'</span>').join('')+'<span><i class="av-key">★</i> our show</span><span><i class="av-key">P</i> in an open proposal'+(P.artistId?' for this artist':'')+'</span></div>';
+  planBind();
+}
+function planBind(){
+  const g=document.getElementById('plan-grid'); if(!g) return;
+  let down=false;
+  const cellAt=(x,y)=>{ const el=document.elementFromPoint(x,y); return el&&el.closest?el.closest('td.pl-c'):null; };
+  g.addEventListener('pointerdown',e=>{
+    const td=e.target.closest&&e.target.closest('td.pl-c'); if(!td||e.button>0) return;
+    down=true; _plan.painted=0; _plan.seen=new Set(); _plan.mode=null; planCell(td);
+  });
+  g.addEventListener('pointermove',e=>{ if(!down) return; const td=cellAt(e.clientX,e.clientY); if(td) planCell(td); });
+  const up=()=>{ if(!down) return; down=false; if(_plan.painted){ persist(); } planSelBar(); };
+  window.addEventListener('pointerup',up); g.addEventListener('pointercancel',up);
+}
+function planCell(td){
+  const P=_plan, vid=td.dataset.v, ds=td.dataset.d, key=vid+'|'+ds;
+  if(P.seen.has(key)) return; P.seen.add(key);
+  if(P.brush==='select'){
+    if(P.mode===null) P.mode=P.sel.has(key)?'off':'on';
+    if(P.mode==='on') P.sel.set(key,{vid,date:ds}); else P.sel.delete(key);
+    td.className=planCellClass(vid,ds); return;
+  }
+  const type=P.brush==='erase'?'clear':P.brush;
+  const n=availSet(vid,[ds],type,(type==='hold1'||type==='hold2')&&P.artistId?{artistId:P.artistId}:{});
+  if(n){ P.painted=(P.painted||0)+1; td.className=planCellClass(vid,ds); td.innerHTML=planCellInner(vid,ds); td.title=planCellTip(vid,ds); }
+}
+function planSelBar(){
+  const host=document.getElementById('pl-sel'); if(!host) return; const n=_plan.sel.size;
+  host.innerHTML=n?'<b style="font-size:13px">'+n+' date'+(n===1?'':'s')+' picked</b><button type="button" class="btn sm primary" onclick="planProposalModal()">Add to a proposal…</button><button type="button" class="btn ghost sm" onclick="planClearSel()">Clear picks</button>':'';
+}
+function planClearSel(){ _plan.sel=new Map(); planRender(); }
+function planBrush(k){ _plan.brush=k; planRender(); }
+function planArtist(id){ _plan.artistId=id; planSave(); planRender(); }
+function planNav(d){ _plan.ym=d===0?todayStr().slice(0,7):monthShift(_plan.ym,d); planSave(); planRender(); }
+function planRemoveVenue(vid){ _plan.venueIds=_plan.venueIds.filter(x=>x!==vid); for(const k of [..._plan.sel.keys()]) if(k.startsWith(vid+'|')) _plan.sel.delete(k); planSave(); planRender(); }
+// Venue picker
+let _plp=null;
+function planPickVenues(){
+  _plp={q:'',prov:'',sel:new Set()};
+  const P=_plan||planLoad();
+  const props=(DB.proposals||[]).filter(p=>p.status!=='Declined'&&(p.shows||[]).length);
+  const provs=[...new Set(DB.venues.map(v=>v.province).filter(Boolean))].sort();
+  const inp='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px';
+  openModal('Add venues to the planner',
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="plp-q" placeholder="Search venue or city…" oninput="_plp.q=this.value;plpList()" style="flex:1;min-width:150px;'+inp+'" aria-label="Search venues">'
+    +'<select onchange="_plp.prov=this.value;plpList()" style="'+inp+'" aria-label="Province"><option value="">All provinces/states</option>'+provs.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">'
+    +(props.length?'<select onchange="plpFromProposal(this.value);this.value=\'\'" style="'+inp+'" aria-label="Add venues from a proposal"><option value="">+ All venues in a proposal…</option>'+props.map(p=>'<option value="'+p.id+'">'+esc(p.title)+'</option>').join('')+'</select>':'')
+    +(P.artistId?'<button type="button" class="btn sm" onclick="plpFromOutreach()">+ Venues contacted for '+esc((get(DB.artists,P.artistId)||{}).name||'')+'</button>':'')
+    +'<button type="button" class="btn sm" onclick="plpWithAvail()">+ Venues with availability recorded</button></div>'
+    +'<div id="plp-list" style="max-height:46vh;overflow:auto;border:1px solid var(--bord);border-radius:var(--rad);padding:4px 8px"></div>'
+    +'<div id="plp-n" class="muted" style="font-size:12px;margin-top:6px"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="plp-go" onclick="planAddVenues()">Add venues</button>');
+  plpList();
+}
+function plpList(){
+  const host=document.getElementById('plp-list'); if(!host) return;
+  const q=(_plp.q||'').toLowerCase(), have=new Set(_plan.venueIds);
+  const list=DB.venues.filter(v=>(!_plp.prov||v.province===_plp.prov)&&(!q||((v.name||'')+' '+(v.city||'')+' '+(v.hall||'')).toLowerCase().includes(q)))
+    .sort((a,b)=>(a.city||'').localeCompare(b.city||'')||(a.name||'').localeCompare(b.name||''));
+  host.innerHTML=list.slice(0,300).map(v=>'<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" '+(have.has(v.id)?'checked disabled':(_plp.sel.has(v.id)?'checked':''))+' onchange="plpToggle(\''+v.id+'\',this.checked)"> <b style="font-weight:500">'+esc(v.name||'')+'</b> <span class="muted">'+esc((v.city||'')+(v.province?', '+v.province:''))+(have.has(v.id)?' · already added':'')+'</span></label>').join('')
+    +(list.length>300?'<p class="muted" style="font-size:12px">Showing the first 300. Narrow the search to see more.</p>':'')+(list.length?'':'<p class="muted" style="font-size:13px">No venues match.</p>');
+  plpCount();
+}
+function plpCount(){ const n=_plp.sel.size, el=document.getElementById('plp-n'), b=document.getElementById('plp-go'); if(el) el.textContent=n?n+' venue'+(n===1?'':'s')+' ticked.':'Tick the venues to add.'; if(b){ b.disabled=!n; b.textContent=n?'Add '+n+' venue'+(n===1?'':'s'):'Add venues'; } }
+function plpToggle(id,on){ if(on) _plp.sel.add(id); else _plp.sel.delete(id); plpCount(); }
+function plpFromProposal(pid){ const p=get(DB.proposals,pid); if(!p) return; (p.shows||[]).forEach(s=>{ if(s.venueId&&!_plan.venueIds.includes(s.venueId)) _plp.sel.add(s.venueId); }); plpList(); }
+function plpFromOutreach(){ dbInquiries().filter(q=>q.artistId===_plan.artistId).forEach(q=>{ if(q.venueId&&get(DB.venues,q.venueId)&&!_plan.venueIds.includes(q.venueId)) _plp.sel.add(q.venueId); }); plpList(); }
+function plpWithAvail(){ DB.venues.forEach(v=>{ if((v.availability||[]).length&&!_plan.venueIds.includes(v.id)) _plp.sel.add(v.id); }); plpList(); }
+function planAddVenues(){
+  if(!_plp||!_plp.sel.size) return;
+  _plp.sel.forEach(id=>{ if(!_plan.venueIds.includes(id)) _plan.venueIds.push(id); });
+  _plp=null; planSave(); closeModal(); planRender();
+}
+// Turn picked (venue, date) cells into shows on a proposal
+function planProposalModal(){
+  const P=_plan; if(!P.sel.size) return;
+  const ar=P.artistId?get(DB.artists,P.artistId):null;
+  const props=(DB.proposals||[]).filter(p=>p.status!=='Accepted'&&p.status!=='Declined'&&(!ar||(proposalArtist(p)&&proposalArtist(p).id===ar.id)));
+  const picks=[...P.sel.values()].sort((a,b)=>a.date.localeCompare(b.date)||((get(DB.venues,a.vid)||{}).name||'').localeCompare((get(DB.venues,b.vid)||{}).name||''));
+  const inp='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;width:100%';
+  openModal('Add '+picks.length+' show'+(picks.length===1?'':'s')+' to a proposal',
+    (props.length?'<div class="field"><label>Proposal'+(ar?' for '+esc(ar.name):'')+'</label><select id="plp-prop" style="'+inp+'">'+props.map(p=>'<option value="'+p.id+'">'+esc(p.title)+'</option>').join('')+'</select></div>'
+      :'<p style="font-size:13px;color:var(--amber)">There is no open proposal'+(ar?' for '+esc(ar.name):'')+' yet. Create one on the Proposals page first, or choose a different artist (or none) above.</p>')
+    +'<div class="sec-label" style="margin-top:6px">Dates picked</div><div style="max-height:30vh;overflow:auto;margin-bottom:10px">'
+    +picks.map(x=>{ const v=get(DB.venues,x.vid)||{}, a=venueAvailabilityOn(x.vid,x.date);
+      return '<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--bord);font-size:13px"><b style="min-width:112px;font-weight:600">'+esc(fmtDate(x.date))+'</b><span style="flex:1">'+esc(v.name||'')+'<span class="muted"> · '+esc(v.city||'')+'</span></span>'+(a?availBadge(a.type):'<span class="muted" style="font-size:11px">nothing recorded</span>')+'</div>'; }).join('')+'</div>'
+    +'<div class="field"><label>Mark these dates at the venues as</label><select id="plp-mark" style="'+inp+'"><option value="">Leave as they are</option><option value="hold1">1st hold</option><option value="hold2">2nd hold</option></select></div>'
+    +'<div id="plp-err" style="color:var(--red);font-size:12px;min-height:16px"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button>'+(props.length?'<button class="btn primary" onclick="planAddToProposal()">Add to proposal</button>':''));
+}
+function planAddToProposal(){
+  const p=get(DB.proposals,fv('plp-prop')); if(!p) return;
+  const mark=fv('plp-mark'), P=_plan, pa=proposalArtist(p), artistId=pa?pa.id:(P.artistId||'');
+  p.shows=p.shows||[]; let added=0, skipped=0, i=0;
+  [...P.sel.values()].sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>{
+    if(p.shows.some(o=>o.venueId===x.vid&&o.date===x.date)){ skipped++; return; }
+    const s=pavBuildShow(p,x.vid,x.date,0); if(!s) return;
+    if(p.shows.some(o=>o._sid===s._sid)) s._sid=s._sid+'_'+(i++);
+    s.showStatus='Not contacted'; p.shows.push(s); added++;
+    if(mark) availSet(x.vid,[x.date],mark,{artistId,note:'Proposal: '+(p.title||'')});
+  });
+  P.sel=new Map(); propAutoLinkInquiries(p);
+  logActivity('edited','Proposal',p.title+' (added '+added+' show'+(added===1?'':'s')+' from the planner)');
+  persist(); closeModal(); go('proposals',p.id);
+}
+
+/* ---------- Proposals: choose a date from the venue's availability ---------- */
+function propDateCell(p,s,isAccepted){
+  const v=get(DB.venues,s.venueId), a=s.date?venueAvailabilityOn(s.venueId,s.date):null;
+  const chip=a?' '+availBadge(a.type):((s.date&&v&&(v.availability||[]).length&&canDo('admin'))?' <span class="muted" style="font-size:11px" title="This date isn\'t recorded for this venue">· not recorded</span>':'');
+  const pick=(!isAccepted&&canDo('admin')&&!inArtistView()&&s.venueId)?'<div style="font-size:11px;margin-top:3px"><a onclick="event.stopPropagation();propDatePicker(\''+p.id+'\',\''+s._sid+'\')">📅 '+(s.date?'Change':'Pick')+' date</a></div>':'';
+  return '<div>'+esc(s.date||'TBD')+chip+'</div>'+pick;
+}
+let _pdp=null;
+function propDatePicker(pid,sid,opt){
+  const p=get(DB.proposals,pid), s=p&&(p.shows||[]).find(x=>x._sid===sid); if(!s) return;
+  const v=get(DB.venues,s.venueId)||{};
+  _pdp={pid,sid,back:!!(opt&&opt.back),unknown:false,pick:s.date||''};
+  openModal('Choose a date — '+(v.name||'Venue'),'<div id="pdp-body"></div>',
+    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="propDateSave()">Use this date</button>');
+  pdpRender();
+}
+function pdpRender(){
+  const host=document.getElementById('pdp-body'); if(!host||!_pdp) return;
+  const p=get(DB.proposals,_pdp.pid), s=p&&(p.shows||[]).find(x=>x._sid===_pdp.sid); if(!s) return;
+  const v=get(DB.venues,s.venueId)||{}, ar=proposalArtist(p);
+  const list=availOpenDates(s.venueId,todayStr(),_pdp.unknown);
+  const taken={}; (p.shows||[]).forEach(o=>{ if(o._sid!==s._sid&&o.date) taken[o.date]=get(DB.venues,o.venueId); });
+  const inp='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;width:100%';
+  let lastM='', rows='';
+  list.forEach(a=>{
+    const m=a.date.slice(0,7); if(m!==lastM){ rows+='<div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 2px">'+esc(monthLabel(m))+'</div>'; lastM=m; }
+    rows+='<label class="bk-check" style="justify-content:flex-start"><input type="radio" name="pdp" '+(_pdp.pick===a.date?'checked':'')+' onchange="pdpPick(\''+a.date+'\')"> <b style="font-weight:600;min-width:118px">'+esc(new Date(a.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}))+'</b> '+availBadge(a.type)
+      +'<span class="muted" style="font-size:12px"> '+esc((a.artistId&&get(DB.artists,a.artistId)?get(DB.artists,a.artistId).name+(a.note?' · ':''):'')+(a.note||''))+'</span>'
+      +(taken[a.date]?' <span class="badge gray" title="Another show in this proposal">also '+esc(taken[a.date]?taken[a.date].name:'another show')+'</span>':'')+'</label>';
+  });
+  host.innerHTML='<p class="muted" style="font-size:12px;margin:0 0 6px">Dates recorded as available or on hold at '+esc(v.name||'this venue')+'. Add more on the venue page or in the Planner.</p>'
+    +(list.length?'<div style="max-height:34vh;overflow:auto;border:1px solid var(--bord);border-radius:var(--rad);padding:2px 10px 8px">'+rows+'</div>'
+      :'<div style="padding:12px;background:var(--surf2);border-radius:var(--rad);font-size:13px">No open dates recorded for this venue yet. <a onclick="closeModal();go(\'venues\',\''+(v.id||'')+'\')">Record availability →</a></div>')
+    +'<label style="font-size:12px;display:block;margin:8px 0;cursor:pointer"><input type="checkbox" '+(_pdp.unknown?'checked':'')+' onchange="_pdp.unknown=this.checked;pdpRender()"> Also show dates marked unknown</label>'
+    +'<div class="row2"><div class="field"><label>Or type a date</label><input type="date" id="pdp-date" value="'+esc(_pdp.pick||'')+'" onchange="pdpPick(this.value,true)"></div>'
+    +'<div class="field"><label>Mark this date at the venue as</label><select id="pdp-mark" style="'+inp+'"><option value="">Leave as it is</option><option value="hold1">1st hold'+(ar?' for '+esc(ar.name):'')+'</option><option value="hold2">2nd hold'+(ar?' for '+esc(ar.name):'')+'</option></select></div></div>'
+    +'<div id="pdp-warn" style="font-size:12px;min-height:18px"></div><div id="pdp-err" style="color:var(--red);font-size:12px;min-height:16px"></div>';
+  pdpWarn();
+}
+function pdpPick(date,typed){
+  _pdp.pick=date; const i=document.getElementById('pdp-date'); if(i&&!typed) i.value=date;
+  if(typed){ document.querySelectorAll('input[name=pdp]').forEach(r=>{ r.checked=false; }); }
+  pdpWarn();
+}
+function pdpWarn(){
+  const w=document.getElementById('pdp-warn'); if(!w||!_pdp) return;
+  const p=get(DB.proposals,_pdp.pid), s=p&&(p.shows||[]).find(x=>x._sid===_pdp.sid); if(!s||!_pdp.pick){ w.innerHTML=''; return; }
+  const a=venueAvailabilityOn(s.venueId,_pdp.pick);
+  w.innerHTML=a?'<span style="color:'+(AVAIL_USABLE.includes(a.type)?'var(--green)':'var(--amber)')+'">'+(AVAIL_USABLE.includes(a.type)?'✓ ':'⚠ ')+esc(AVAIL_TYPE_LABEL[a.type]||a.type)+' on this date'+(a.note?': '+esc(a.note):'')+'</span>'
+    :'<span class="muted">Nothing recorded for this date at this venue.</span>';
+}
+function propDateSave(){
+  const p=get(DB.proposals,_pdp&&_pdp.pid), s=p&&(p.shows||[]).find(x=>x._sid===_pdp.sid); if(!s) return;
+  const date=(document.getElementById('pdp-date')||{}).value||_pdp.pick, err=document.getElementById('pdp-err');
+  if(!date){ if(err) err.textContent='Pick a date from the list, or type one.'; return; }
+  const mark=fv('pdp-mark'), ar=proposalArtist(p), back=_pdp.back;
+  s.date=date;
+  if(mark) availSet(s.venueId,[date],mark,{artistId:ar?ar.id:'',note:'Proposal: '+(p.title||'')});
+  logActivity('edited','Proposal',p.title+' (date for '+((get(DB.venues,s.venueId)||{}).name||'show')+': '+date+(mark?', '+AVAIL_NAME[mark]:'')+')');
+  _pdp=null; persist(); closeModal();
+  if(back) acceptProposalModal(p.id); else render();
+}
+function accAvailTag(p,s){
+  const a=s.date?venueAvailabilityOn(s.venueId,s.date):null;
+  return (s.date?(a?' '+availBadge(a.type):' <span class="muted" style="font-size:11px">not recorded</span>'):' <span class="badge red">no date</span>')
+    +(canDo('admin')?' <a style="font-size:11px" onclick="event.preventDefault();propDatePicker(\''+p.id+'\',\''+s._sid+'\',{back:true})">📅 '+(s.date?'change':'pick')+'</a>':'');
+}
+function accDateOk(s){ const a=s.date?venueAvailabilityOn(s.venueId,s.date):null; return !!(s.date&&a&&AVAIL_USABLE.includes(a.type)); }
+// Quick date chips in the add-venues picker
+function pavChips(id){
+  const list=availOpenDates(id,todayStr()).slice(0,6); if(!list.length) return '';
+  return '<div class="pav-chips" aria-label="Open dates">'+list.map(a=>'<button type="button" class="av-chip av-'+a.type+'" onclick="pavSetDate(\''+id+'\',\''+a.date+'\');pavRenderSel()" title="'+esc(availLabel(a))+'">'+esc(new Date(a.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}))+' '+AVAIL_CODE[a.type]+'</button>').join('')+'</div>';
+}
+
+/* ---------- Outreach: full edit (artist, venue, tour, proposal & show, dates, availability) ---------- */
+let _iqe=null;
+function iqeVals(){
+  const g=id=>{ const e=document.getElementById(id); return e?e.value:''; }, c=document.getElementById('iqe-rec');
+  return {venue:g('iqe-venue'),artist:g('iqe-artist'),tour:g('iqe-tour'),prop:g('iqe-prop'),show:g('iqe-show'),start:g('iqe-start'),end:g('iqe-end'),att:g('iqe-att'),
+    status:g('iqe-status'),method:g('iqe-method'),url:g('iqe-url'),note:g('iqe-note'),rec:!!(c&&c.checked),recType:g('iqe-rectype')};
+}
+function inquiryEditModal(id){
+  const q=dbInquiries().find(x=>x.id===id); if(!q) return;
+  _iqe={id};
+  openModal('Edit outreach','<div id="iqe-body"></div>',
+    '<button class="btn sm danger" style="margin-right:auto" onclick="deleteInquiry(\''+id+'\')">Delete</button><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveInquiryEdit()">Save</button>');
+  iqeBody({venue:q.venueId,artist:q.artistId||'',tour:q.tourId||'',prop:q.proposalId||'',show:q.showSid||'',start:q.start||'',end:q.end||'',att:q.attendance||'',
+    status:q.status,method:inqMethod(q),url:q.url||'',note:'',rec:false,recType:({'Available':'available','Hold offered':'hold1','Not available':'unavailable'})[q.status]||'unknown'});
+}
+function iqeRedraw(changed){
+  const v=iqeVals();
+  if(changed==='artist'){ v.tour=''; v.prop=''; v.show=''; }
+  if(changed==='venue'&&v.prop){ const p=get(DB.proposals,v.prop), s=p&&(p.shows||[]).find(x=>x.venueId===v.venue); v.show=s?s._sid:''; }
+  if(changed==='prop'){ const p=get(DB.proposals,v.prop), s=p&&(p.shows||[]).find(x=>x.venueId===v.venue); v.show=s?s._sid:(p?'__new':''); }
+  if(changed==='status'){ v.recType=({'Available':'available','Hold offered':'hold1','Not available':'unavailable'})[v.status]||v.recType; }
+  iqeBody(v);
+}
+function iqeBody(v){
+  const host=document.getElementById('iqe-body'); if(!host) return;
+  const q=dbInquiries().find(x=>x.id===_iqe.id); if(!q) return;
+  const ar=get(DB.artists,v.artist), arName=ar?ar.name:(q.artistName||'');
+  const tours=DB.tours.filter(t=>t.id===v.tour||!arName||!t.artist||t.artist.toLowerCase()===arName.toLowerCase());
+  const props=(DB.proposals||[]).filter(p=>p.id===v.prop||(p.status!=='Declined'&&(!ar||(proposalArtist(p)&&proposalArtist(p).id===ar.id))));
+  const pr=get(DB.proposals,v.prop);
+  const shows=pr?(pr.shows||[]).slice().sort((a,b)=>(a.venueId===v.venue?0:1)-(b.venueId===v.venue?0:1)||(a.date||'9').localeCompare(b.date||'9')):[];
+  const inp='padding:8px 10px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px;width:100%';
+  const venueName=(get(DB.venues,v.venue)||{}).name||'this venue';
+  host.innerHTML='<div class="field"><label>Venue</label><select id="iqe-venue" onchange="iqeRedraw(\'venue\')" style="'+inp+'">'+DB.venues.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(x=>'<option value="'+x.id+'" '+(x.id===v.venue?'selected':'')+'>'+esc(x.name||'')+(x.city?' ('+esc(x.city)+')':'')+'</option>').join('')+'</select></div>'
+    +'<div class="row2"><div class="field"><label>Artist</label><select id="iqe-artist" onchange="iqeRedraw(\'artist\')" style="'+inp+'"><option value="">—</option>'+DB.artists.map(a=>'<option value="'+a.id+'" '+(a.id===v.artist?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Tour</label><select id="iqe-tour" style="'+inp+'"><option value="">— none —</option>'+tours.map(t=>'<option value="'+t.id+'" '+(t.id===v.tour?'selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></div></div>'
+    +'<div class="row2"><div class="field"><label>Proposal</label><select id="iqe-prop" onchange="iqeRedraw(\'prop\')" style="'+inp+'"><option value="">— none —</option>'+props.map(p=>'<option value="'+p.id+'" '+(p.id===v.prop?'selected':'')+'>'+esc(p.title)+(p.status==='Accepted'?' (accepted)':'')+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Show in that proposal</label><select id="iqe-show" '+(pr?'':'disabled')+' style="'+inp+'"><option value="">— none —</option>'
+    +shows.map(s=>'<option value="'+s._sid+'" '+(s._sid===v.show?'selected':'')+'>'+esc(((get(DB.venues,s.venueId)||{}).name||'Show')+(s.date?' · '+s.date:''))+'</option>').join('')
+    +(pr?'<option value="__new" '+(v.show==='__new'?'selected':'')+'>➕ Add '+esc(venueName)+' to this proposal as a new show</option>':'')+'</select></div></div>'
+    +'<div class="row2"><div class="field"><label>Dates asked about — from</label><input type="date" id="iqe-start" value="'+esc(v.start)+'"></div><div class="field"><label>to</label><input type="date" id="iqe-end" value="'+esc(v.end)+'"></div></div>'
+    +'<div class="row2"><div class="field"><label>Status</label><select id="iqe-status" onchange="iqeRedraw(\'status\')" style="'+inp+'">'+INQ_STATUSES.map(s=>'<option '+(s===v.status?'selected':'')+'>'+s+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Expected attendance</label><input id="iqe-att" value="'+esc(v.att)+'"></div></div>'
+    +'<div class="row2"><div class="field"><label>How it was sent</label><select id="iqe-method" style="'+inp+'">'+Object.keys(INQ_METHODS).map(k=>'<option value="'+k+'" '+(k===v.method?'selected':'')+'>'+esc(INQ_METHODS[k])+'</option>').join('')+'</select></div>'
+    +'<div class="field"><label>Form link or contact</label><input id="iqe-url" value="'+esc(v.url)+'" placeholder="https://venue.com/rentals"></div></div>'
+    +'<div class="field"><label>Add a note to the history</label><textarea id="iqe-note" rows="2" placeholder="e.g. Gerry has Mar 12–14 open, $1,800 rental">'+esc(v.note)+'</textarea></div>'
+    +'<div style="background:var(--surf2);border-radius:var(--rad);padding:10px 12px"><label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="iqe-rec" '+(v.rec?'checked':'')+'> Also record these dates in '+esc(venueName)+'\'s availability as</label>'
+    +'<select id="iqe-rectype" style="margin-top:6px;'+inp+'">'+AVAIL_STATUSES.map(t=>'<option value="'+t+'" '+(t===v.recType?'selected':'')+'>'+AVAIL_NAME[t]+'</option>').join('')+'</select>'
+    +'<div class="muted" style="font-size:11px;margin-top:4px">Uses the dates above (up to 62 days).</div></div>'
+    +'<div id="iqe-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:6px"></div>';
+}
+function saveInquiryEdit(){
+  const q=dbInquiries().find(x=>x.id===(_iqe&&_iqe.id)); if(!q) return;
+  const v=iqeVals(), err=document.getElementById('iqe-err');
+  if(v.start&&v.end&&v.end<v.start){ if(err) err.textContent='The end date is before the start date.'; return; }
+  const now=new Date().toISOString(), by=(AUTH_USER&&AUTH_USER.displayName)||'', h=(note)=>{ (q.history=q.history||[]).push({ts:now,status:q.status,note,by}); };
+  const ar=get(DB.artists,v.artist);
+  const oldPid=q.proposalId||'', oldTour=q.tourId||'';
+  q.venueId=v.venue||q.venueId; q.artistId=v.artist; q.artistName=ar?ar.name:(v.artist?'':q.artistName);
+  q.tourId=v.tour; q.start=v.start; q.end=v.end; q.range=inquiryRange(v.start,v.end); q.attendance=v.att.trim();
+  q.method=v.method; q.url=v.url.trim();
+  // proposal + show
+  if(!v.prop){ q.proposalId=''; q.showSid=''; }
+  else {
+    const p=get(DB.proposals,v.prop); let sid=v.show;
+    if(p&&sid==='__new'){
+      p.shows=p.shows||[]; const s=pavBuildShow(p,q.venueId,q.start||'',0);
+      if(s){ if(p.shows.some(o=>o._sid===s._sid)) s._sid=s._sid+'_'+Date.now().toString(36); s.showStatus='Not contacted'; p.shows.push(s); sid=s._sid; }
+      else sid='';
+    }
+    q.proposalId=v.prop; q.showSid=sid||'';
+  }
+  if(q.proposalId!==oldPid){ const np=get(DB.proposals,q.proposalId), op=get(DB.proposals,oldPid);
+    h(np?'Linked to proposal '+(np.title||''):'Unlinked from proposal '+((op&&op.title)||'')); }
+  if(q.tourId!==oldTour){ const nt=get(DB.tours,q.tourId); h(nt?'Linked to tour '+nt.name:'Unlinked from tour'); }
+  q.updatedAt=now;
+  let recorded=0;
+  if(v.rec&&q.start) recorded=availSet(q.venueId,decExpandRange(q.start,q.end||q.start,62),v.recType,{note:'From outreach',artistId:q.artistId||''});
+  if(recorded) h('Recorded '+recorded+' day'+(recorded===1?'':'s')+' as '+AVAIL_NAME[v.recType]+' in the venue\'s availability');
+  const st=v.status, note=v.note.trim();
+  if(st!==q.status||note) setInquiryStatus(q.id,st,note); else { syncProposalShowFromInquiry(q); persist(); }
+  logActivity('edited an inquiry to','Venue',((get(DB.venues,q.venueId)||{}).name||'')+' ('+(q.artistName||'')+')');
+  _iqe=null; closeModal(); render();
 }
 
 /* ---------- VIEW: OUTREACH ---------- */
@@ -12489,7 +12965,7 @@ if(AUTH_USER) {
     sanitizeSeqCounters();
     if(!Array.isArray(DB.tasks)) DB.tasks=[];
     if(!Array.isArray(DB.inquiries)) DB.inquiries=[];
-    if(migrateVenueInquiries()+migrateEventStatuses()) persist();
+    if(migrateVenueInquiries()+migrateEventStatuses()+migrateAvailability()) persist();
     decStartPolling();
     syncUsersFromDB();
     // Migrate: seed default pitch deck slides for installs that predate this feature
