@@ -433,7 +433,16 @@ a{color:var(--blue);text-decoration:none}
 .pl-we:not(.av-available):not(.av-hold1):not(.av-hold2):not(.av-unavailable):not(.av-unknown){background:var(--surf2)}
 .pl-sel{outline:2px solid var(--acc);outline-offset:-2px}.pl-today{box-shadow:inset 0 0 0 1px var(--acc)}
 .pl-c .av-code,.pl-c .av-mark{display:block;line-height:1.1}
-@media(max-width:700px){.pl-v{min-width:110px}}
+
+.pl-box{border:1px solid var(--bord);border-radius:var(--rad);padding:10px 12px;background:var(--surf)}
+.pl-step{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--txt3);margin-bottom:6px}
+.pl-f{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--txt3)}.pl-quick{display:flex;gap:4px;flex-wrap:wrap}
+.pl-chk{font-size:13px;display:flex;gap:6px;align-items:center;cursor:pointer;align-self:flex-end;padding-bottom:7px}
+.pl-count{font-size:13px;margin:4px 0 8px}.pl-mh{background:var(--surf3)!important;font-size:11px;text-align:left!important;padding:2px 6px}
+.pl-star{border:0;background:none;color:var(--txt3);font-size:17px;cursor:pointer;float:left;margin:0 6px 0 -2px;padding:0}.pl-star.on{color:var(--acc)}
+.pl-sum{font-size:11px}.pl-ok{color:var(--green);font-weight:600}.pl-no{color:var(--red)}
+.pl-vn{overflow:hidden}.pl-v{min-width:230px!important;max-width:260px!important}
+@media(max-width:700px){.pl-v{min-width:160px!important;max-width:170px!important}}
 </style>
 </head>
 <body>
@@ -11060,25 +11069,30 @@ function availDeleteRun(idsCsv){
   persist(); availRender();
 }
 
-/* ---------- PLANNER: venues down, days across ---------- */
-let _plan=null;
+/* ---------- PLANNER: find venues by dates, size and place; mark availability; pick dates for proposals ---------- */
+let _plan=null, _planUpBound=false;
+const PLAN_SORTS=[['cap-desc','Size: largest first'],['cap-asc','Size: smallest first'],['loc','Location: province, then city'],['city','City A–Z'],['name','Venue name A–Z'],['open-desc','Most open dates'],['first-open','Earliest open date']];
+const PLAN_FILTS=[['all','All venues'],['open','Has open dates (available or on hold)'],['avail','Has dates marked available'],['recorded','Anything recorded in this range'],['none','Nothing recorded yet (need to ask)']];
+function planAdd(ds,n){ const d=new Date(ds+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
 function planLoad(){
   if(_plan) return _plan;
-  let s={}; try{ s=JSON.parse(localStorage.getItem('td_planner')||'{}')||{}; }catch(e){}
-  _plan={artistId:(s.artistId&&get(DB.artists,s.artistId))?s.artistId:'',ym:(s.ym&&/^\d{4}-\d\d$/.test(s.ym))?s.ym:todayStr().slice(0,7),
-    venueIds:Array.isArray(s.venueIds)?s.venueIds.filter(id=>get(DB.venues,id)):[],brush:'available',sel:new Map(),maps:null};
+  let s={}; try{ s=JSON.parse(localStorage.getItem('td_planner2')||'{}')||{}; }catch(e){}
+  const t=todayStr(), ok=x=>/^\d{4}-\d\d-\d\d$/.test(x||'');
+  _plan={artistId:(s.artistId&&get(DB.artists,s.artistId))?s.artistId:'',from:ok(s.from)&&s.from>=planAdd(t,-30)?s.from:t,to:'',
+    q:s.q||'',prov:s.prov||'',capMin:s.capMin||'',capMax:s.capMax||'',filt:s.filt||'all',minDays:s.minDays||1,sort:s.sort||'cap-desc',
+    short:Array.isArray(s.short)?s.short.filter(id=>get(DB.venues,id)):[],onlyShort:!!s.onlyShort,brush:'select',sel:new Map(),maps:null,touched:new Set()};
+  _plan.to=ok(s.to)&&s.to>=_plan.from?s.to:planAdd(_plan.from,59);
   return _plan;
 }
-function planSave(){ try{ localStorage.setItem('td_planner',JSON.stringify({artistId:_plan.artistId,ym:_plan.ym,venueIds:_plan.venueIds})); }catch(e){} }
+function planSave(){ const P=_plan; try{ localStorage.setItem('td_planner2',JSON.stringify({artistId:P.artistId,from:P.from,to:P.to,q:P.q,prov:P.prov,capMin:P.capMin,capMax:P.capMax,filt:P.filt,minDays:P.minDays,sort:P.sort,short:P.short,onlyShort:P.onlyShort})); }catch(e){} }
 VIEWS.planner={
   render(c,a){
     if(!canDo('admin')){ c.innerHTML=emptyState('▦','The planner is only available to administrators.'); return; }
-    planLoad();
-    a.innerHTML='<button class="btn sm primary" onclick="planPickVenues()">+ Add venues</button>';
-    c.innerHTML='<div id="plan-bar"></div><div id="plan-grid-wrap"></div>';
-    planRender();
+    planLoad(); a.innerHTML='<button class="btn ghost sm" onclick="planReset()">Reset filters</button>';
+    c.innerHTML='<div id="plan-bar"></div><div id="plan-grid-wrap"></div>'; planRenderBar(); planRenderGrid();
   }
 };
+function planReset(){ const P=_plan; P.q='';P.prov='';P.capMin='';P.capMax='';P.filt='all';P.minDays=1;P.onlyShort=false;P.sort='cap-desc'; planSave(); planRenderBar(); planRenderGrid(); }
 function planMaps(){
   const P=_plan, ev={}, pr={};
   (DB.events||[]).forEach(e=>{ if(e.venueId&&e.date) (ev[e.venueId+'|'+e.date]=ev[e.venueId+'|'+e.date]||[]).push(e); });
@@ -11102,50 +11116,131 @@ function planCellClass(vid,ds){
   const a=venueAvailabilityOn(vid,ds), dow=new Date(ds+'T12:00:00').getDay();
   return 'pl-c'+(a?' av-'+a.type:'')+((dow===0||dow===6)?' pl-we':'')+(_plan.sel.has(vid+'|'+ds)?' pl-sel':'')+(ds===todayStr()?' pl-today':'');
 }
-function planRender(){
-  const P=_plan, bar=document.getElementById('plan-bar'), wrap=document.getElementById('plan-grid-wrap'); if(!bar||!wrap) return;
-  planMaps();
-  const sel='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px';
-  const brushes=AVAIL_STATUSES.map(t=>[t,AVAIL_CODE[t]+' '+AVAIL_NAME[t]]).concat([['erase','⌫ Erase'],['select','⬚ Pick dates for a proposal']]);
-  const help={available:'Click or drag across days to mark them available.',hold1:'Click or drag to mark days as first hold'+(P.artistId?' for '+esc((get(DB.artists,P.artistId)||{}).name||''):'')+'.',
-    hold2:'Click or drag to mark days as second hold'+(P.artistId?' for '+esc((get(DB.artists,P.artistId)||{}).name||''):'')+'.',unavailable:'Click or drag to mark days unavailable.',
-    unknown:'Click or drag to mark days as unknown (asked, no answer yet).',erase:'Click or drag to clear what is recorded for those days.',
-    select:'Click the days you want, across any venues, then add them to a proposal as shows.'}[P.brush]||'';
-  bar.innerHTML='<div class="pl-bar"><div class="pl-row"><label class="pl-lbl">Artist <select id="pl-artist" onchange="planArtist(this.value)" style="'+sel+'"><option value="">— none —</option>'
-    +DB.artists.map(ar=>'<option value="'+ar.id+'" '+(P.artistId===ar.id?'selected':'')+'>'+esc(ar.name)+'</option>').join('')+'</select></label>'
-    +'<div class="pl-nav"><button type="button" class="btn sm" onclick="planNav(-1)" aria-label="Previous month">‹</button><b>'+esc(monthLabel(P.ym))+'</b>'
-    +'<button type="button" class="btn sm" onclick="planNav(1)" aria-label="Next month">›</button><button type="button" class="btn ghost sm" onclick="planNav(0)">Today</button></div></div>'
-    +'<div class="pl-row"><span class="pl-lbl">Paint with</span><div class="pl-brushes">'
-    +brushes.map(b=>'<button type="button" class="pl-brush av-'+b[0]+(P.brush===b[0]?' on':'')+'" aria-pressed="'+(P.brush===b[0])+'" onclick="planBrush(\''+b[0]+'\')">'+b[1]+'</button>').join('')+'</div></div>'
-    +'<div class="pl-help" id="pl-help">'+help+'</div><div class="pl-row" id="pl-sel"></div></div>';
+function planStats(v,dates){
+  const cnt={available:0,hold1:0,hold2:0,unavailable:0,unknown:0}; let first='';
+  const set=new Set(dates);
+  (v.availability||[]).forEach(a=>{ if(!set.has(a.date)) return; const t=cnt[a.type]!==undefined?a.type:(a.type==='held'?'hold1':'unknown'); cnt[t]++; if(AVAIL_USABLE.includes(t)&&(!first||a.date<first)) first=a.date; });
+  return {cnt,open:cnt.available+cnt.hold1+cnt.hold2,first,rec:cnt.available+cnt.hold1+cnt.hold2+cnt.unavailable+cnt.unknown};
+}
+function planRows(dates){
+  const P=_plan, q=P.q.trim().toLowerCase(), cmin=+P.capMin||0, cmax=+P.capMax||0, md=Math.max(1,+P.minDays||1);
+  let rows=DB.venues.filter(v=>{
+    if(P.onlyShort&&!P.short.includes(v.id)) return false;
+    if(P.prov&&v.province!==P.prov) return false;
+    if(q&&!((v.name||'')+' '+(v.city||'')+' '+(v.hall||'')+' '+(v.province||'')).toLowerCase().includes(q)) return false;
+    const cap=+v.capacity||0; if(cmin&&cap<cmin) return false; if(cmax&&(!cap||cap>cmax)) return false;
+    return true;
+  }).map(v=>({v,st:planStats(v,dates)})).filter(r=>{
+    if(P.filt==='open') return r.st.open>=md; if(P.filt==='avail') return r.st.cnt.available>=md;
+    if(P.filt==='recorded') return r.st.rec>0; if(P.filt==='none') return r.st.rec===0; return true;
+  });
+  const cap=r=>+r.v.capacity||0, nm=r=>(r.v.name||'').toLowerCase(), city=r=>(r.v.city||'').toLowerCase(), pv=r=>(r.v.province||'~').toLowerCase();
+  const by={
+    'cap-desc':(a,b)=>(cap(b)-cap(a))||nm(a).localeCompare(nm(b)),
+    'cap-asc':(a,b)=>((cap(a)||1e9)-(cap(b)||1e9))||nm(a).localeCompare(nm(b)),
+    'loc':(a,b)=>pv(a).localeCompare(pv(b))||city(a).localeCompare(city(b))||nm(a).localeCompare(nm(b)),
+    'city':(a,b)=>city(a).localeCompare(city(b))||nm(a).localeCompare(nm(b)),
+    'name':(a,b)=>nm(a).localeCompare(nm(b)),
+    'open-desc':(a,b)=>(b.st.open-a.st.open)||nm(a).localeCompare(nm(b)),
+    'first-open':(a,b)=>((a.st.first||'9')).localeCompare(b.st.first||'9')||nm(a).localeCompare(nm(b))};
+  return rows.sort(by[P.sort]||by['cap-desc']);
+}
+function planRenderBar(){
+  const P=_plan, bar=document.getElementById('plan-bar'); if(!bar) return;
+  const f='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px';
+  const provs=[...new Set(DB.venues.map(v=>v.province).filter(Boolean))].sort();
+  const tools=[['select','☝ Pick dates for a proposal'],...AVAIL_STATUSES.map(t=>[t,'Mark '+AVAIL_CODE[t]+' '+AVAIL_NAME[t]]),['erase','⌫ Clear a day']];
+  const arN=(get(DB.artists,P.artistId)||{}).name||'';
+  const help={select:'Click days (across any venues) to pick them, then add them to a proposal as shows. Nothing is changed on the venues.',
+    available:'Click or drag across days to mark them <b>available</b> at that venue.',hold1:'Click or drag to mark days as <b>1st hold</b>'+(arN?' for '+esc(arN):'')+'.',
+    hold2:'Click or drag to mark days as <b>2nd hold</b>'+(arN?' for '+esc(arN):'')+'.',unavailable:'Click or drag to mark days <b>unavailable</b>.',
+    unknown:'Click or drag to mark days <b>unknown</b> (asked, no answer yet).',erase:'Click or drag to clear what is recorded on those days.'}[P.brush]||'';
+  const lbl=(t,inner)=>'<label class="pl-f"><span>'+t+'</span>'+inner+'</label>';
+  bar.innerHTML='<div class="pl-bar">'
+    +'<div class="pl-box"><div class="pl-step">1 · When and who</div><div class="pl-row">'
+    +lbl('Artist (for holds and “P” markers)','<select onchange="planSet(\'artistId\',this.value)" style="'+f+'"><option value="">— none —</option>'+DB.artists.map(a=>'<option value="'+a.id+'" '+(P.artistId===a.id?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select>')
+    +lbl('From','<input type="date" value="'+P.from+'" onchange="planRange(this.value,null)" style="'+f+'">')+lbl('To','<input type="date" value="'+P.to+'" onchange="planRange(null,this.value)" style="'+f+'">')
+    +'<div class="pl-f"><span>Quick range</span><div class="pl-quick"><button type="button" class="btn sm" onclick="planPreset(\'m0\')">This month</button><button type="button" class="btn sm" onclick="planPreset(\'m1\')">Next month</button><button type="button" class="btn sm" onclick="planPreset(\'d30\')">30 days</button><button type="button" class="btn sm" onclick="planPreset(\'d90\')">90 days</button><button type="button" class="btn sm" aria-label="Earlier" onclick="planShift(-1)">‹</button><button type="button" class="btn sm" aria-label="Later" onclick="planShift(1)">›</button></div></div></div></div>'
+    +'<div class="pl-box"><div class="pl-step">2 · Find venues</div><div class="pl-row">'
+    +lbl('Search','<input value="'+esc(P.q)+'" placeholder="Name, city…" oninput="planSet(\'q\',this.value,true)" style="'+f+';width:150px">')
+    +lbl('Province / state','<select onchange="planSet(\'prov\',this.value)" style="'+f+'"><option value="">All</option>'+provs.map(x=>'<option '+(P.prov===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select>')
+    +lbl('Seats from','<input type="number" min="0" step="50" value="'+esc(P.capMin)+'" placeholder="min" oninput="planSet(\'capMin\',this.value,true)" style="'+f+';width:82px">')
+    +lbl('to','<input type="number" min="0" step="50" value="'+esc(P.capMax)+'" placeholder="max" oninput="planSet(\'capMax\',this.value,true)" style="'+f+';width:82px">')
+    +lbl('Availability in this range','<select onchange="planSet(\'filt\',this.value)" style="'+f+'">'+PLAN_FILTS.map(x=>'<option value="'+x[0]+'" '+(P.filt===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select>')
+    +((P.filt==='open'||P.filt==='avail')?lbl('At least … days','<input type="number" min="1" max="120" value="'+(+P.minDays||1)+'" oninput="planSet(\'minDays\',this.value,true)" style="'+f+';width:64px">'):'')
+    +lbl('Sort by','<select onchange="planSet(\'sort\',this.value)" style="'+f+'">'+PLAN_SORTS.map(x=>'<option value="'+x[0]+'" '+(P.sort===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select>')
+    +'<label class="pl-chk"><input type="checkbox" '+(P.onlyShort?'checked':'')+' onchange="planSet(\'onlyShort\',this.checked)"> ★ Shortlist only</label></div></div>'
+    +'<div class="pl-box"><div class="pl-step">3 · When I click a day</div><div class="pl-brushes" role="radiogroup">'
+    +tools.map(b=>'<button type="button" role="radio" aria-checked="'+(P.brush===b[0])+'" class="pl-brush av-'+b[0]+(P.brush===b[0]?' on':'')+'" onclick="planBrush(\''+b[0]+'\')">'+b[1]+'</button>').join('')
+    +'</div><div class="pl-help">'+help+'</div></div>'
+    +'<div class="pl-row" id="pl-sel"></div></div>';
   planSelBar();
-  if(!P.venueIds.length){
-    wrap.innerHTML='<div class="empty-state" style="text-align:center;padding:40px 10px"><div style="font-size:32px;margin-bottom:8px">▦</div><p style="font-size:14px;margin-bottom:12px">Add the venues you are considering, then paint their availability across the month.</p><button class="btn primary" onclick="planPickVenues()">+ Add venues</button></div>';
-    return;
-  }
-  const p=P.ym.split('-').map(Number), days=new Date(p[0],p[1],0).getDate(), dl=['S','M','T','W','T','F','S'];
-  const head='<tr><th class="pl-v">Venue</th>'+Array.from({length:days},(_,i)=>{ const ds=dayStr(p[0],p[1],i+1), dow=new Date(ds+'T12:00:00').getDay();
-      return '<th class="pl-h'+((dow===0||dow===6)?' pl-we':'')+(ds===todayStr()?' pl-today':'')+'"><span>'+dl[dow]+'</span><b>'+(i+1)+'</b></th>'; }).join('')+'</tr>';
-  const rows=P.venueIds.map(vid=>{ const v=get(DB.venues,vid); if(!v) return '';
-    return '<tr><th class="pl-v"><div class="pl-vn"><a onclick="go(\'venues\',\''+vid+'\')">'+esc(v.name||'')+'</a><small>'+esc((v.city||'')+(v.province?', '+v.province:''))+'</small></div>'
-      +'<button type="button" class="pl-x" aria-label="Remove '+esc(v.name||'venue')+' from the planner" onclick="planRemoveVenue(\''+vid+'\')">×</button></th>'
-      +Array.from({length:days},(_,i)=>{ const ds=dayStr(p[0],p[1],i+1);
-        return '<td class="'+planCellClass(vid,ds)+'" data-v="'+vid+'" data-d="'+ds+'" title="'+esc(planCellTip(vid,ds))+'">'+planCellInner(vid,ds)+'</td>'; }).join('')+'</tr>'; }).join('');
-  wrap.innerHTML='<div class="pl-wrap" id="plan-grid"><table class="pl-tbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>'
+}
+function planSet(k,val,keepBar){ _plan[k]=val; planSave(); if(!keepBar||k==='filt'||k==='onlyShort') planRenderBar(); planRenderGrid(); }
+function planRange(a,b){
+  const P=_plan; if(a) P.from=a; if(b) P.to=b; if(!P.from||!P.to) return;
+  if(P.to<P.from){ if(a) P.to=planAdd(P.from,29); else P.from=P.to; }
+  planSave(); planRenderBar(); planRenderGrid();
+}
+function planPreset(k){
+  const t=new Date(); let y=t.getFullYear(), m=t.getMonth()+1, from, to;
+  if(k==='m0'||k==='m1'){ if(k==='m1'){ m++; if(m>12){m=1;y++;} } from=dayStr(y,m,1); to=dayStr(y,m,new Date(y,m,0).getDate()); }
+  else { from=todayStr(); to=planAdd(from,k==='d30'?29:89); }
+  _plan.from=from; _plan.to=to; planSave(); planRenderBar(); planRenderGrid();
+}
+function planShift(dir){
+  const P=_plan, n=Math.max(7,decExpandRange(P.from,P.to,121).length); P.from=planAdd(P.from,dir*n); P.to=planAdd(P.to,dir*n); planSave(); planRenderBar(); planRenderGrid();
+}
+function planRenderGrid(){
+  const P=_plan, wrap=document.getElementById('plan-grid-wrap'); if(!wrap) return;
+  planMaps();
+  let dates=decExpandRange(P.from,P.to,120); const cut=decExpandRange(P.from,P.to,1000).length>120;
+  const rows=planRows(dates), LIM=150, shown=rows.slice(0,LIM), dl=['S','M','T','W','T','F','S'];
+  const months=[]; dates.forEach(d=>{ const m=d.slice(0,7); if(months.length&&months[months.length-1].m===m) months[months.length-1].n++; else months.push({m,n:1}); });
+  const head='<tr><th class="pl-v" rowspan="2">Venue</th>'+months.map(x=>'<th class="pl-mh" colspan="'+x.n+'">'+esc(monthLabel(x.m))+'</th>').join('')+'</tr><tr>'
+    +dates.map(ds=>{ const dow=new Date(ds+'T12:00:00').getDay(); return '<th class="pl-h'+((dow===0||dow===6)?' pl-we':'')+(ds===todayStr()?' pl-today':'')+'"><span>'+dl[dow]+'</span><b>'+(+ds.slice(8))+'</b></th>'; }).join('')+'</tr>';
+  const body=shown.map(r=>planRowHTML(r,dates)).join('');
+  wrap.innerHTML='<div class="pl-count"><b>'+rows.length+'</b> venue'+(rows.length===1?'':'s')+' match'+(rows.length>LIM?' (showing the first '+LIM+' — narrow the filters)':'')
+    +(cut?' · showing the first 120 days of the range':'')
+    +(rows.length?' · <a onclick="planShortAll()">★ Shortlist all shown</a>':'')+'</div>'
+    +(rows.length?'<div class="pl-wrap" id="plan-grid"><table class="pl-tbl"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
+      :'<div class="empty-state" style="text-align:center;padding:36px 10px"><div style="font-size:30px;margin-bottom:6px">▦</div><p style="font-size:14px">No venues match these filters for '+esc(fmtDate(P.from))+' – '+esc(fmtDate(P.to))+'.</p><button class="btn" onclick="planReset()">Reset filters</button></div>')
     +'<div class="av-legend" style="margin-top:10px">'+AVAIL_STATUSES.map(t=>'<span><i class="av-key av-'+t+'">'+AVAIL_CODE[t]+'</i> '+AVAIL_NAME[t]+'</span>').join('')+'<span><i class="av-key">★</i> our show</span><span><i class="av-key">P</i> in an open proposal'+(P.artistId?' for this artist':'')+'</span></div>';
-  planBind();
+  planBind(); P._dates=dates;
+}
+function planSumHTML(st){
+  return (st.open?'<span class="pl-ok">'+st.open+' open</span>':'<span class="muted">none open</span>')
+    +(st.cnt.available||st.cnt.hold1||st.cnt.hold2?' <span class="muted">('+[st.cnt.available?st.cnt.available+'✓':'',st.cnt.hold1?st.cnt.hold1+'×1st':'',st.cnt.hold2?st.cnt.hold2+'×2nd':''].filter(Boolean).join(' ')+')</span>':'')
+    +(st.cnt.unavailable?' · <span class="pl-no">'+st.cnt.unavailable+' ✕</span>':'')+(st.cnt.unknown?' · <span class="muted">'+st.cnt.unknown+' ?</span>':'');
+}
+function planRowHTML(r,dates){
+  const v=r.v, P=_plan, star=P.short.includes(v.id), cap=+v.capacity||0;
+  return '<tr data-row="'+v.id+'"><th class="pl-v"><button type="button" class="pl-star'+(star?' on':'')+'" aria-pressed="'+star+'" aria-label="Shortlist '+esc(v.name||'venue')+'" onclick="planStar(\''+v.id+'\')">'+(star?'★':'☆')+'</button>'
+    +'<div class="pl-vn"><a onclick="go(\'venues\',\''+v.id+'\')">'+esc(v.name||'')+'</a><small>'+esc((v.city||'')+(v.province?', '+v.province:''))+(cap?' · '+cap.toLocaleString()+' seats':'')+'</small>'
+    +'<small class="pl-sum">'+planSumHTML(r.st)+'</small>'
+    +(P.brush==='select'&&r.st.open?'<small><a onclick="planPickOpen(\''+v.id+'\')">pick open days</a></small>':'')+'</div></th>'
+    +dates.map(ds=>'<td class="'+planCellClass(v.id,ds)+'" data-v="'+v.id+'" data-d="'+ds+'" title="'+esc(planCellTip(v.id,ds))+'">'+planCellInner(v.id,ds)+'</td>').join('')+'</tr>';
+}
+function planStar(id){ const P=_plan, i=P.short.indexOf(id); if(i<0) P.short.push(id); else P.short.splice(i,1); planSave(); if(P.onlyShort) planRenderGrid(); else { const b=document.querySelector('tr[data-row="'+id+'"] .pl-star'); if(b){ const on=i<0; b.className='pl-star'+(on?' on':''); b.textContent=on?'★':'☆'; b.setAttribute('aria-pressed',on); } } }
+function planShortAll(){ const P=_plan; planRows(P._dates||[]).forEach(r=>{ if(!P.short.includes(r.v.id)) P.short.push(r.v.id); }); planSave(); planRenderGrid(); }
+function planPickOpen(vid){
+  const P=_plan; (P._dates||[]).forEach(ds=>{ const a=venueAvailabilityOn(vid,ds); if(a&&AVAIL_USABLE.includes(a.type)) P.sel.set(vid+'|'+ds,{vid,date:ds}); });
+  planRenderGrid(); planSelBar();
 }
 function planBind(){
   const g=document.getElementById('plan-grid'); if(!g) return;
-  let down=false;
   const cellAt=(x,y)=>{ const el=document.elementFromPoint(x,y); return el&&el.closest?el.closest('td.pl-c'):null; };
   g.addEventListener('pointerdown',e=>{
     const td=e.target.closest&&e.target.closest('td.pl-c'); if(!td||e.button>0) return;
-    down=true; _plan.painted=0; _plan.seen=new Set(); _plan.mode=null; planCell(td);
+    _plan.down=true; _plan.painted=0; _plan.seen=new Set(); _plan.mode=null; _plan.touched=new Set(); planCell(td);
   });
-  g.addEventListener('pointermove',e=>{ if(!down) return; const td=cellAt(e.clientX,e.clientY); if(td) planCell(td); });
-  const up=()=>{ if(!down) return; down=false; if(_plan.painted){ persist(); } planSelBar(); };
-  window.addEventListener('pointerup',up); g.addEventListener('pointercancel',up);
+  g.addEventListener('pointermove',e=>{ if(!_plan.down) return; const td=cellAt(e.clientX,e.clientY); if(td) planCell(td); });
+  if(!_planUpBound){ _planUpBound=true; window.addEventListener('pointerup',planUp); window.addEventListener('pointercancel',planUp); }
+}
+function planUp(){
+  const P=_plan; if(!P||!P.down) return; P.down=false;
+  if(P.painted){ persist(); P.touched.forEach(vid=>{ const v=get(DB.venues,vid), el=document.querySelector('tr[data-row="'+vid+'"] .pl-sum'); if(v&&el) el.innerHTML=planSumHTML(planStats(v,P._dates||[])); }); }
+  planSelBar();
 }
 function planCell(td){
   const P=_plan, vid=td.dataset.v, ds=td.dataset.d, key=vid+'|'+ds;
@@ -11157,56 +11252,15 @@ function planCell(td){
   }
   const type=P.brush==='erase'?'clear':P.brush;
   const n=availSet(vid,[ds],type,(type==='hold1'||type==='hold2')&&P.artistId?{artistId:P.artistId}:{});
-  if(n){ P.painted=(P.painted||0)+1; td.className=planCellClass(vid,ds); td.innerHTML=planCellInner(vid,ds); td.title=planCellTip(vid,ds); }
+  if(n){ P.painted=(P.painted||0)+1; P.touched.add(vid); td.className=planCellClass(vid,ds); td.innerHTML=planCellInner(vid,ds); td.title=planCellTip(vid,ds); }
 }
 function planSelBar(){
   const host=document.getElementById('pl-sel'); if(!host) return; const n=_plan.sel.size;
-  host.innerHTML=n?'<b style="font-size:13px">'+n+' date'+(n===1?'':'s')+' picked</b><button type="button" class="btn sm primary" onclick="planProposalModal()">Add to a proposal…</button><button type="button" class="btn ghost sm" onclick="planClearSel()">Clear picks</button>':'';
+  const vs=new Set([..._plan.sel.values()].map(x=>x.vid)).size;
+  host.innerHTML=n?'<b style="font-size:13px">'+n+' date'+(n===1?'':'s')+' picked at '+vs+' venue'+(vs===1?'':'s')+'</b><button type="button" class="btn sm primary" onclick="planProposalModal()">Add to a proposal…</button><button type="button" class="btn ghost sm" onclick="planClearSel()">Clear picks</button>':'';
 }
-function planClearSel(){ _plan.sel=new Map(); planRender(); }
-function planBrush(k){ _plan.brush=k; planRender(); }
-function planArtist(id){ _plan.artistId=id; planSave(); planRender(); }
-function planNav(d){ _plan.ym=d===0?todayStr().slice(0,7):monthShift(_plan.ym,d); planSave(); planRender(); }
-function planRemoveVenue(vid){ _plan.venueIds=_plan.venueIds.filter(x=>x!==vid); for(const k of [..._plan.sel.keys()]) if(k.startsWith(vid+'|')) _plan.sel.delete(k); planSave(); planRender(); }
-// Venue picker
-let _plp=null;
-function planPickVenues(){
-  _plp={q:'',prov:'',sel:new Set()};
-  const P=_plan||planLoad();
-  const props=(DB.proposals||[]).filter(p=>p.status!=='Declined'&&(p.shows||[]).length);
-  const provs=[...new Set(DB.venues.map(v=>v.province).filter(Boolean))].sort();
-  const inp='padding:7px 9px;border:1px solid var(--bord2);border-radius:var(--rad);background:var(--surf);color:var(--txt);font-size:13px';
-  openModal('Add venues to the planner',
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><input id="plp-q" placeholder="Search venue or city…" oninput="_plp.q=this.value;plpList()" style="flex:1;min-width:150px;'+inp+'" aria-label="Search venues">'
-    +'<select onchange="_plp.prov=this.value;plpList()" style="'+inp+'" aria-label="Province"><option value="">All provinces/states</option>'+provs.map(x=>'<option>'+esc(x)+'</option>').join('')+'</select></div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">'
-    +(props.length?'<select onchange="plpFromProposal(this.value);this.value=\'\'" style="'+inp+'" aria-label="Add venues from a proposal"><option value="">+ All venues in a proposal…</option>'+props.map(p=>'<option value="'+p.id+'">'+esc(p.title)+'</option>').join('')+'</select>':'')
-    +(P.artistId?'<button type="button" class="btn sm" onclick="plpFromOutreach()">+ Venues contacted for '+esc((get(DB.artists,P.artistId)||{}).name||'')+'</button>':'')
-    +'<button type="button" class="btn sm" onclick="plpWithAvail()">+ Venues with availability recorded</button></div>'
-    +'<div id="plp-list" style="max-height:46vh;overflow:auto;border:1px solid var(--bord);border-radius:var(--rad);padding:4px 8px"></div>'
-    +'<div id="plp-n" class="muted" style="font-size:12px;margin-top:6px"></div>',
-    '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="plp-go" onclick="planAddVenues()">Add venues</button>');
-  plpList();
-}
-function plpList(){
-  const host=document.getElementById('plp-list'); if(!host) return;
-  const q=(_plp.q||'').toLowerCase(), have=new Set(_plan.venueIds);
-  const list=DB.venues.filter(v=>(!_plp.prov||v.province===_plp.prov)&&(!q||((v.name||'')+' '+(v.city||'')+' '+(v.hall||'')).toLowerCase().includes(q)))
-    .sort((a,b)=>(a.city||'').localeCompare(b.city||'')||(a.name||'').localeCompare(b.name||''));
-  host.innerHTML=list.slice(0,300).map(v=>'<label class="bk-check" style="justify-content:flex-start"><input type="checkbox" '+(have.has(v.id)?'checked disabled':(_plp.sel.has(v.id)?'checked':''))+' onchange="plpToggle(\''+v.id+'\',this.checked)"> <b style="font-weight:500">'+esc(v.name||'')+'</b> <span class="muted">'+esc((v.city||'')+(v.province?', '+v.province:''))+(have.has(v.id)?' · already added':'')+'</span></label>').join('')
-    +(list.length>300?'<p class="muted" style="font-size:12px">Showing the first 300. Narrow the search to see more.</p>':'')+(list.length?'':'<p class="muted" style="font-size:13px">No venues match.</p>');
-  plpCount();
-}
-function plpCount(){ const n=_plp.sel.size, el=document.getElementById('plp-n'), b=document.getElementById('plp-go'); if(el) el.textContent=n?n+' venue'+(n===1?'':'s')+' ticked.':'Tick the venues to add.'; if(b){ b.disabled=!n; b.textContent=n?'Add '+n+' venue'+(n===1?'':'s'):'Add venues'; } }
-function plpToggle(id,on){ if(on) _plp.sel.add(id); else _plp.sel.delete(id); plpCount(); }
-function plpFromProposal(pid){ const p=get(DB.proposals,pid); if(!p) return; (p.shows||[]).forEach(s=>{ if(s.venueId&&!_plan.venueIds.includes(s.venueId)) _plp.sel.add(s.venueId); }); plpList(); }
-function plpFromOutreach(){ dbInquiries().filter(q=>q.artistId===_plan.artistId).forEach(q=>{ if(q.venueId&&get(DB.venues,q.venueId)&&!_plan.venueIds.includes(q.venueId)) _plp.sel.add(q.venueId); }); plpList(); }
-function plpWithAvail(){ DB.venues.forEach(v=>{ if((v.availability||[]).length&&!_plan.venueIds.includes(v.id)) _plp.sel.add(v.id); }); plpList(); }
-function planAddVenues(){
-  if(!_plp||!_plp.sel.size) return;
-  _plp.sel.forEach(id=>{ if(!_plan.venueIds.includes(id)) _plan.venueIds.push(id); });
-  _plp=null; planSave(); closeModal(); planRender();
-}
+function planClearSel(){ _plan.sel=new Map(); planRenderGrid(); planSelBar(); }
+function planBrush(k){ _plan.brush=k; planRenderBar(); planRenderGrid(); }
 // Turn picked (venue, date) cells into shows on a proposal
 function planProposalModal(){
   const P=_plan; if(!P.sel.size) return;
